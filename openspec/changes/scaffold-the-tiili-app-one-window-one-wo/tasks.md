@@ -29,7 +29,7 @@
 
 ## 5. Workspace checks and instructions
 
-- [ ] 5.1 (triage) Update checks with install and the new checks
+- [x] 5.1 (triage) Update checks with install and the new checks
   - file: .harvaaja/checks.yaml
   - content:
   ```yaml
