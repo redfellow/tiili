@@ -11,7 +11,7 @@
   - proof: `npm run typecheck`
 
 ## 3. Design preparation
-- [ ] 3.1 (triage) Add the design-prepare check
+- [x] 3.1 (triage) Add the design-prepare check
   - file: .harvaaja/checks.yaml
   - content:
   ```yaml
