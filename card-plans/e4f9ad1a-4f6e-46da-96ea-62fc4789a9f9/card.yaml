@@ -1,0 +1,16 @@
+format: 1
+slug: colour-panes-by-git-repository
+title: Colour panes by git repository
+x-harvaaja-card: e4f9ad1a-4f6e-46da-96ea-62fc4789a9f9
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable contracts (repo tracking, tints, title chip, 16 brand
+    tints); no existing spec or change covers them.
+  citations:
+    - docs/concept.md Colour by project
+    - docs/brand/tiili.css --tint-1..8
+    - openspec/specs is empty
+  revision: 31de0720-d217-4a2b-8864-93d23b97c8ed
