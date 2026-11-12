@@ -1,7 +1,7 @@
 # packaging Specification
 
 ## Purpose
-TBD - created by archiving change package-tiili-as-installers-for-macos-wi. Update Purpose after archive.
+How tiili is packaged for release: installers for macOS, Windows and Linux built with Tauri's bundler, and the app icon set they carry.
 
 ## Requirements
 
