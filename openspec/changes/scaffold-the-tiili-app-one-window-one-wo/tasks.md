@@ -77,7 +77,7 @@
       sandbox: none
       timeoutSeconds: 1200
   ```
-- [ ] 5.2 (triage) Allow the registries the install needs
+- [x] 5.2 (triage) Allow the registries the install needs
   - file: .harvaaja/network.yaml
   - content:
   ```yaml
