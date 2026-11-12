@@ -74,7 +74,28 @@ Core colours, named after the materials. All values also live in [`tiili.css`](t
 | taivas | `#6F97B3` | Sky, project tint |
 
 **Project tints**, assigned in this order as new repositories appear: tiili, savi, ikkuna, koivu, sammal, muratti,
-taivas, rauta. Labels on dark tints are white; on savi, ikkuna, koivu and taivas they are dark.
+taivas, rauta, havu, kaisla, kanerva, kuura, järvi, jäkälä, puolukka, turve. Once all sixteen are in use, a new
+repository gets the tint with the fewest open panes (ties go to the lowest number). Labels on dark tints are white; on
+light tints they are dark. Tints 9–16 keep their labels above 5:1; sammal sits just under 4.5:1 with white.
+
+| Token | Name | Tint | Label (`-on`) | Contrast |
+| --- | --- | --- | --- | --- |
+| `--tint-1` | tiili | `#A4472B` | `#FFFFFF` | 6.0:1 |
+| `--tint-2` | savi | `#C9764F` | `#2A2321` | 4.5:1 |
+| `--tint-3` | ikkuna | `#8FA6A4` | `#1B2224` | 6.3:1 |
+| `--tint-4` | koivu | `#D9A43A` | `#2A2321` | 6.8:1 |
+| `--tint-5` | sammal | `#6E7F4E` | `#FFFFFF` | 4.4:1 |
+| `--tint-6` | muratti | `#861B22` | `#FFFFFF` | 9.6:1 |
+| `--tint-7` | taivas | `#6F97B3` | `#16222B` | 5.2:1 |
+| `--tint-8` | rauta | `#3A3F45` | `#FFFFFF` | 10.6:1 |
+| `--tint-9` | havu (spruce) | `#2F5D4A` | `#FFFFFF` | 7.5:1 |
+| `--tint-10` | kaisla (reed) | `#C8B98A` | `#2A2321` | 7.9:1 |
+| `--tint-11` | kanerva (heather) | `#8A5A83` | `#FFFFFF` | 5.4:1 |
+| `--tint-12` | kuura (frost) | `#B7C7D3` | `#2A2321` | 8.9:1 |
+| `--tint-13` | järvi (lake) | `#2E4F6E` | `#FFFFFF` | 8.5:1 |
+| `--tint-14` | jäkälä (lichen) | `#A9B48A` | `#2A2321` | 7.0:1 |
+| `--tint-15` | puolukka (lingonberry) | `#B23A50` | `#FFFFFF` | 5.8:1 |
+| `--tint-16` | turve (peat) | `#5A4632` | `#FFFFFF` | 8.9:1 |
 
 **Contrast.** tiili is too dark to be text on koski (2.7:1), so dark mode uses `#D3865F` for accent text and focus
 rings. Buttons keep the tiili fill in both themes with white labels (6.0:1). All text tokens pass 4.5:1 against

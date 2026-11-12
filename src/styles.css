@@ -60,6 +60,9 @@ body {
 
 .pane {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   box-sizing: border-box;
   flex: 1 1 0;
   min-width: 0;
@@ -84,7 +87,39 @@ body {
 }
 
 .pane-terminal {
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Title row: the chip naming the pane's repository, or its folder outside one. */
+.pane-title {
+  display: flex;
+  min-width: 0;
+  min-height: 18px;
+}
+
+/* Neutral chip, for a folder outside any repository. */
+.pane-chip {
+  overflow: hidden;
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-brick);
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11.5px/18px var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keeps the title row's height before the folder is known. */
+.pane-chip:empty {
+  visibility: hidden;
+}
+
+/* In a repository: the project tint with its label colour. */
+.pane[data-tint] .pane-chip {
+  background: var(--pane-tint);
+  color: var(--pane-tint-on);
 }
 
 /* Settings dialogue */
