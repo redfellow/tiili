@@ -1,4 +1,5 @@
 pub mod pty;
+pub mod settings;
 
 use std::sync::Mutex;
 
@@ -12,6 +13,8 @@ use pty::PtySession;
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
 /// Event sent when a clipboard menu item is chosen; its payload is `copy`, `paste` or `selectAll`.
 pub const CLIPBOARD_EVENT: &str = "clipboard";
+/// Event sent when the app menu's Settings… item is chosen.
+pub const OPEN_SETTINGS_EVENT: &str = "open-settings";
 
 #[derive(Clone, Serialize)]
 struct PtyExit {
@@ -66,13 +69,19 @@ fn pty_resize(terminal: State<'_, Terminal>, rows: u16, cols: u16) -> Result<(),
     with_session(&terminal, |s| s.resize(rows, cols))
 }
 
-/// macOS menu bar: the app menu and an Edit menu whose items the frontend carries out on the terminal.
+/// macOS menu bar: the app menu with Settings… and an Edit menu whose items the frontend carries out on the terminal.
 #[cfg(target_os = "macos")]
 fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 
     let app_menu = SubmenuBuilder::new(app, "tiili")
         .item(&PredefinedMenuItem::about(app, None, None)?)
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("settings", "Settings…")
+                .accelerator("Cmd+,")
+                .build(app)?,
+        )
         .separator()
         .item(&PredefinedMenuItem::hide(app, None)?)
         .item(&PredefinedMenuItem::hide_others(app, None)?)
@@ -121,6 +130,8 @@ pub fn run() {
                     let id = event.id().as_ref();
                     if matches!(id, "copy" | "paste" | "selectAll") {
                         let _ = app.emit(CLIPBOARD_EVENT, id);
+                    } else if id == "settings" {
+                        let _ = app.emit(OPEN_SETTINGS_EVENT, ());
                     }
                 });
             }
@@ -128,7 +139,13 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![pty_spawn, pty_write, pty_resize])
+        .invoke_handler(tauri::generate_handler![
+            pty_spawn,
+            pty_write,
+            pty_resize,
+            settings::settings_load,
+            settings::settings_save
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");
 }
