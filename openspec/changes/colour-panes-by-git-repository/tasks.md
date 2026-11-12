@@ -9,7 +9,7 @@
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml repo::`
 - [x] 2.2 Add `src-tauri/src/cwd.rs`: OSC 7 parser (table-driven tests incl. percent-encoding and Windows drive paths), macOS/Linux poller, `pane-cwd` event carrying cwd, root and name
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml cwd::`
-- [ ] 2.3 Integration test `src-tauri/tests/repo_tracking.rs` (first line `// @harvaaja-test-tier: integration`): temp dirs with `git init`, a shell `cd`s between them, tracked root follows (skip polling assertions on Windows)
+- [x] 2.3 Integration test `src-tauri/tests/repo_tracking.rs` (first line `// @harvaaja-test-tier: integration`): temp dirs with `git init`, a shell `cd`s between them, tracked root follows (skip polling assertions on Windows)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 
