@@ -41,10 +41,16 @@ checks:
     stage: release
     sandbox: none
     timeoutSeconds: 1200
+  # Installs dependencies and builds the dev bridge in the design worktree before the design server starts.
+  - name: design-prepare
+    run: npm ci --no-audit --no-fund --cache "$TMPDIR/harvaaja-npm-cache" && cargo build --manifest-path src-tauri/Cargo.toml --bin dev-bridge
+    role: design-prepare
+    stage: manual
+    network: [registry.npmjs.org, index.crates.io, static.crates.io]
+    timeoutSeconds: 900
   # Browser preview with a real shell: the launcher starts the dev bridge (a PTY) and Vite, and stops the bridge with it.
   - name: design
     run: npm run dev:browser -- --port "$HV_PREVIEW_PORT" --strictPort
     role: design
     stage: manual
     timeoutSeconds: 1200
-

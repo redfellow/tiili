@@ -1,0 +1,18 @@
+format: 1
+slug: design-tiili-live-fails-to-start-the-des
+title: "Design tiili live fails to start: the design worktree has no
+  node_modules, and the dev bridge cannot open a shell in ..."
+x-harvaaja-card: 2fed3add-3226-40cb-82ae-1e3bdfbbcd02
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds an observable contract to dev-browser-backend: the bridge
+    reports a failed shell start, and the terminal shows one readable line
+    instead of a dead socket."
+  citations:
+    - openspec/specs/dev-browser-backend/spec.md
+    - src-tauri/src/bin/dev-bridge.rs
+    - src/backend-ws.ts
+  revision: 9387c331-9ca0-48ba-ad32-0dd4e3115808
