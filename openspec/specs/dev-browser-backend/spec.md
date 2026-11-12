@@ -1,7 +1,7 @@
 # dev-browser-backend Specification
 
 ## Purpose
-TBD - created by archiving change real-pty-backend-for-the-browser-dev-ser. Update Purpose after archive.
+A real shell in tiili's terminal when the frontend runs in a plain browser from the dev server: a local, dev-only WebSocket bridge to tiili's own PTY code, so the browser preview (and Design) can demo a working terminal.
 
 ## Requirements
 
