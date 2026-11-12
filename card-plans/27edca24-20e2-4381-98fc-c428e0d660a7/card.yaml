@@ -6,3 +6,12 @@ x-harvaaja-card: 27edca24-20e2-4381-98fc-c428e0d660a7
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: First code in the repo; openspec/specs is empty and the card asks for
+    new terminal-session and clipboard specs. No active changes to polish.
+  citations:
+    - "card origin: 'should go through an OpenSpec change'"
+    - openspec/specs is empty
+    - openspec/changes has only archive/
+  revision: 7b225990-a007-476b-b1b2-649abb4be88b

@@ -1,0 +1,138 @@
+## 1. Skeleton and tooling
+
+- [ ] 1.1 Merge `origin/main` so `docs/concept.md` and `docs/brand/` are present; scaffold the Tauri 2 + Vite + TypeScript app with npm (`package.json` scripts `typecheck` = `tsc --noEmit`, `lint` = `eslint`, `test` = `vitest run`), `src-tauri/` with Cargo.toml/tauri.conf.json (window title `tiili`), ESLint flat config, Vitest config; commit `package-lock.json` and `Cargo.lock`
+  - proof: `test -f docs/brand/tiili.css && test -f package-lock.json && test -f src-tauri/Cargo.lock`
+  - proof: `npm run typecheck`
+  - proof: `cargo check --manifest-path src-tauri/Cargo.toml`
+
+## 2. PTY session (Rust)
+
+- [ ] 2.1 Add `src-tauri/src/pty.rs` (spawn default shell via `portable-pty`, write, resize, reader thread, exit notification) free of Tauri types, and Tauri commands `pty_spawn`/`pty_write`/`pty_resize` streaming output over a `Channel` and emitting an exit event
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+- [ ] 2.2 Add integration test `src-tauri/tests/pty_session.rs` (first line `// @harvaaja-test-tier: integration`): spawn a shell, write `echo tiili-ok` + newline, read until `tiili-ok` appears (timeout), resize without error, write `exit` and observe exit
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
+
+## 3. Terminal frontend
+
+- [ ] 3.1 Add `src/terminal.ts` wiring xterm.js + fit addon to the PTY commands, `ResizeObserver` → `pty_resize`, exit message `[process exited] Press Enter to start a new shell` and restart on Enter
+  - proof: `npx eslint src/terminal.ts`
+- [ ] 3.2 Brand: import `docs/brand/tiili.css`; vendor Geist Mono woff2 + OFL licence under `src/assets/fonts/` with `@font-face`; `src/theme.ts` builds the xterm theme from `--term-bg`, `--term-fg`, `--ansi-0..15`, block cursor `--accent`, re-applied on `prefers-color-scheme` change; generate icons with `npx tauri icon` from `docs/brand/logo/icon-light.svg` into `src-tauri/icons/`
+  - proof: `npx eslint src/theme.ts`
+  - proof: `test -f src-tauri/icons/icon.png && test -f src-tauri/icons/icon.icns && test -f src-tauri/icons/icon.ico`
+
+## 4. Copy and paste
+
+- [ ] 4.1 Add pure `src/keymap.ts` `clipboardAction(event, platform)` and table-driven `src/keymap.test.ts` (first line `// @harvaaja-test-tier: fast`) covering macOS ⌘C/⌘V/⌘A, Windows/Linux Ctrl+Shift+C/V, plain Ctrl+C → null on every platform, Ctrl+Shift+C on macOS → null
+  - proof: `npx vitest run src/keymap.test.ts`
+- [ ] 4.2 Wire clipboard: `attachCustomKeyEventHandler` using the keymap (Windows/Linux), macOS Edit menu (Copy/Paste/Select All with ⌘ accelerators) built in Rust and emitting events the frontend handles, right-click native context menu with Copy and Paste on all platforms, clipboard via `tauri-plugin-clipboard-manager`, paste through `term.paste()`
+  - proof: `npx eslint src`
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+  - proof: `npm run typecheck`
+
+## 5. Workspace checks and instructions
+
+- [ ] 5.1 (triage) Update checks with install and the new checks
+  file: .harvaaja/checks.yaml
+  content:
+  ```yaml
+  # Checks for tiili: a Tauri 2 app (Rust in src-tauri/, TypeScript + Vite frontend, npm).
+  setup:
+    - name: install
+      run: npm ci
+      timeoutSeconds: 600
+  checks:
+    - name: openspec
+      run: openspec validate --all --strict --no-interactive
+      stage: every
+      timeoutSeconds: 120
+    - name: typecheck
+      run: npm run typecheck
+      stage: every
+      timeoutSeconds: 300
+    - name: lint
+      run: npm run lint
+      stage: every
+      timeoutSeconds: 300
+    - name: unit
+      run: npm test
+      stage: every
+      timeoutSeconds: 300
+    - name: cargo-fmt
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      stage: every
+      timeoutSeconds: 120
+    - name: cargo-clippy
+      run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      stage: every
+      timeoutSeconds: 1200
+    - name: cargo-test
+      run: cargo test --manifest-path src-tauri/Cargo.toml
+      stage: every
+      timeoutSeconds: 1200
+  ```
+- [ ] 5.2 (triage) Allow the registries the install needs
+  file: .harvaaja/network.yaml
+  content:
+  ```yaml
+  # Hosts the workspace's agents may reach: npm and crates.io registries for npm ci and cargo.
+  allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io]
+  ```
+- [ ] 5.3 (triage) Update the planner's current state
+  file: .harvaaja/instructions/plan.md
+  content:
+  ```markdown
+  # Planning this workspace
+
+  Rules for planners, on top of härvääjä's own. Keep them about this workspace: how its tests are named, run and
+  tiered, what its end-to-end tests are, and anything every plan must include.
+
+  ## Current state
+
+  - tiili is a Tauri 2 app: Rust core in `src-tauri/`, TypeScript frontend in `src/` built with Vite, npm.
+  - Commands: `npm run typecheck` (tsc), `npm run lint` (ESLint; one file: `npx eslint <file>`), `npx vitest run
+    <file>` (unit tests), `cargo fmt --manifest-path src-tauri/Cargo.toml --check`, `cargo clippy --manifest-path
+    src-tauri/Cargo.toml --all-targets -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml --test
+    <name>`, and `openspec validate --all --strict`.
+  - The app window cannot run in the sandbox: anything seen in the window is a manual host check.
+
+  ## Proofs
+
+  - Name each task's proof as the narrowest command of this workspace's test runner that covers the task, and lint
+    or type checks of only the files it touches.
+  - Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,
+    `integration` or `host` lets härvääjä leave the slow ones to the release check.
+  ```
+- [ ] 5.4 (triage) Update the builder's current state
+  file: .harvaaja/instructions/build.md
+  content:
+  ```markdown
+  # Building this workspace
+
+  Rules for implementers and fixers, on top of härvääjä's own. Keep them about this workspace: the commands that
+  run one test file, lint or type check, and conventions the code must follow.
+
+  ## Current state
+
+  - tiili is a Tauri 2 app: Rust core in `src-tauri/`, TypeScript frontend in `src/` built with Vite, npm.
+  - One test file: `npx vitest run <file>`; one Rust test target: `cargo test --manifest-path src-tauri/Cargo.toml
+    --test <name>`. Lint: `npx eslint <files>`. Type check: `npm run typecheck`. Rust: `cargo fmt --manifest-path
+    src-tauri/Cargo.toml --check` and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D
+    warnings`. OpenSpec: `openspec validate --all --strict`.
+  - Keep PTY logic free of Tauri types and key mapping pure, so both stay testable without a window.
+
+  ## Proofs
+
+  - Run only the test files that cover what you changed, with this workspace's test runner.
+  - A new test gets a first-line comment `@harvaaja-test-tier: fast`, `integration` or `host`: fast for
+    isolated logic, integration for anything that needs real processes, files or services, host for what can't
+    run in the sandbox.
+  ```
+
+## Manual checks after merge (The user)
+
+- On macOS, Windows and Linux run `npm run tauri dev`: the window is titled `tiili`, the shell prompt appears in Geist Mono with a brick block cursor, typing and resizing work.
+- macOS: Edit menu has Copy ⌘C, Paste ⌘V, Select All ⌘A and they work in the terminal.
+- Windows and Linux: Ctrl+Shift+C/V copy and paste; plain Ctrl+C interrupts `sleep 100` (or `ping -t` on Windows).
+- Right-click shows Copy and Paste on each OS.
+- Type `exit`: the exit message appears and Enter starts a new shell.
+- Toggle system dark/light mode: the terminal colours follow.
