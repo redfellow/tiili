@@ -1,0 +1,5 @@
+# Hosts the workspace's agents may reach. Empty on purpose: the repository has no package
+# registry, no dependencies to fetch and no documentation site it needs (see checks.yaml).
+# Add a registry here once a package manifest exists, for example:
+#   allow: [registry.npmjs.org, '*.python.org']
+allow: []
