@@ -1,5 +1,3 @@
-# Hosts the workspace's agents may reach. Empty on purpose: the repository has no package
-# registry, no dependencies to fetch and no documentation site it needs (see checks.yaml).
-# Add a registry here once a package manifest exists, for example:
-#   allow: [registry.npmjs.org, '*.python.org']
-allow: []
+# Hosts the workspace's agents may reach: npm and crates.io registries for npm ci and cargo,
+# and GitHub release downloads for the vendored Geist Mono font.
+allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io, github.com, release-assets.githubusercontent.com, objects.githubusercontent.com]

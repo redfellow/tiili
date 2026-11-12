@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "tiili",
+  "version": "../package.json",
+  "identifier": "app.tiili",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "tiili",
+        "width": 900,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "dmg",
+      "msi",
+      "appimage",
+      "deb"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "A desktop terminal that tiles its terminals automatically.",
+    "longDescription": "tiili is a desktop terminal that tiles its terminals automatically, so you can run many coding agents side by side and still tell them apart. Terminals in the same git repository share a colour, and copy and paste work on every platform.",
+    "macOS": {
+      "signingIdentity": null
+    },
+    "windows": {
+      "certificateThumbprint": null
+    }
+  }
+}

@@ -5,10 +5,12 @@ tiered, what its end-to-end tests are, and anything every plan must include.
 
 ## Current state
 
-- As of commit 006e836 the repository has no test runner, linter, type checker or build. Its only checked
-  artifacts are OpenSpec changes and specs (`openspec validate --all --strict`).
-- Do not plan a proof command that the repository does not have. If a task needs a test, lint or type check,
-  plan a task that adds that tool first, and name it in the plan.
+- tiili is a Tauri 2 app: Rust core in `src-tauri/`, TypeScript frontend in `src/` built with Vite, npm.
+- Commands: `npm run typecheck` (tsc), `npm run lint` (ESLint; one file: `npx eslint <file>`), `npx vitest run
+  <file>` (unit tests), `cargo fmt --manifest-path src-tauri/Cargo.toml --check`, `cargo clippy --manifest-path
+  src-tauri/Cargo.toml --all-targets -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml --test
+  <name>`, and `openspec validate --all --strict`.
+- The app window cannot run in the sandbox: anything seen in the window is a manual host check.
 
 ## Proofs
 
@@ -16,3 +18,10 @@ tiered, what its end-to-end tests are, and anything every plan must include.
   or type checks of only the files it touches.
 - Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,
   `integration` or `host` lets härvääjä leave the slow ones to the release check.
+
+## Specs
+
+- A delta spec that creates a new capability (a folder under `openspec/changes/<change>/specs/` with no matching
+  `openspec/specs/<capability>/`) starts with a `## Purpose` section: one or two sentences on what the capability
+  is for, written for this app. Archiving copies it into the new main spec; without it the archive writes a `TBD`
+  placeholder that fails `openspec validate --all --strict` on the base branch after the merge.

@@ -1,0 +1,7 @@
+# Home paths the workspace's agents and checks need beyond the sandbox's defaults. Human-maintained, read from
+# the base branch. A path that opens a credential folder or härvääjä's data folder is refused.
+write:
+  # cargo keeps its registry cache and locks here (Homebrew Rust, no rustup). Without it every cargo command in
+  # the sandbox fails with "Operation not permitted". It holds no credentials today; if you ever run
+  # `cargo login`, ~/.cargo/credentials.toml would land here too.
+  - ~/.cargo
