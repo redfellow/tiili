@@ -18,3 +18,10 @@ tiered, what its end-to-end tests are, and anything every plan must include.
   or type checks of only the files it touches.
 - Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,
   `integration` or `host` lets härvääjä leave the slow ones to the release check.
+
+## Specs
+
+- A delta spec that creates a new capability (a folder under `openspec/changes/<change>/specs/` with no matching
+  `openspec/specs/<capability>/`) starts with a `## Purpose` section: one or two sentences on what the capability
+  is for, written for this app. Archiving copies it into the new main spec; without it the archive writes a `TBD`
+  placeholder that fails `openspec validate --all --strict` on the base branch after the merge.
