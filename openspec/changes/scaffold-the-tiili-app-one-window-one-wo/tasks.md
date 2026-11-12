@@ -85,7 +85,7 @@
   # and GitHub release downloads for the vendored Geist Mono font.
   allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io, github.com, release-assets.githubusercontent.com, objects.githubusercontent.com]
   ```
-- [ ] 5.3 (triage) Update the planner's current state
+- [x] 5.3 (triage) Update the planner's current state
   - file: .harvaaja/instructions/plan.md
   - content:
   ```markdown
