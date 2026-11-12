@@ -41,3 +41,8 @@ checks:
     stage: release
     sandbox: none
     timeoutSeconds: 1200
+  # Design preview: the Vite dev server for the frontend, on the port härvääjä assigns.
+  - name: design
+    run: npm run dev -- --port "$HV_PREVIEW_PORT" --strictPort
+    role: design
+    stage: manual
