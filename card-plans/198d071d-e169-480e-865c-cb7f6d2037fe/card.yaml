@@ -6,3 +6,15 @@ x-harvaaja-card: 198d071d-e169-480e-865c-cb7f6d2037fe
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "New observable contract: a dev-only browser backend (WebSocket PTY
+    bridge, token, browser clipboard/menu). No active change shares this intent;
+    existing specs cover the Tauri app only."
+  citations:
+    - openspec/specs/terminal-session/spec.md
+    - openspec/specs/clipboard/spec.md
+    - src/terminal.ts
+    - src/clipboard.ts
+    - src-tauri/src/pty.rs
+  revision: 3bbabea7-cbd1-4fc8-bd62-e18546af34d5
