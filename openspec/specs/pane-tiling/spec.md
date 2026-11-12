@@ -1,7 +1,7 @@
 # pane-tiling Specification
 
 ## Purpose
-TBD - created by archiving change auto-tile-terminals-multiple-panes-in-a. Update Purpose after archive.
+Several terminal panes in the one tiili window, each with its own shell, laid out in an automatic grid that grows as terminals open, with shortcuts to open, close and move focus between panes.
 
 ## Requirements
 
