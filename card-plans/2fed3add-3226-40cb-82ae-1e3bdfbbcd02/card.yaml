@@ -1,0 +1,8 @@
+format: 1
+slug: design-tiili-live-fails-to-start-the-des
+title: "Design tiili live fails to start: the design worktree has no
+  node_modules, and the dev bridge cannot open a shell in ..."
+x-harvaaja-card: 2fed3add-3226-40cb-82ae-1e3bdfbbcd02
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
