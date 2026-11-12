@@ -1,7 +1,7 @@
 # settings Specification
 
 ## Purpose
-TBD - created by archiving change user-selectable-theme-and-font-settings. Update Purpose after archive.
+Let the user choose how tiili looks (theme and terminal font) in one settings dialogue that applies changes live, keeps them across restarts and is where every later tiili setting lives.
 
 ## Requirements
 
