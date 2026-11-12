@@ -1,7 +1,7 @@
 # terminal-session Specification
 
 ## Purpose
-TBD - created by archiving change scaffold-the-tiili-app-one-window-one-wo. Update Purpose after archive.
+The one terminal window of tiili: a terminal connected to the user's default shell through a pseudo-terminal, how it looks, and what happens when the shell exits.
 
 ## Requirements
 

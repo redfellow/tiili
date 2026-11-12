@@ -1,7 +1,7 @@
 # clipboard Specification
 
 ## Purpose
-TBD - created by archiving change scaffold-the-tiili-app-one-window-one-wo. Update Purpose after archive.
+Copy and paste between the tiili terminal and the system clipboard with each platform's usual shortcuts and context menu, without taking Ctrl+C away from the shell.
 
 ## Requirements
 
