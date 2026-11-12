@@ -5,10 +5,12 @@ run one test file, lint or type check, and conventions the code must follow.
 
 ## Current state
 
-- As of commit 006e836 the repository has no code, test runner, linter, type checker or build. Its only checked
-  artifacts are OpenSpec changes and specs. Run `openspec validate --all --strict` after editing them.
-- Do not invent a command to run a test, lint or type check. If the change needs one that does not exist yet,
-  say so in your report rather than adding a stub.
+- tiili is a Tauri 2 app: Rust core in `src-tauri/`, TypeScript frontend in `src/` built with Vite, npm.
+- One test file: `npx vitest run <file>`; one Rust test target: `cargo test --manifest-path src-tauri/Cargo.toml
+  --test <name>`. Lint: `npx eslint <files>`. Type check: `npm run typecheck`. Rust: `cargo fmt --manifest-path
+  src-tauri/Cargo.toml --check` and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D
+  warnings`. OpenSpec: `openspec validate --all --strict`.
+- Keep PTY logic free of Tauri types and key mapping pure, so both stay testable without a window.
 
 ## Proofs
 
