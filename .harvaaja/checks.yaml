@@ -46,6 +46,5 @@ checks:
     run: npm run dev:browser -- --port "$HV_PREVIEW_PORT" --strictPort
     role: design
     stage: manual
-    sandbox: none
     timeoutSeconds: 1200
 
