@@ -5,3 +5,11 @@ x-harvaaja-card: 12f93962-57ea-4e67-a6f3-221c2e37dd74
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: Purpose already written (commit fd7b75c); Reijo chose "Nothing,
+    discard card". No spec or code change needed.
+  citations:
+    - openspec/specs/packaging/spec.md:4 (written Purpose)
+    - "Answer batch ed038a8b: Nothing, discard card"
+  revision: 09a92eec-7ecb-4611-b703-fe9ca23be911
