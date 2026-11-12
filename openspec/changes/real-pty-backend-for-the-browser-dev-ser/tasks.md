@@ -22,8 +22,8 @@
   - proof: `npx eslint vite.config.ts scripts/dev-browser.mjs`
   - proof: `npm run build && ! grep -rE 'tiili-bridge-token|/pty' dist`
 - [ ] 3.2 (triage) Add the design check that runs the browser preview with a real shell
-  file: .harvaaja/checks.yaml
-  content:
+  - file: .harvaaja/checks.yaml
+  - content:
   ```yaml
   # Checks for tiili: a Tauri 2 app (Rust in src-tauri/, TypeScript + Vite frontend, npm).
   setup:
