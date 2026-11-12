@@ -13,7 +13,7 @@
 - [x] 2.1 Add `tungstenite` to `src-tauri/Cargo.toml` (update Cargo.lock), set `default-run = "tiili"`; add `src-tauri/src/bridge.rs` (pure `parse_client`, `check_request` with constant-time token compare, unit tests: input, resize, garbage, missing/wrong/right token, wrong path, bad rows/cols)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib bridge`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
-- [ ] 2.2 Add `src-tauri/src/bin/dev-bridge.rs`: env token/port (refuse without token), bind 127.0.0.1, one `PtySession` per connection, binary output, exit text frame, close kills shell. Integration test `src-tauri/tests/dev_bridge.rs` (first line `// @harvaaja-test-tier: integration`): wrong token refused; right token, send `echo hi`, receive `hi`; send `exit`, receive exit frame
+- [x] 2.2 Add `src-tauri/src/bin/dev-bridge.rs`: env token/port (refuse without token), bind 127.0.0.1, one `PtySession` per connection, binary output, exit text frame, close kills shell. Integration test `src-tauri/tests/dev_bridge.rs` (first line `// @harvaaja-test-tier: integration`): wrong token refused; right token, send `echo hi`, receive `hi`; send `exit`, receive exit frame
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test dev_bridge`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 

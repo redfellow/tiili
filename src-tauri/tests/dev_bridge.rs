@@ -115,7 +115,9 @@ fn wrong_token_the_bridge_refuses_the_handshake() {
     }
 }
 
+// @harvaaja-test-tier: host
 #[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
 fn shell_in_the_browser_output_is_shown_then_exit_is_reported() {
     let bridge = bridge();
     let mut ws = connect(&bridge, TOKEN).expect("handshake accepted");
