@@ -1,5 +1,9 @@
+import type { Direction } from "./layout/model";
+
 export type Platform = "macos" | "windows" | "linux";
 export type ClipboardAction = "copy" | "paste" | "selectAll";
+/** A layout shortcut: move the focused pane one place, or reset the grid to even sizes. */
+export type LayoutAction = { move: Direction } | "reset";
 /** A pane shortcut: open a new pane, close the focused one, or focus pane `index` (0-based). */
 export type PaneAction = { type: "new" } | { type: "close" } | { type: "focus"; index: number };
 
@@ -10,6 +14,8 @@ export interface KeyChord {
   shiftKey: boolean;
   altKey: boolean;
   metaKey: boolean;
+  /** The physical key, e.g. "Digit0"; read where Shift or Alt can change `key`. */
+  code?: string;
 }
 
 /**
@@ -55,6 +61,31 @@ export function paneAction(event: KeyChord, platform: Platform): PaneAction | nu
   if (event.altKey && !event.ctrlKey && !event.shiftKey && digit !== null) {
     return { type: "focus", index: digit };
   }
+  return null;
+}
+
+const ARROWS: Record<string, Direction> = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+};
+
+/**
+ * Which layout action a key press asks for, or null when the key belongs to the shell.
+ * macOS: ⌃⌘+arrow moves the focused pane, ⌃⌘0 resets the grid. Windows and Linux: Ctrl+Alt+Shift+arrow and
+ * Ctrl+Alt+Shift+0, clear of readline's Ctrl+arrows, Ctrl+Shift+arrow selection, Snap and workspace keys.
+ */
+export function layoutAction(event: KeyChord, platform: Platform): LayoutAction | null {
+  const chord =
+    platform === "macos"
+      ? event.ctrlKey && event.metaKey && !event.altKey && !event.shiftKey
+      : event.ctrlKey && event.altKey && event.shiftKey && !event.metaKey;
+  if (!chord) return null;
+  const dir = ARROWS[event.key];
+  if (dir) return { move: dir };
+  // With Shift held, the 0 key reads as ")" or "=" depending on the keyboard layout.
+  if (event.key === "0" || event.code === "Digit0") return "reset";
   return null;
 }
 

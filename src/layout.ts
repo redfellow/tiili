@@ -28,9 +28,3 @@ export function gridFor(n: number): Grid {
   }
   return { cols, rows, cells };
 }
-
-/** The panes of each row, in order: the shape the DOM renders, one flex row per grid row. */
-export function rowsOf<T>(items: T[]): T[][] {
-  const { cols, rows } = gridFor(items.length);
-  return Array.from({ length: rows }, (_, r) => items.slice(r * cols, (r + 1) * cols));
-}
