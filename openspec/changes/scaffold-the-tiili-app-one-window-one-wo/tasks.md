@@ -9,8 +9,6 @@
 
 - [x] 2.1 Add `src-tauri/src/pty.rs` (spawn default shell via `portable-pty`, write, resize, reader thread, exit notification) free of Tauri types, and Tauri commands `pty_spawn`/`pty_write`/`pty_resize` streaming output over a `Channel` and emitting an exit event
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
-- [ ] 2.2 Add integration test `src-tauri/tests/pty_session.rs` (first line `// @harvaaja-test-tier: integration`): spawn a shell, write `echo tiili-ok` + newline, read until `tiili-ok` appears (timeout), resize without error, write `exit` and observe exit
-  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
 
 ## 3. Terminal frontend
 
@@ -140,6 +138,7 @@
 
 ## Manual checks after merge (The user)
 
+- The PTY integration test (was task 2.2): run `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session` on the host, since the sandbox refuses a pseudo-terminal. It passed on the host on 2026-11-12 (1 passed), and the `cargo-test-pty` release check from 5.1 runs it outside the sandbox.
 - On macOS, Windows and Linux run `npm run tauri dev`: the window is titled `tiili`, the shell prompt appears in Geist Mono with a brick block cursor, typing and resizing work.
 - macOS: Edit menu has Copy ⌘C, Paste ⌘V, Select All ⌘A and they work in the terminal.
 - Windows and Linux: Ctrl+Shift+C/V copy and paste; plain Ctrl+C interrupts `sleep 100` (or `ping -t` on Windows).
