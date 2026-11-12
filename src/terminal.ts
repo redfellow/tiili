@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { Terminal, type FontWeight } from "@xterm/xterm";
-import { DEFAULT_FONT_FAMILY, type FontSettings, type Settings } from "./settings";
+import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
 const EXIT_MESSAGE = "[process exited] Press Enter to start a new shell";
@@ -11,12 +11,8 @@ const EXIT_MESSAGE = "[process exited] Press Enter to start a new shell";
 /** The addons `applyFont` changes or refits with, per terminal. */
 const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
 
-/** The CSS font-family list for a chosen font: the font, then Geist Mono when it isn't installed. */
-export function fontFamilyList(family: string): string {
-  return family === DEFAULT_FONT_FAMILY
-    ? `"${DEFAULT_FONT_FAMILY}", monospace`
-    : `"${family}", "${DEFAULT_FONT_FAMILY}", monospace`;
-}
+/** Counts `applyFont` calls per terminal, so a call whose font loaded late doesn't undo a newer one. */
+const fontGenerations = new WeakMap<Terminal, number>();
 
 /** Waits until the font's regular and bold faces are loaded, since xterm measures the font when it changes. */
 async function loadFont(font: FontSettings): Promise<void> {
@@ -33,7 +29,11 @@ async function loadFont(font: FontSettings): Promise<void> {
  */
 export async function applyFont(term: Terminal, settings: Settings): Promise<void> {
   const { font } = settings;
+  const generation = (fontGenerations.get(term) ?? 0) + 1;
+  fontGenerations.set(term, generation);
   await loadFont(font);
+  // A newer call started while this font loaded; its settings win.
+  if (fontGenerations.get(term) !== generation) return;
   term.options.fontFamily = fontFamilyList(font.family);
   term.options.fontSize = font.size;
   term.options.fontWeight = String(font.weight) as FontWeight;

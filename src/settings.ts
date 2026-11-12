@@ -39,6 +39,13 @@ export interface Settings {
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
 
+/** The CSS font-family list for a chosen font: the font, then Geist Mono when it isn't installed. */
+export function fontFamilyList(family: string): string {
+  return family === DEFAULT_FONT_FAMILY
+    ? `"${DEFAULT_FONT_FAMILY}", monospace`
+    : `"${family}", "${DEFAULT_FONT_FAMILY}", monospace`;
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   font: {

@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, normalize, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, fontFamilyList, normalize, type Settings } from "./settings";
 
 const font = DEFAULT_SETTINGS.font;
 const withFont = (patch: Partial<Settings["font"]>): Settings => ({ ...DEFAULT_SETTINGS, font: { ...font, ...patch } });
@@ -41,5 +41,16 @@ const cases: [string, unknown, Settings][] = [
 describe("normalize", () => {
   it.each(cases)("%s", (_name, input, expected) => {
     expect(normalize(input)).toEqual(expected);
+  });
+});
+
+const familyCases: [string, string, string][] = [
+  ["Unavailable font: a chosen family falls back to Geist Mono", "JetBrains Mono", '"JetBrains Mono", "Geist Mono", monospace'],
+  ["Unavailable font: Geist Mono itself is listed once", "Geist Mono", '"Geist Mono", monospace'],
+];
+
+describe("fontFamilyList", () => {
+  it.each(familyCases)("%s", (_name, family, expected) => {
+    expect(fontFamilyList(family)).toBe(expected);
   });
 });
