@@ -83,8 +83,9 @@
   - file: .harvaaja/network.yaml
   - content:
   ```yaml
-  # Hosts the workspace's agents may reach: npm and crates.io registries for npm ci and cargo.
-  allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io]
+  # Hosts the workspace's agents may reach: npm and crates.io registries for npm ci and cargo,
+  # and GitHub release downloads for the vendored Geist Mono font.
+  allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io, github.com, release-assets.githubusercontent.com, objects.githubusercontent.com]
   ```
 - [ ] 5.3 (triage) Update the planner's current state
   - file: .harvaaja/instructions/plan.md
