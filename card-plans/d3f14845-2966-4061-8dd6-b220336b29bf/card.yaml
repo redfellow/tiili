@@ -1,0 +1,13 @@
+format: 1
+slug: tiili-design-mode-dev-server-failing-on
+title: Tiili design mode dev server failing on missing vitest package in worktree
+x-harvaaja-card: d3f14845-2966-4061-8dd6-b220336b29bf
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: ecae14bb-be42-4a92-9bb6-3bc4d5b0c2a8

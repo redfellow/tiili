@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { gridFor, rowsOf } from "./layout";
+import { gridFor } from "./layout";
 
 // [panes, columns, rows, panes in each row]
 const cases: [number, number, number, number[]][] = [
@@ -32,7 +32,6 @@ describe("gridFor", () => {
       expect(inRow).toHaveLength(count);
       expect(inRow.reduce((sum, cell) => sum + cell.colSpan, 0)).toBeCloseTo(cols);
     });
-    expect(rowsOf(Array.from({ length: n }, (_, i) => i)).map((r) => r.length)).toEqual(perRow);
   });
 
   it("Short last row stretches: 3 panes put two on top and one full-width below", () => {
@@ -44,6 +43,8 @@ describe("gridFor", () => {
   });
 
   it("Close re-flows: 4 panes less one lay out as 3", () => {
-    expect(rowsOf(["a", "b", "c", "d"].filter((p) => p !== "b"))).toEqual([["a", "c"], ["d"]]);
+    const rows = (n: number) => Array.from({ length: gridFor(n).rows }, (_, r) => gridFor(n).cells.filter((c) => c.row === r).length);
+    expect(rows(4)).toEqual([2, 2]);
+    expect(rows(["a", "b", "c", "d"].filter((p) => p !== "b").length)).toEqual([2, 1]);
   });
 });

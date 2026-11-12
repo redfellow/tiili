@@ -47,4 +47,13 @@ describe("sizeReporter", () => {
     vi.advanceTimersByTime(50);
     expect(send).toHaveBeenCalledTimes(1);
   });
+
+  it("Divider drag resizes PTYs on release: a cancelled burst sends nothing", () => {
+    const send = vi.fn();
+    const reporter = sizeReporter(() => ({ rows: 30, cols: 100 }), send, 50);
+    reporter.schedule();
+    reporter.cancel();
+    vi.advanceTimersByTime(50);
+    expect(send).not.toHaveBeenCalled();
+  });
 });
