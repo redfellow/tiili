@@ -20,6 +20,7 @@
 - [x] 3.2 Add `src/paneChip.ts` and wire `pane-cwd` events to pane tint and chip (neutral outside a repository); document the Windows OSC 7 prompt snippets in README.md
   - proof: `npx eslint src/paneChip.ts src/tints.ts`
   - proof: `npm run typecheck`
+  - proof: `npx vitest run src/paneChip.test.ts`
 
 ## Manual checks after merge (The user)
 

@@ -11,7 +11,9 @@ export const PANE_CWD_EVENT = "pane-cwd";
 /** The last folder name in `path`, which may use `/` or `\` (Windows); the path itself for a root. */
 export function folderName(path: string): string {
   const parts = path.split(/[\\/]/).filter((part) => part !== "");
-  return parts[parts.length - 1] ?? path;
+  // A drive root such as `C:\` names no folder either.
+  if (parts.length === 0 || (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0]))) return path;
+  return parts[parts.length - 1];
 }
 
 /** Creates a pane's title chip, empty until the pane's folder is known. */
