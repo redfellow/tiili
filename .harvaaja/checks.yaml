@@ -31,13 +31,15 @@ checks:
     run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
     stage: every
     timeoutSeconds: 1200
-  # Unit tests only: the PTY integration test needs a pseudo-terminal, which the sandbox refuses.
+  # Every Rust test the sandbox can run. Tests that need a pseudo-terminal (or anything else the sandbox refuses)
+  # are #[ignore = "host: ..."] and tagged @harvaaja-test-tier: host, so they are skipped here.
   - name: cargo-test
-    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins
+    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests
     stage: every
     timeoutSeconds: 1200
-  - name: cargo-test-pty
-    run: cargo test --manifest-path src-tauri/Cargo.toml --test pty_session
+  # The whole Rust suite, host tests included, outside the sandbox before a release.
+  - name: cargo-test-host
+    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests -- --include-ignored
     stage: release
     sandbox: none
     timeoutSeconds: 1200
