@@ -6,3 +6,11 @@ x-harvaaja-card: 81056f39-fe18-4adb-9282-8f8d17402c16
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Only workspace network config changes (a human-only triage file);
+    there is no product behaviour or spec contract.
+  citations:
+    - .harvaaja/network.yaml
+    - scaffold-the-tiili-app-one-window-one-wo tasks.md 5.2 and 3.2
+  revision: d09766ae-e6e1-4dcc-872e-f70a89f4af9b
