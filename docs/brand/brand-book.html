@@ -1,0 +1,597 @@
+<meta charset="utf-8">
+<title>Tiili Brand System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one brand book. The page itself is built from the tiili tokens it documents; .tl / .td force light or dark locally for side-by-side demos. */
+:root {
+  /* Core palette */
+  --c-tiili: #A4472B; --c-klinkkeri: #6B2A1E; --c-savi: #C9764F; --c-laasti: #E8DECD; --c-kalkki: #F6F1E9;
+  --c-graniitti: #8D877D; --c-koski: #182023; --c-rauta: #3A3F45; --c-ikkuna: #8FA6A4; --c-muratti: #861B22; --c-koivu: #D9A43A; --c-sammal: #6E7F4E; --c-taivas: #6F97B3;
+  --mortar: #2A100C;
+
+  --display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Semantic: light */
+  --bg: #F6F1E9; --surface: #FFFDF9; --sunken: #ECE5DA; --fg: #2A2321; --muted: #6B625C; --line: #DCD2C5;
+  --accent: #A4472B; --accent-hover: #8A3820; --accent-press: #6B2A1E; --on-accent: #FFFFFF; --accent-text: #A4472B; --focus: #A4472B;
+  --term-bg: #F6F1E9; --term-fg: #2A2321; --term-dim: #8D877D; --term-gap: #D8CEC0; --dot: #A4472B; --mortar: #2A100C;
+}
+.tl {
+  --bg: #F6F1E9; --surface: #FFFDF9; --sunken: #ECE5DA; --fg: #2A2321; --muted: #6B625C; --line: #DCD2C5;
+  --accent: #A4472B; --accent-hover: #8A3820; --accent-press: #6B2A1E; --on-accent: #FFFFFF; --accent-text: #A4472B; --focus: #A4472B;
+  --term-bg: #F6F1E9; --term-fg: #2A2321; --term-dim: #8D877D; --term-gap: #D8CEC0; --dot: #A4472B; --mortar: #2A100C;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111617; --surface: #182023; --sunken: #0C1011; --fg: #EFE7DE; --muted: #A0978F; --line: #2A3437;
+    --accent: #A4472B; --accent-hover: #BA5A33; --accent-press: #8A3820; --on-accent: #FFFFFF; --accent-text: #D3865F; --focus: #D3865F;
+    --term-bg: #182023; --term-fg: #D9D3CA; --term-dim: #6E7876; --term-gap: #0B0F10; --dot: #C9764F; --mortar: #3A1610; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"], .td {
+  --bg: #111617; --surface: #182023; --sunken: #0C1011; --fg: #EFE7DE; --muted: #A0978F; --line: #2A3437;
+  --accent: #A4472B; --accent-hover: #BA5A33; --accent-press: #8A3820; --on-accent: #FFFFFF; --accent-text: #D3865F; --focus: #D3865F;
+  --term-bg: #182023; --term-fg: #D9D3CA; --term-dim: #6E7876; --term-gap: #0B0F10; --dot: #C9764F; --mortar: #3A1610; color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--fg); font-family: var(--display); font-size: 15px; line-height: 1.55; }
+.tl, .td { background: var(--bg); color: var(--fg); }
+.wrap { max-width: 1140px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 64px; }
+p { margin: 0; }
+.eyebrow, h3 { font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+h1 { margin: 6px 0 10px; font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; letter-spacing: -0.035em; text-wrap: balance; line-height: 1.1; }
+h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.025em; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h2 .n { font-family: var(--mono); font-size: 13px; color: var(--muted); font-weight: 400; }
+.lede { max-width: 66ch; color: var(--muted); }
+section { display: grid; gap: 20px; }
+section > header { display: grid; gap: 6px; }
+section > header p { max-width: 70ch; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.note { font-size: 13.5px; color: var(--muted); }
+.note b { color: var(--fg); font-weight: 500; }
+.scroll { overflow-x: auto; }
+
+/* ---------- Wordmark ---------- */
+.wm { font-family: var(--display); font-weight: 700; letter-spacing: -0.035em; line-height: 1; white-space: nowrap; }
+.di { position: relative; display: inline-block; }
+.di::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); top: 0.1em; width: 0.175em; height: 0.095em; background: var(--dot); border-radius: 0.012em; }
+
+/* ---------- Icon ---------- */
+.icon { width: var(--s, 128px); height: var(--s, 128px); border-radius: 22.5%; overflow: hidden; flex: none; background: var(--mortar); position: relative;
+  box-shadow: 0 calc(var(--s, 128px) * .04) calc(var(--s, 128px) * .1) rgba(0,0,0,.22); }
+.icon svg { display: block; width: 100%; height: 100%; }
+.icon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); pointer-events: none; }
+.icons { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.icons figure { margin: 0; display: grid; justify-items: center; gap: 6px; }
+.icons figcaption { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dock { border-radius: 14px; padding: 22px; display: grid; gap: 14px; }
+.dock.light { background: linear-gradient(180deg, #EFE9E0, #E2DACE); --mortar: #2A100C; }
+.dock.dark { background: linear-gradient(180deg, #1E2427, #121718); --mortar: #3A1610; }
+.dock .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; }
+.dock.light .tag { color: #6B625C; } .dock.dark .tag { color: #8E9694; }
+.dock.light figcaption { color: #6B625C; } .dock.dark figcaption { color: #8E9694; }
+.cmp { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.cmp-col { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cmp-hd { display: grid; gap: 2px; }
+.cmp-hd b { font-weight: 600; font-size: 17px; }
+.cmp-hd span { font-size: 13.5px; color: var(--muted); }
+.icon.rb { display: grid; place-items: center; }
+.icon.rb svg { width: 70%; height: auto; }
+.icon.rb.light { background: #F6F1E9; }
+.icon.rb.dark { background: #182023; }
+.rb-lock { display: flex; align-items: center; gap: 0.3em; font-size: var(--ls, 72px); }
+.rb-lock svg { height: 0.82em; width: auto; flex: none; }
+.lockup { display: flex; align-items: center; gap: 0.32em; font-size: var(--ls, 72px); }
+.lockup > svg { height: 0.82em; width: auto; flex: none; }
+.lockup .wm { font-size: 1em; }
+
+/* ---------- Stamp ---------- */
+.brick { width: var(--bw, 220px); aspect-ratio: 2.15 / 1; border-radius: 4px; display: grid; place-items: center; position: relative; flex: none;
+  background: linear-gradient(165deg, #BA5A33, var(--c-tiili) 45%, #8A3820);
+  box-shadow: 0 10px 20px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -2px 0 rgba(0,0,0,.18); }
+.brick::before { content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: .8; background:
+  radial-gradient(circle at 30% 40%, rgba(0,0,0,.1) 0 1px, transparent 1.6px) 0 0 / 7px 7px,
+  radial-gradient(circle at 70% 60%, rgba(255,255,255,.08) 0 1px, transparent 1.6px) 3px 2px / 9px 9px; }
+.frog { position: relative; padding: 0.55em 1em 0.45em; border-radius: 3px; background: rgba(0,0,0,.14); font-size: calc(var(--bw, 220px) / 9.5);
+  box-shadow: inset 0 3px 5px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.14); display: grid; justify-items: center; gap: .15em; }
+.frog .t { font-family: var(--mono); font-weight: 700; font-size: 1em; letter-spacing: .24em; margin-right: -.24em; color: #74301C; line-height: 1;
+  text-shadow: 0 1px 0 rgba(255,255,255,.2), 0 -1px 0 rgba(0,0,0,.4); }
+.frog small { font-family: var(--mono); font-size: .27em; letter-spacing: .28em; margin-right: -.28em; color: #74301C; text-shadow: 0 1px 0 rgba(255,255,255,.16); }
+
+/* ---------- Cursor prompt ---------- */
+.prompt { font-family: var(--mono); font-weight: 500; letter-spacing: -0.02em; display: inline-flex; align-items: center; line-height: 1; color: var(--fg); }
+.prompt .p { color: var(--muted); margin-right: .45ch; }
+.cur { display: inline-block; width: 0.6em; height: 1.05em; background: var(--accent); margin-left: 0.06em; border-radius: 0.02em; animation: blink 1.2s linear infinite; }
+@keyframes blink { 0%, 64% { opacity: 1; } 65%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cur { animation: none; } }
+
+/* ---------- Buttons ---------- */
+.btn { font: 600 14px/1 var(--display); letter-spacing: -0.005em; border-radius: 6px; padding: 11px 16px; border: 1px solid transparent; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; text-decoration: none; transition: background-color .12s, border-color .12s, color .12s; white-space: nowrap; }
+.btn:focus-visible, .btn.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+.btn-primary { background: var(--accent); color: var(--on-accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 1px 0 rgba(0,0,0,.2); }
+.btn-primary:hover, .btn-primary.is-hover { background: var(--accent-hover); }
+.btn-primary:active, .btn-primary.is-press { background: var(--accent-press); }
+.btn-secondary { background: transparent; color: var(--fg); border-color: var(--line); }
+.btn-secondary:hover, .btn-secondary.is-hover { border-color: var(--muted); background: var(--sunken); }
+.btn-ghost { background: transparent; color: var(--accent-text); padding-inline: 6px; }
+.btn-ghost:hover, .btn-ghost.is-hover { text-decoration: underline; text-underline-offset: 3px; }
+.btn[disabled], .btn.is-disabled { opacity: .45; cursor: not-allowed; }
+.btn .os { font: 500 11.5px/1 var(--mono); opacity: .75; }
+.btn .brk { width: .62em; height: .9em; background: currentColor; border-radius: 1px; opacity: .9; }
+.btn-large { font-size: 16px; padding: 14px 20px; }
+.btngrid { display: grid; grid-template-columns: auto repeat(4, auto); gap: 12px 14px; align-items: center; justify-content: start; }
+.btngrid .lab { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: .04em; }
+
+/* ---------- Boards ---------- */
+.board { border-radius: 14px; padding: 28px; display: grid; gap: 22px; border: 1px solid var(--line); min-width: 0; }
+.board .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.board .mode { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.board .parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.board .part .brick { --bw: 112px !important; }
+.board .part .prompt { font-size: 22px !important; }
+.part { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-height: 120px; display: grid; grid-template-rows: 1fr auto; overflow: hidden; }
+.part .st { display: grid; place-items: center; padding: 14px; }
+.part .lb { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 7px 10px; border-top: 1px solid var(--line); letter-spacing: .04em; }
+
+/* ---------- Palette ---------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sw { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.sw .chip { height: 64px; display: flex; align-items: flex-end; padding: 6px 8px; font-family: var(--mono); font-size: 10.5px; }
+.sw .tx { padding: 8px 10px 10px; display: grid; gap: 1px; }
+.sw .tx b { font-weight: 600; font-size: 14px; }
+.sw .tx span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sw .tx em { font-style: normal; font-size: 12px; color: var(--muted); }
+.firing { display: flex; height: 54px; border-radius: 8px; overflow: hidden; gap: 3px; background: var(--mortar); padding: 3px; }
+.firing div { flex: 1; border-radius: 2px; display: flex; align-items: flex-end; padding: 4px 6px; font-family: var(--mono); font-size: 10px; color: rgba(255,240,230,.9); }
+table.tok { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px; }
+table.tok th { text-align: left; font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+table.tok td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.tok td code { font-family: var(--mono); font-size: 12px; }
+table.tok .v { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+table.tok .v i { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); display: inline-block; }
+table.tok .ratio { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+
+/* ---------- Type ---------- */
+.typescale { display: grid; gap: 14px; }
+.ts { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.ts .spec { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.5; }
+@media (max-width: 600px) { .ts { grid-template-columns: 1fr; gap: 4px; } }
+
+/* ---------- Website mock ---------- */
+.site { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); min-width: 700px; }
+.site nav { display: flex; align-items: center; gap: 22px; padding: 14px 24px; border-bottom: 1px solid var(--line); }
+.site nav .lockup { --ls: 22px; gap: 8px; }
+.site nav .lockup .icon { --s: 24px; box-shadow: none; border-radius: 6px; }
+.site nav a { color: var(--muted); font-size: 14px; text-decoration: none; }
+.site nav .sp { flex: 1; }
+.site .hero { display: grid; grid-template-columns: 1fr 1.1fr; gap: 28px; padding: 40px 24px 32px; align-items: center; }
+.site .hero h4 { margin: 0 0 12px; font-size: 40px; line-height: 1.05; letter-spacing: -0.04em; font-weight: 700; text-wrap: balance; }
+.site .hero p { color: var(--muted); font-size: 15.5px; max-width: 40ch; }
+.site .hero .ctas { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.site .hero .meta { margin-top: 14px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.site .wall { height: 26px; background: var(--term-gap); }
+.site .wall svg { display: block; width: 100%; height: 100%; }
+.site footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); }
+
+/* ---------- App window ---------- */
+.win { border-radius: 10px; overflow: hidden; background: var(--term-gap); box-shadow: 0 12px 32px rgba(0,0,0,.22); min-width: 560px; border: 1px solid var(--line); }
+.win .bar { height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: var(--sunken); color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.win .bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+.win .bar .title { margin-inline: auto; padding-right: 48px; display: flex; gap: 7px; align-items: center; }
+.win .bar .title b { width: 7px; height: 12px; background: var(--accent); display: inline-block; border-radius: 1px; }
+.term { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.term .pane { background: var(--term-bg); padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--term-fg); min-height: 176px; white-space: pre; overflow: hidden; }
+.term .pane.focus { box-shadow: inset 0 2px 0 var(--accent); }
+.term .pane.idle { opacity: .82; }
+.term .dim { color: var(--term-dim); }
+.td .term .ok { color: #8DB596; } .tl .term .ok { color: #4C7356; }
+.td .term .acc { color: #D3865F; } .tl .term .acc { color: #A4472B; }
+.term .cur { width: 0.62em; height: 1.2em; vertical-align: -0.25em; margin-left: 0; }
+.term .cur.idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--term-dim); animation: none; }
+.ansi { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; padding: 10px; border-radius: 8px; background: var(--term-bg); border: 1px solid var(--line); }
+.ansi div { aspect-ratio: 1.6 / 1; border-radius: 3px; display: flex; align-items: flex-end; padding: 3px 4px; font-family: var(--mono); font-size: 9.5px; }
+.anat { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.anat li { display: grid; grid-template-columns: 120px minmax(0,1fr); gap: 12px; }
+.anat li b { font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); }
+.anat li span { color: var(--muted); }
+.scale { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.scale div { display: grid; justify-items: center; gap: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.scale i { display: block; background: var(--accent); border-radius: 1px; height: 14px; }
+.radii { display: flex; gap: 14px; flex-wrap: wrap; }
+.radii div { width: 72px; height: 48px; border: 2px solid var(--accent-text); display: grid; place-items: center; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
+pre.code { margin: 0; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow: auto; max-height: 420px; color: var(--fg); }
+.copyrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">tiili · round 3 · the brand system</div>
+    <h1>One system, laid in running bond</h1>
+    <p class="lede">The mark is the running bond from round 1: seven bricks, with the focused one fired a different shade. Below it: the system as a light board and a dark board, then the palette, type, website buttons, a website hero, and the app's visual basis. This page is itself built from the tiili tokens, so switching your theme switches it too.</p>
+  </header>
+
+  <!-- 1. Mark -->
+  <section>
+    <header>
+      <h2><span class="n">01</span>The mark</h2>
+      <p>Seven bricks in running bond, from round 1. The centre brick is the pane that has focus, with a <code style="font-family:var(--mono)">&gt;_</code> prompt on it: burnt darker (klinkkeri) with a white prompt on light grounds, lighter clay (savi) with a black prompt on dark ones. Below 64 px the prompt is left off; the brick is too small to hold it. Beside the wordmark the mark stands free; as an app icon it sits on a kalkki tile in light mode and a koski tile in dark mode.</p>
+    </header>
+    <div class="cols2">
+      <div class="dock light">
+        <div class="icons" id="icons-light"></div>
+        <span class="tag">light dock</span>
+      </div>
+      <div class="dock dark">
+        <div class="icons" id="icons-dark"></div>
+        <span class="tag">dark dock</span>
+      </div>
+    </div>
+    <div class="cols2">
+      <div class="dock tl" style="background:var(--bg); border:1px solid var(--line)"><div class="lockup" style="--ls:64px" data-lockup></div><span class="tag" style="color:var(--muted)">lockup on kalkki</span></div>
+      <div class="dock td" style="background:var(--bg); border:1px solid var(--line)"><div class="lockup" style="--ls:64px" data-lockup></div><span class="tag" style="color:var(--muted)">lockup on koski</span></div>
+    </div>
+  </section>
+
+  <!-- 2. Boards -->
+  <section>
+    <header>
+      <h2><span class="n">02</span>One system, light and dark</h2>
+      <p>Four parts, each with one job: the running bond is the icon, brick dots are the wordmark, the brick cursor lives in the app, and the maker's stamp is the seal. The accent stays the same brick in both themes; only grounds and text colours change.</p>
+    </header>
+    <div class="cols2">
+      <div class="board tl">
+        <div class="top"><div class="lockup" style="--ls:46px" data-lockup></div><span class="mode">light · kalkki</span></div>
+        <div class="parts">
+          <div class="part"><div class="st"><span class="prompt" style="font-size:26px"><span class="p">~</span>tiili<span class="cur"></span></span></div><div class="lb">in-app · cursor</div></div>
+          <div class="part"><div class="st"><div class="brick" style="--bw:130px"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div></div><div class="lb">seal · stamp</div></div>
+          <div class="part"><div class="st" style="gap:8px"><button class="btn btn-primary" type="button"><span class="brk"></span>Download</button><button class="btn btn-secondary" type="button">Docs</button></div><div class="lb">web · buttons</div></div>
+        </div>
+      </div>
+      <div class="board td">
+        <div class="top"><div class="lockup" style="--ls:46px" data-lockup></div><span class="mode">dark · koski</span></div>
+        <div class="parts">
+          <div class="part"><div class="st"><span class="prompt" style="font-size:26px"><span class="p">~</span>tiili<span class="cur"></span></span></div><div class="lb">in-app · cursor</div></div>
+          <div class="part"><div class="st"><div class="brick" style="--bw:130px"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div></div><div class="lb">seal · stamp</div></div>
+          <div class="part"><div class="st" style="gap:8px"><button class="btn btn-primary" type="button"><span class="brk"></span>Download</button><button class="btn btn-secondary" type="button">Docs</button></div><div class="lb">web · buttons</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Palette -->
+  <section>
+    <header>
+      <h2><span class="n">03</span>Palette</h2>
+      <p>Core colours name the materials. Project tints come from the same set. Semantic tokens are what the website and app actually use.</p>
+    </header>
+    <div class="card">
+      <h3>Core</h3>
+      <div class="swatches" id="core"></div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Project tints · one per git repo</h3>
+        <div class="firing" id="tints" style="background:var(--term-gap)"></div>
+        <p class="note">Assigned in this order as new repos appear. The label colour on each is set so it passes 4.5:1.</p>
+      </div>
+    </div>
+    <div class="card scroll">
+      <h3>Semantic tokens</h3>
+      <table class="tok" id="tokens">
+        <thead><tr><th>Token</th><th>Use</th><th>Light</th><th>Dark</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="note">Contrast is shown against that theme's <code style="font-family:var(--mono)">--bg</code>. Brick <b>#A4472B</b> is too dark to be text on koski (2.7:1), so dark mode uses <b>#D3865F</b> for accent text and focus rings. Buttons keep the same brick fill in both themes with white labels at 6.0:1.</p>
+    </div>
+  </section>
+
+  <!-- 4. Type -->
+  <section>
+    <header>
+      <h2><span class="n">04</span>Type</h2>
+      <p>Geist for everything people read; Geist Mono for anything that belongs to the terminal: commands, labels, versions, the stamp. Bold and tight for display, regular and open for body.</p>
+    </header>
+    <div class="card typescale">
+      <div class="ts"><div class="spec">Display<br>Geist 700 · 56/1.0<br>tracking −0.04em</div><div style="font-size:clamp(34px,6vw,56px); font-weight:700; letter-spacing:-0.04em; line-height:1">Every agent gets its own brick.</div></div>
+      <div class="ts"><div class="spec">Heading 1<br>Geist 600 · 36/1.1<br>−0.035em</div><div style="font-size:clamp(26px,4vw,36px); font-weight:600; letter-spacing:-0.035em; line-height:1.1">Tiling that follows your projects</div></div>
+      <div class="ts"><div class="spec">Heading 2<br>Geist 600 · 24/1.2<br>−0.025em</div><div style="font-size:24px; font-weight:600; letter-spacing:-0.025em; line-height:1.2">Colours by git repository</div></div>
+      <div class="ts"><div class="spec">Body<br>Geist 400 · 16/1.6</div><div style="font-size:16px; line-height:1.6; max-width:62ch">Open a terminal and tiili places it: fullscreen, then side by side, then a 2×2 grid. Panes from the same repository share a colour, so you can tell your projects apart at a glance.</div></div>
+      <div class="ts"><div class="spec">Small<br>Geist 400 · 13.5/1.5</div><div style="font-size:13.5px; color:var(--muted)">Requires macOS 13, Windows 10 or a recent Linux desktop.</div></div>
+      <div class="ts"><div class="spec">Label<br>Geist Mono 500 · 11.5<br>uppercase · +0.08em</div><div style="font-family:var(--mono); font-size:11.5px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">Release notes · v0.1.0</div></div>
+      <div class="ts"><div class="spec">Terminal<br>Geist Mono 400 · 13/1.6</div><div style="font-family:var(--mono); font-size:13px; line-height:1.6">$ tiili open ~/Koodit/sporeward --split right</div></div>
+    </div>
+  </section>
+
+  <!-- 5. Website -->
+  <section>
+    <header>
+      <h2><span class="n">05</span>Website</h2>
+      <p>One primary action per screen, in brick. Secondary actions are outlined, tertiary ones are text. Every button gets the same 2 px focus ring, offset so it never touches the fill.</p>
+    </header>
+    <div class="cols2">
+      <div class="card tl scroll">
+        <h3>Buttons · light</h3>
+        <div class="btngrid">
+          <span></span><span class="lab">default</span><span class="lab">hover</span><span class="lab">focus</span><span class="lab">disabled</span>
+          <span class="lab">primary</span><button class="btn btn-primary" type="button">Download</button><button class="btn btn-primary is-hover" type="button">Download</button><button class="btn btn-primary is-focus" type="button">Download</button><button class="btn btn-primary" type="button" disabled>Download</button>
+          <span class="lab">secondary</span><button class="btn btn-secondary" type="button">Docs</button><button class="btn btn-secondary is-hover" type="button">Docs</button><button class="btn btn-secondary is-focus" type="button">Docs</button><button class="btn btn-secondary" type="button" disabled>Docs</button>
+          <span class="lab">text</span><button class="btn btn-ghost" type="button">Changelog</button><button class="btn btn-ghost is-hover" type="button">Changelog</button><button class="btn btn-ghost is-focus" type="button">Changelog</button><button class="btn btn-ghost" type="button" disabled>Changelog</button>
+        </div>
+      </div>
+      <div class="card td scroll">
+        <h3>Buttons · dark</h3>
+        <div class="btngrid">
+          <span></span><span class="lab">default</span><span class="lab">hover</span><span class="lab">focus</span><span class="lab">disabled</span>
+          <span class="lab">primary</span><button class="btn btn-primary" type="button">Download</button><button class="btn btn-primary is-hover" type="button">Download</button><button class="btn btn-primary is-focus" type="button">Download</button><button class="btn btn-primary" type="button" disabled>Download</button>
+          <span class="lab">secondary</span><button class="btn btn-secondary" type="button">Docs</button><button class="btn btn-secondary is-hover" type="button">Docs</button><button class="btn btn-secondary is-focus" type="button">Docs</button><button class="btn btn-secondary" type="button" disabled>Docs</button>
+          <span class="lab">text</span><button class="btn btn-ghost" type="button">Changelog</button><button class="btn btn-ghost is-hover" type="button">Changelog</button><button class="btn btn-ghost is-focus" type="button">Changelog</button><button class="btn btn-ghost" type="button" disabled>Changelog</button>
+        </div>
+      </div>
+    </div>
+    <div class="cols2">
+      <div class="card tl"><h3>Download button · light</h3><div style="display:flex; gap:10px; flex-wrap:wrap"><button class="btn btn-primary btn-large" type="button"><span class="brk"></span>Download for macOS <span class="os">.dmg · 9 MB</span></button></div></div>
+      <div class="card td"><h3>Download button · dark</h3><div style="display:flex; gap:10px; flex-wrap:wrap"><button class="btn btn-primary btn-large" type="button"><span class="brk"></span>Download for Linux <span class="os">.AppImage · 11 MB</span></button></div></div>
+    </div>
+    <div class="scroll">
+      <div class="site tl" id="site-light"></div>
+    </div>
+    <div class="scroll">
+      <div class="site td" id="site-dark"></div>
+    </div>
+  </section>
+
+  <!-- 6. App -->
+  <section>
+    <header>
+      <h2><span class="n">06</span>App visual basis</h2>
+      <p>The window from round 2, now in both themes. Panes sit on a mortar-coloured background, so the 3 px gaps read as mortar joints. The focused pane gets a brick line on top and a solid brick cursor; the others get an outlined cursor and dim slightly.</p>
+    </header>
+    <div class="scroll"><div class="win td" data-win></div></div>
+    <div class="scroll"><div class="win tl" data-win></div></div>
+    <div class="cols2">
+      <div class="card">
+        <h3>Pane anatomy</h3>
+        <ul class="anat">
+          <li><b>gap</b><span>3 px, <code style="font-family:var(--mono)">--term-gap</code>. Dark mortar in dark mode, light mortar in light mode.</span></li>
+          <li><b>focus</b><span>2 px brick line on the pane's top edge plus a solid brick cursor. No glow, no border around the whole pane.</span></li>
+          <li><b>inactive</b><span>Outlined cursor, pane at 82% opacity. Output keeps streaming.</span></li>
+          <li><b>project</b><span>A tint from the project list colours the pane's title chip and the cursor outline when grouping by repo is on.</span></li>
+          <li><b>title bar</b><span>Brick glyph, then app name and pane count, in Geist Mono 11.</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Spacing and radius</h3>
+        <div class="scale" id="space"></div>
+        <div class="radii">
+          <div style="border-radius:3px">3 · brick</div>
+          <div style="border-radius:6px">6 · control</div>
+          <div style="border-radius:10px">10 · window</div>
+          <div style="border-radius:22.5%; width:48px">22.5%</div>
+        </div>
+        <p class="note">Radii stay small. Bricks have nearly square corners, and so does the UI.</p>
+      </div>
+    </div>
+    <div class="cols2">
+      <div class="card td"><h3>Terminal colours · dark</h3><div class="ansi" id="ansi-dark"></div></div>
+      <div class="card tl"><h3>Terminal colours · light</h3><div class="ansi" id="ansi-light"></div></div>
+    </div>
+  </section>
+
+  <!-- 7. Tokens -->
+  <section>
+    <header>
+      <h2><span class="n">07</span>Tokens</h2>
+      <p>Everything above as CSS custom properties, ready to drop into the website and the Tauri app's webview.</p>
+    </header>
+    <div class="card">
+      <div class="copyrow"><h3>tiili.css</h3><button class="btn btn-secondary" type="button" id="copy">Copy tokens</button></div>
+      <pre class="code" id="code"></pre>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var uid = 0;
+  // Round 2 firings: tiili, klinkkeri, savi, rauta
+  var FIRE = ['#A4472B', '#6B2A1E', '#C9764F', '#3A3F45'];
+  var MORTAR = '#E8DECD';
+  // Brick order, row by row; no two touching bricks share a colour.
+  var ORDER = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1];
+  // Icon: 3 + 2 + 3 bricks; each colour used twice, no touching pair alike.
+  var LAY = [1, 0, 2, 3, 1, 2, 0, 3];
+
+  function wall(rows, opts) {
+    opts = opts || {};
+    var id = 'g' + (++uid);
+    // Three courses at every size; rows === 4 only means "large", which gets thinner mortar.
+    var m = rows === 4 ? 3.6 : 4.8;
+    var h = (100 - 2 * m) * 3 / 7;          // top and bottom courses lose a third
+    var w = 2.1 * h;
+    var s0 = 50 - w * 0.25;                  // off-centre slice of wall
+    var seams = [s0, s0 + (w + m) / 2, s0];
+    var courses = [];
+    for (var cr = 0; cr < 3; cr++) {
+      var list = [];
+      for (var q = -3; q <= 3; q++) { var bx = seams[cr] + m / 2 + q * (w + m); if (bx + w > 0 && bx < 100) list.push({ x: bx }); }
+      courses.push(list);
+    }
+    var START = [0, 2, 1];
+    courses.forEach(function (list, cr) {
+      list.forEach(function (b, bi) {
+        var bad = {};
+        if (bi > 0) bad[list[bi - 1].c] = 1;
+        if (cr > 0) courses[cr - 1].forEach(function (a) { if (a.x < b.x + w && a.x + w > b.x) bad[a.c] = 1; });
+        for (var t = 0; t < 4; t++) { var cc = (START[cr] + bi + t) % 4; if (!bad[cc]) { b.c = cc; break; } }
+      });
+    });
+    var parts = [];
+    for (var r = 0; r < 3; r++) {
+      var y = -h / 3 + r * (h + m);
+      var xs = courses[r].map(function (b) { return b.x; });
+      for (var i = 0; i < xs.length; i++) {
+        var fill = FIRE[courses[r][i].c];
+        parts.push('<rect x="' + xs[i].toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + (rows === 4 ? 0.8 : 0.6) + '" fill="' + fill + '"/>');
+        if (opts.bevel) {
+          parts.push('<rect x="' + (xs[i] + 0.6).toFixed(2) + '" y="' + (y + 0.6).toFixed(2) + '" width="' + (w - 1.2).toFixed(2) + '" height="0.9" fill="rgba(255,214,176,.35)"/>');
+          parts.push('<rect x="' + (xs[i] + 0.6).toFixed(2) + '" y="' + (y + 0.6).toFixed(2) + '" width="0.9" height="' + (h - 1.2).toFixed(2) + '" fill="rgba(255,214,176,.22)"/>');
+        }
+      }
+    }
+    var filt = opts.grain
+      ? '<defs><filter id="' + id + '" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.28 0" result="a"/><feComposite in="a" in2="SourceGraphic" operator="in" result="g"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="g"/></feMerge></filter></defs>'
+      : '';
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + filt + '<g' + (opts.grain ? ' filter="url(#' + id + ')"' : '') + '>' + parts.join('') + '</g></svg>';
+  }
+  function icon(size) {
+    var big = size >= 64;
+    return '<div class="icon" style="--s:' + size + 'px">' + wall(big ? 4 : 3) + '</div>';
+  }
+  function iconEm() {
+    return '<div class="icon">' + wall(4) + '</div>';
+  }
+  var WM = '<span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span>';
+
+  ['icons-light', 'icons-dark'].forEach(function (elId) {
+    var mode = elId === 'icons-dark' ? 'dark' : 'light';
+    document.getElementById(elId).innerHTML = [128, 64, 32, 16].map(function (s) { return '<figure>' + bondIcon(s, mode) + '<figcaption>' + s + '</figcaption></figure>'; }).join('');
+  });
+  document.querySelectorAll('[data-lockup]').forEach(function (el) { el.innerHTML = bond(el.closest('.td') ? '#C9764F' : '#6B2A1E') + WM; });
+
+  // Running bond mark from round 1: 7 bricks, centre brick is the focused pane.
+  // glyph: colour of the ">_" prompt on the focus brick, or false to leave it off (small sizes).
+  function bond(focus, glyph) {
+    if (glyph === undefined) glyph = focus === '#C9764F' ? '#111617' : '#FFFFFF';
+    var b = '#A4472B';
+    var prompt = glyph ? '<text x="26" y="20.4" text-anchor="middle" dominant-baseline="middle" font-family="Geist Mono, ui-monospace, Menlo, monospace" font-weight="700" font-size="8" letter-spacing="0.2" fill="' + glyph + '">&gt;_</text>' : '';
+    return '<svg viewBox="0 0 52 40" aria-hidden="true"><g fill="' + b + '">' +
+      '<rect x="0" y="0" width="25" height="12" rx="1.5"/><rect x="27" y="0" width="25" height="12" rx="1.5"/>' +
+      '<rect x="0" y="14" width="11.5" height="12" rx="1.5"/><rect x="13.5" y="14" width="25" height="12" rx="1.5" fill="' + focus + '"/><rect x="40.5" y="14" width="11.5" height="12" rx="1.5"/>' +
+      '<rect x="0" y="28" width="25" height="12" rx="1.5"/><rect x="27" y="28" width="25" height="12" rx="1.5"/></g>' + prompt + '</svg>';
+  }
+  function bondIcon(size, mode) {
+    var focus = mode === 'dark' ? '#C9764F' : '#6B2A1E';
+    return '<div class="icon rb ' + mode + '" style="--s:' + size + 'px">' + bond(focus, size >= 64 ? undefined : false) + '</div>';
+  }
+
+  // Core palette
+  var core = [
+    ['tiili', '#A4472B', 'Brand accent, buttons, cursor', '#fff'],
+    ['klinkkeri', '#6B2A1E', 'Pressed states, deep tint', '#fff'],
+    ['savi', '#C9764F', 'Accent on dark, project tint', '#2A2321'],
+    ['laasti', '#E8DECD', 'Mortar, light surfaces', '#2A2321'],
+    ['kalkki', '#F6F1E9', 'Light background', '#2A2321'],
+    ['graniitti', '#8D877D', 'Muted marks, dim text on dark', '#2A2321'],
+    ['koski', '#182023', 'Terminal and dark surface', '#E8DECD'],
+    ['rauta', '#3A3F45', 'Text-dark tint, iron', '#fff'],
+    ['ikkuna', '#8FA6A4', 'Window glass, cyan', '#2A2321'],
+    ['muratti', '#861B22', 'Ivy, errors', '#fff'],
+    ['koivu', '#D9A43A', 'Birch, warnings', '#2A2321'],
+    ['sammal', '#6E7F4E', 'Moss, success', '#fff']
+  ];
+  document.getElementById('core').innerHTML = core.map(function (c) {
+    return '<div class="sw"><div class="chip" style="background:' + c[1] + ';color:' + c[3] + '">' + c[1] + '</div><div class="tx"><b>' + c[0] + '</b><em>' + c[2] + '</em></div></div>';
+  }).join('');
+  var tints = [['tiili', '#A4472B', '#fff'], ['savi', '#C9764F', '#2A2321'], ['ikkuna', '#8FA6A4', '#1B2224'], ['koivu', '#D9A43A', '#2A2321'], ['sammal', '#6E7F4E', '#fff'], ['muratti', '#861B22', '#fff'], ['taivas', '#6F97B3', '#16222B'], ['rauta', '#3A3F45', '#fff']];
+  document.getElementById('tints').innerHTML = tints.map(function (t) { return '<div style="background:' + t[1] + ';color:' + t[2] + '">' + t[0] + '</div>'; }).join('');
+
+  // Contrast helpers
+  function lum(hex) {
+    var n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function ratio(a, b) { var x = lum(a), y = lum(b); return ((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)).toFixed(1); }
+
+  var BG_L = '#F6F1E9', BG_D = '#111617';
+  var toks = [
+    ['--bg', 'Page background', '#F6F1E9', '#111617', false],
+    ['--surface', 'Cards, panels', '#FFFDF9', '#182023', false],
+    ['--sunken', 'Title bars, code', '#ECE5DA', '#0C1011', false],
+    ['--fg', 'Body text', '#2A2321', '#EFE7DE', true],
+    ['--muted', 'Secondary text', '#6B625C', '#A0978F', true],
+    ['--line', 'Borders, dividers', '#DCD2C5', '#2A3437', false],
+    ['--accent', 'Button fill, cursor', '#A4472B', '#A4472B', false],
+    ['--accent-hover', 'Button hover', '#8A3820', '#BA5A33', false],
+    ['--accent-press', 'Button pressed', '#6B2A1E', '#8A3820', false],
+    ['--on-accent', 'Text on brick', '#FFFFFF', '#FFFFFF', false],
+    ['--accent-text', 'Links, accent text', '#A4472B', '#D3865F', true],
+    ['--focus', 'Focus ring', '#A4472B', '#D3865F', true],
+    ['--term-bg', 'Terminal background', '#F6F1E9', '#182023', false],
+    ['--term-fg', 'Terminal text', '#2A2321', '#D9D3CA', true],
+    ['--term-gap', 'Mortar between panes', '#D8CEC0', '#0B0F10', false],
+    ['--mark-ground', 'Tile behind the app icon', '#F6F1E9', '#182023', false],
+    ['--mark-focus', 'Focus brick in the mark', '#6B2A1E', '#C9764F', false]
+  ];
+  document.querySelector('#tokens tbody').innerHTML = toks.map(function (t) {
+    function cell(v, bg) { return '<span class="v"><i style="background:' + v + '"></i>' + v + (t[4] ? ' <span class="ratio">' + ratio(v, bg) + ':1</span>' : '') + '</span>'; }
+    return '<tr><td><code>' + t[0] + '</code></td><td>' + t[1] + '</td><td>' + cell(t[2], BG_L) + '</td><td>' + cell(t[3], BG_D) + '</td></tr>';
+  }).join('');
+
+  // ANSI
+  var ansiDark = ['#222B2E', '#D05B3F', '#8DB596', '#D9A43A', '#7FA2B8', '#B97C92', '#8FB0AD', '#CFC8BE', '#56615F', '#E57A57', '#A9CBB0', '#EDC066', '#9DBCD0', '#D198AC', '#ADCBC8', '#F6F1E9'];
+  var ansiLight = ['#2A2321', '#A4472B', '#4C7356', '#8C5F0E', '#3C6680', '#844B66', '#3F6E6B', '#8D877D', '#5E5650', '#C2512F', '#5E8A69', '#A87414', '#4D7C99', '#9C5A7A', '#4F8481', '#B9B1A6'];
+  function ansi(list, el) {
+    el.innerHTML = list.map(function (c, i) { var L = lum(c); return '<div style="background:' + c + ';color:' + (L > 0.3 ? '#1B1715' : '#F6F1E9') + '">' + i + '</div>'; }).join('');
+  }
+  ansi(ansiDark, document.getElementById('ansi-dark'));
+  ansi(ansiLight, document.getElementById('ansi-light'));
+
+  // Spacing
+  document.getElementById('space').innerHTML = [4, 8, 12, 16, 24, 32, 48, 64].map(function (s) { return '<div><i style="width:' + s + 'px"></i>' + s + '</div>'; }).join('');
+
+  // App window
+  var winHTML = '<div class="bar"><i></i><i></i><i></i><span class="title"><b></b>tiili — 2 panes</span></div>' +
+    '<div class="term">' +
+    '<div class="pane focus"><span class="dim">~/Koodit/sporeward</span>\n<span class="acc">$</span> claude\n<span class="ok">✓</span> Read 14 files\n<span class="ok">✓</span> Updated spec.md\n› add idempotency test<span class="cur" aria-hidden="true"></span></div>' +
+    '<div class="pane idle"><span class="dim">~/Koodit/tiili</span>\n<span class="acc">$</span> npm run tauri dev\n<span class="dim">  Compiling tiili v0.1.0</span>\n<span class="ok">  Finished</span> dev in 4.21s\n<span class="acc">$</span> <span class="cur idle" aria-hidden="true"></span></div>' +
+    '</div>';
+  document.querySelectorAll('[data-win]').forEach(function (el) { el.innerHTML = winHTML; });
+
+  // Website hero
+  var wallStrip = (function () {
+    var p = [], w = 46, h = 10, m = 2, k = 0;
+    for (var r = 0; r < 2; r++) {
+      var y = r * (h + m) + 1, off = r % 2 ? -(w + m) / 2 : 0;
+      for (var x = off; x < 1400; x += w + m) { p.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="0.8" fill="' + FIRE[ORDER[k++ % ORDER.length]] + '"/>'); }
+    }
+    return '<svg viewBox="0 0 1400 26" preserveAspectRatio="xMinYMid slice" aria-hidden="true">' + p.join('') + '</svg>';
+  })();
+  function site(osLabel, size, dark) {
+    return '<nav><div class="lockup">' + bond(dark ? '#C9764F' : '#6B2A1E', false) + WM + '</div><span class="sp"></span><a href="#" onclick="return false">Docs</a><a href="#" onclick="return false">Changelog</a><a href="#" onclick="return false">GitHub</a><button class="btn btn-primary" type="button">Download</button></nav>' +
+      '<div class="hero"><div><h4>Every agent gets its own brick.</h4><p>tiili tiles your terminals as you open them and colours each one by project, so ten agents across three repos stay readable.</p>' +
+      '<div class="ctas"><button class="btn btn-primary btn-large" type="button"><span class="brk"></span>Download for ' + osLabel + '</button><button class="btn btn-secondary btn-large" type="button">View on GitHub</button></div>' +
+      '<div class="meta">v0.1.0 · ' + size + ' · also for Windows and Linux</div></div>' +
+      '<div class="win" style="min-width:0">' + winHTML + '</div></div>' +
+      '<div class="wall">' + wallStrip + '</div>' +
+      '<footer><span>Fired in Tampere · MIT licence</span><span>TRE · Nº 1</span></footer>';
+  }
+  document.getElementById('site-light').innerHTML = site('macOS', '9 MB', false);
+  document.getElementById('site-dark').innerHTML = site('Linux', '11 MB', true);
+
+  // Token code
+  var css = ':root {\n  /* core */\n' + core.map(function (c) { return '  --tiili-' + c[0] + ': ' + c[1] + ';'; }).join('\n') +
+    '\n  --tiili-taivas: #6F97B3;\n\n  /* type */\n  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;\n  --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;\n\n  /* radius */\n  --radius-brick: 3px;\n  --radius-control: 6px;\n  --radius-window: 10px;\n  --pane-gap: 3px;\n\n  /* semantic: light */\n' +
+    toks.map(function (t) { return '  ' + t[0] + ': ' + t[2] + ';'; }).join('\n') +
+    '\n}\n\n[data-theme="dark"] {\n' + toks.map(function (t) { return '  ' + t[0] + ': ' + t[3] + ';'; }).join('\n') +
+    '\n}\n\n/* terminal ANSI 0–15 */\n[data-theme="dark"] { --ansi: ' + ansiDark.join(' ') + '; }\n[data-theme="light"] { --ansi: ' + ansiLight.join(' ') + '; }\n';
+  var codeEl = document.getElementById('code');
+  codeEl.textContent = css;
+  var btn = document.getElementById('copy');
+  btn.addEventListener('click', function () {
+    function selectIt() { var r = document.createRange(); r.selectNodeContents(codeEl); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected: press ⌘C'; }
+    try {
+      navigator.clipboard.writeText(css).then(function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy tokens'; }, 1600); }, selectIt);
+    } catch (e) { selectIt(); }
+  });
+})();
+</script>

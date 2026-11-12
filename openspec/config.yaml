@@ -1,5 +1,14 @@
 schema: spec-driven
 
+context: |
+  tiili is a desktop terminal that auto-tiles terminals and colours them by git repository (see docs/concept.md).
+  Designs and tasks must cover macOS, Windows and Linux, and call out platform differences
+  (keyboard shortcuts, menus, shells, PTY/ConPTY).
+  Stack: Tauri 2 (Rust core), xterm.js in the webview, portable-pty for PTYs, TypeScript for the UI.
+  Copy and paste: Cmd+C/V through a real Edit menu on macOS; Ctrl+Shift+C/V on Windows and Linux.
+  Visual design follows docs/brand/README.md; colours and type come from docs/brand/tiili.css tokens.
+  tiili is a clean-room project: nothing may be copied or derived from Waffle's binaries, name or artwork.
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.
