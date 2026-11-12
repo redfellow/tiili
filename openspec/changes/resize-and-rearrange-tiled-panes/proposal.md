@@ -30,3 +30,4 @@ Auto-tiling (docs/concept.md) places terminals in an even grid, but the concept 
 - The grab strip is the pane's top edge (where the focus line sits), 6 px tall, using `--term-gap`/accent tokens only; ruled out a visible handle icon or new colours.
 - Divider drag shows live layout while xterm refits only at the end; PTY resize is sent once per affected pane on pointer up.
 - Out of scope: pop-out windows, saving layouts across restarts, nested splits.
+- The divider keeps its accent colour while being dragged (kept as built); ruled out removing it after review.

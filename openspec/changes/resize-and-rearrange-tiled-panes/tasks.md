@@ -19,9 +19,18 @@
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_resize_panes`
   - proof: `npm run typecheck`
 
+## 4. Rework: send the merged head through checks
+
+- [ ] 4.1 Confirm the branch head carries the `hv/main` merge (144bf17) and the review nits (fc4141b) with no further code change: `rowsOf` is gone from `src/layout` and its tests, and the layout model and keymap tests still pass on the merged head
+  - proof: `git merge-base --is-ancestor fc4141b HEAD`
+  - proof: `npx vitest run src/layout/model.test.ts src/keymap.test.ts src/resize.test.ts`
+  - proof: `npx eslint src/layout src/panes.ts src/terminal.ts src/resize.ts`
+  - proof: `npm run typecheck`
+
 ## Manual checks after merge (The user)
 
 - On macOS, Windows and Linux: drag a column and a row divider, then run `stty size` (or `$Host.UI.RawUI.WindowSize` in PowerShell) in each affected pane.
 - Drag a pane's top edge onto another and check both sessions keep running; text selection inside a pane still works.
 - Try the move and reset shortcuts on each platform, and check they don't reach the shell or trigger an OS action.
 - Open and close terminals after resizing and check sizes are kept or reset as the spec says.
+- On Linux under GNOME, check whether Ctrl+Alt+Shift+arrow is taken by the desktop (workspace move) before reaching tiili; this stays a manual check, not a code change.
