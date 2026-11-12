@@ -4,7 +4,7 @@
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 - [x] 1.2 Add `src-tauri/src/cwd.rs` `process_cwd(pid)` (Linux `/proc`, macOS `libproc`, Windows `None`) with home-folder fallback at spawn; unit test that the current process's cwd is returned on macOS/Linux and `None` on Windows
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml cwd`
-- [ ] 1.3 Integration test `src-tauri/tests/pty_registry.rs` (first line `// @harvaaja-test-tier: integration`): spawn three sessions, resize each to a different size and check each reports its own size (`stty size` output), spawn one with cwd of another's `/tmp` dir on macOS/Linux and check `pwd`, close one and check the others still echo
+- [x] 1.3 Integration test `src-tauri/tests/pty_registry.rs` (first line `// @harvaaja-test-tier: integration`): spawn three sessions, resize each to a different size and check each reports its own size (`stty size` output), spawn one with cwd of another's `/tmp` dir on macOS/Linux and check `pwd`, close one and check the others still echo
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_registry`
 
 ## 2. Layout and shortcuts (pure)
