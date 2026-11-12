@@ -1,0 +1,13 @@
+format: 1
+slug: written-purpose-section-for-the-packagin
+title: Written Purpose section for the packaging capability spec
+x-harvaaja-card: 12f93962-57ea-4e67-a6f3-221c2e37dd74
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: b00d3ce0-7b5d-4844-8a62-d1d9e18c797a

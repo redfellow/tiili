@@ -26,6 +26,14 @@
   --tint-6: #861B22; --tint-6-on: #FFFFFF;
   --tint-7: #6F97B3; --tint-7-on: #16222B;
   --tint-8: #3A3F45; --tint-8-on: #FFFFFF;
+  --tint-9: #2F5D4A; --tint-9-on: #FFFFFF;
+  --tint-10: #C8B98A; --tint-10-on: #2A2321;
+  --tint-11: #8A5A83; --tint-11-on: #FFFFFF;
+  --tint-12: #B7C7D3; --tint-12-on: #2A2321;
+  --tint-13: #2E4F6E; --tint-13-on: #FFFFFF;
+  --tint-14: #A9B48A; --tint-14-on: #2A2321;
+  --tint-15: #B23A50; --tint-15-on: #FFFFFF;
+  --tint-16: #5A4632; --tint-16-on: #FFFFFF;
 
   /* Type */
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

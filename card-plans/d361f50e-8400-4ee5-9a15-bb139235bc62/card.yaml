@@ -1,0 +1,16 @@
+format: 1
+slug: resize-and-rearrange-tiled-panes
+title: Resize and rearrange tiled panes
+x-harvaaja-card: d361f50e-8400-4ee5-9a15-bb139235bc62
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable contract (pane resizing, swapping, shortcuts,
+    re-flow); no existing spec or same-intent change covers it.
+  citations:
+    - openspec/specs is empty
+    - "docs/concept.md: panes can be resized and rearranged later"
+    - scaffold change covers one terminal only
+  revision: 4a1c8d94-7982-4a05-b857-b6c6657efc02

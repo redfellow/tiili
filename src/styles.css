@@ -43,23 +43,28 @@ body {
 
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
+  --pane-gap: 3px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--pane-gap);
   height: 100%;
   background: var(--term-gap);
 }
 
-/* One flex row per grid row: rows share the height, panes in a row share its width. */
+/* One flex row per grid row: rows and the panes of a row are grown by their track sizes. */
 .pane-row {
   display: flex;
   flex: 1 1 0;
-  gap: 3px;
+  gap: var(--pane-gap);
   min-height: 0;
 }
 
 .pane {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   box-sizing: border-box;
   flex: 1 1 0;
   min-width: 0;
@@ -84,7 +89,86 @@ body {
 }
 
 .pane-terminal {
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Title row: the chip naming the pane's repository, or its folder outside one. */
+.pane-title {
+  display: flex;
+  min-width: 0;
+  min-height: 18px;
+}
+
+/* Neutral chip, for a folder outside any repository. */
+.pane-chip {
+  overflow: hidden;
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-brick);
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11.5px/18px var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keeps the title row's height before the folder is known. */
+.pane-chip:empty {
+  visibility: hidden;
+}
+
+/* In a repository: the project tint with its label colour. */
+.pane[data-tint] .pane-chip {
+  background: var(--pane-tint);
+  color: var(--pane-tint-on);
+}
+
+/* The pane's top edge, where the focus line sits: drag it onto another pane to swap the two. */
+.pane-grab {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 6px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.pane-grab:active {
+  cursor: grabbing;
+}
+
+.pane[data-drop-target] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  opacity: 1;
+}
+
+/* Dividers are the mortar gaps between tracks; dragging one resizes the tracks on both sides. */
+.pane-divider {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+}
+
+.pane-divider-col {
+  top: 0;
+  width: var(--pane-gap);
+  cursor: col-resize;
+}
+
+.pane-divider-row {
+  left: 0;
+  width: 100%;
+  height: var(--pane-gap);
+  cursor: row-resize;
+}
+
+.pane-divider[data-dragging] {
+  background: var(--accent);
 }
 
 /* Settings dialogue */
