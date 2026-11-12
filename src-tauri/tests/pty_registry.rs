@@ -1,4 +1,4 @@
-// @harvaaja-test-tier: integration
+// @harvaaja-test-tier: host
 //! Drives several real default shells through `SessionRegistry`.
 
 use std::collections::HashMap;
@@ -57,6 +57,7 @@ fn spawn(
 
 /// Each session its own size, Independent sessions, Inherit directory.
 #[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
 fn sessions_keep_their_own_size_input_and_directory() {
     let registry = SessionRegistry::new();
     let (tx, rx) = mpsc::channel();

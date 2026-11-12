@@ -1,4 +1,4 @@
-// @harvaaja-test-tier: integration
+// @harvaaja-test-tier: host
 //! Drives a real default shell through `PtySession`.
 
 use std::sync::mpsc;
@@ -23,6 +23,7 @@ fn wait_for(output: &mpsc::Receiver<Vec<u8>>, seen: &mut Vec<u8>, pattern: &str)
 }
 
 #[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
 fn typing_reaches_the_shell_and_output_is_shown_then_exit_is_reported() {
     let (out_tx, out_rx) = mpsc::channel();
     let (exit_tx, exit_rx) = mpsc::channel();

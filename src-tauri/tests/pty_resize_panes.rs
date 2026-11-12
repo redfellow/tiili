@@ -1,4 +1,4 @@
-// @harvaaja-test-tier: integration
+// @harvaaja-test-tier: host
 //! Divider drag resizes PTYs on release: two side-by-side shells get the sizes a moved column divider
 //! gives them, and each shell reports its own new rows and columns.
 
@@ -47,6 +47,7 @@ mod unix {
     }
 
     #[test]
+    #[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
     fn divider_drag_resizes_each_pane_pty() {
         let registry = SessionRegistry::new();
         let (tx, rx) = mpsc::channel();
