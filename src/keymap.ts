@@ -1,7 +1,9 @@
 export type Platform = "macos" | "windows" | "linux";
 export type ClipboardAction = "copy" | "paste" | "selectAll";
+/** A pane shortcut: open a new pane, close the focused one, or focus pane `index` (0-based). */
+export type PaneAction = { type: "new" } | { type: "close" } | { type: "focus"; index: number };
 
-/** The parts of a keyboard event the clipboard mapping reads. */
+/** The parts of a keyboard event the shortcut mappings read. */
 export interface KeyChord {
   key: string;
   ctrlKey: boolean;
@@ -27,6 +29,32 @@ export function clipboardAction(event: KeyChord, platform: Platform): ClipboardA
   if (!event.ctrlKey || !event.shiftKey || event.metaKey) return null;
   if (key === "c") return "copy";
   if (key === "v") return "paste";
+  return null;
+}
+
+/**
+ * Which pane action a key press asks for, or null when the key belongs to the shell.
+ * macOS: ⌘T new, ⌘W close, ⌘1–⌘9 focus. Windows and Linux: Ctrl+Shift+T new, Ctrl+Shift+W close,
+ * Alt+1–Alt+9 focus; plain Ctrl+T, Ctrl+W and Ctrl+1 stay with the shell.
+ */
+export function paneAction(event: KeyChord, platform: Platform): PaneAction | null {
+  const key = event.key.toLowerCase();
+  const digit = /^[1-9]$/.test(key) ? Number(key) - 1 : null;
+  if (platform === "macos") {
+    if (!event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
+    if (key === "t") return { type: "new" };
+    if (key === "w") return { type: "close" };
+    return digit === null ? null : { type: "focus", index: digit };
+  }
+  if (event.metaKey) return null;
+  if (event.ctrlKey && event.shiftKey && !event.altKey) {
+    if (key === "t") return { type: "new" };
+    if (key === "w") return { type: "close" };
+    return null;
+  }
+  if (event.altKey && !event.ctrlKey && !event.shiftKey && digit !== null) {
+    return { type: "focus", index: digit };
+  }
   return null;
 }
 

@@ -32,20 +32,24 @@ export function documentTokens(): TokenReader {
 /** The part of a `MediaQueryList` the theme follower listens to. */
 export interface ColorSchemeQuery {
   addEventListener(type: "change", listener: () => void): void;
+  removeEventListener?(type: "change", listener: () => void): void;
 }
 
 /**
  * Calls `apply` with the current theme now and again whenever the system switches light and dark, as long as
- * `followsSystem` says the chosen theme is System; a fixed theme keeps its colours.
+ * `followsSystem` says the chosen theme is System; a fixed theme keeps its colours. Returns a function that
+ * stops following.
  */
 export function followSystemTheme(
   apply: (theme: ITheme) => void,
   followsSystem: () => boolean,
   media: ColorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)"),
   tokens: () => TokenReader = documentTokens,
-): void {
+): () => void {
   apply(terminalTheme(tokens()));
-  media.addEventListener("change", () => {
+  const onChange = () => {
     if (followsSystem()) apply(terminalTheme(tokens()));
-  });
+  };
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener?.("change", onChange);
 }

@@ -3,10 +3,22 @@ import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { Terminal, type FontWeight } from "@xterm/xterm";
+import { sizeReporter } from "./resize";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
 const EXIT_MESSAGE = "[process exited] Press Enter to start a new shell";
+/** Resizing settles this long before a pane re-fits and tells its shell the new size. */
+const RESIZE_SETTLE_MS = 50;
+
+/** One pane's terminal and the shell session behind it. */
+export interface PaneTerminal {
+  term: Terminal;
+  /** The working directory of the pane's shell, when it runs and the platform can read it. */
+  cwd(): Promise<string | undefined>;
+  /** Ends the shell and frees the terminal. */
+  dispose(): Promise<void>;
+}
 
 /** The addons `applyFont` changes or refits with, per terminal. */
 const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
@@ -59,58 +71,99 @@ export function refreshTheme(term: Terminal): void {
 }
 
 /**
- * Opens one terminal in `container` connected to the user's default shell, styled by `settings()`, which the
- * terminal asks again whenever the system switches light and dark.
+ * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
+ * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
+ * dark. The cursor is a solid block while the terminal has focus and an outline otherwise.
  */
-export async function startTerminal(container: HTMLElement, settings: () => Settings): Promise<Terminal> {
+export async function openTerminal(
+  container: HTMLElement,
+  settings: () => Settings,
+  cwd?: string,
+): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
 
   const term = new Terminal({
     cursorStyle: "block",
+    cursorInactiveStyle: "outline",
     cursorBlink: false,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
   addons.set(term, { fit });
   term.open(container);
-  followSystemTheme((theme) => {
-    term.options.theme = theme;
-  }, () => settings().theme === "system");
+  const stopTheme = followSystemTheme(
+    (theme) => {
+      term.options.theme = theme;
+    },
+    () => settings().theme === "system",
+  );
   await applyFont(term, settings());
 
+  let session: number | undefined;
   let running = false;
 
   const reportError = (error: unknown) => {
     term.write(`\r\n${String(error)}\r\n`);
   };
 
-  const spawn = async () => {
+  const spawn = async (dir?: string) => {
     const output = new Channel<number[]>();
     output.onmessage = (bytes) => term.write(new Uint8Array(bytes));
-    await invoke("pty_spawn", { rows: term.rows, cols: term.cols, onOutput: output });
+    session = await invoke<number>("pty_spawn", { rows: term.rows, cols: term.cols, cwd: dir, onOutput: output });
     running = true;
   };
 
-  await listen<{ code: number }>("pty-exit", () => {
+  const unlistenExit = await listen<{ id: number; code: number }>("pty-exit", (event) => {
+    if (event.payload.id !== session) return;
     running = false;
     term.write(`\r\n${EXIT_MESSAGE}\r\n`);
   });
 
   term.onData((data) => {
     if (running) {
-      invoke("pty_write", { data }).catch(reportError);
+      invoke("pty_write", { id: session, data }).catch(reportError);
     } else if (data.includes("\r")) {
-      spawn().catch(reportError);
+      const ended = session;
+      session = undefined;
+      const restart = ended === undefined ? Promise.resolve() : invoke("pty_close", { id: ended });
+      restart.then(() => spawn()).catch(reportError);
     }
   });
 
-  term.onResize(({ rows, cols }) => {
-    if (running) invoke("pty_resize", { rows, cols }).catch(reportError);
-  });
-  new ResizeObserver(() => fit.fit()).observe(container);
+  // Re-fit once resizing settles, then tell the shell its size only if it changed. A font change resizes
+  // the terminal without resizing its pane, so that schedules a report too.
+  const reporter = sizeReporter(
+    () => {
+      fit.fit();
+      return { rows: term.rows, cols: term.cols };
+    },
+    ({ rows, cols }) => {
+      if (running) invoke("pty_resize", { id: session, rows, cols }).catch(reportError);
+    },
+    RESIZE_SETTLE_MS,
+  );
+  const observer = new ResizeObserver(() => reporter.schedule());
+  observer.observe(container);
+  term.onResize(() => reporter.schedule());
 
-  await spawn().catch(reportError);
-  term.focus();
-  return term;
+  await spawn(cwd).catch(reportError);
+
+  return {
+    term,
+    cwd: async () => {
+      if (!running || session === undefined) return undefined;
+      return (await invoke<string | null>("pty_cwd", { id: session })) ?? undefined;
+    },
+    dispose: async () => {
+      observer.disconnect();
+      unlistenExit();
+      stopTheme();
+      const ended = session;
+      session = undefined;
+      running = false;
+      term.dispose();
+      if (ended !== undefined) await invoke("pty_close", { id: ended });
+    },
+  };
 }
