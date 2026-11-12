@@ -32,33 +32,57 @@
 ## 5. Workspace checks and instructions
 
 - [ ] 5.1 (triage) Update checks with install and the new checks
-  file: .harvaaja/checks.yaml
-  content:
+  - file: .harvaaja/checks.yaml
+  - content:
   ```yaml
-  # Checks for the tiili Tauri app, a Rust core and a TypeScript frontend installed with npm
-  setup: [
-      {name: install, run: npm ci, timeoutSeconds: 600}
-    ]
-  checks: [
-      {name: openspec, run: openspec validate --all --strict --no-interactive, stage: every, timeoutSeconds: 120},
-      {name: typecheck, run: npm run typecheck, stage: every, timeoutSeconds: 300},
-      {name: lint, run: npm run lint, stage: every, timeoutSeconds: 300},
-      {name: unit, run: npm test, stage: every, timeoutSeconds: 300},
-      {name: cargo-fmt, run: cargo fmt --manifest-path src-tauri/Cargo.toml --check, stage: every, timeoutSeconds: 120},
-      {name: cargo-clippy, run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings, stage: every, timeoutSeconds: 1200},
-      {name: cargo-test, run: cargo test --manifest-path src-tauri/Cargo.toml, stage: every, timeoutSeconds: 1200}
-    ]
+  # Checks for tiili: a Tauri 2 app (Rust in src-tauri/, TypeScript + Vite frontend, npm).
+  setup:
+    check: install
+    clean: [node_modules]
+  checks:
+    - name: install
+      run: npm ci --no-audit --no-fund --cache "$TMPDIR/harvaaja-npm-cache"
+      network: [registry.npmjs.org]
+      timeoutSeconds: 600
+    - name: openspec
+      run: openspec validate --all --strict --no-interactive
+      stage: every
+      timeoutSeconds: 120
+    - name: typecheck
+      run: npm run typecheck
+      stage: every
+      timeoutSeconds: 300
+    - name: lint
+      run: npm run lint
+      stage: every
+      timeoutSeconds: 300
+    - name: unit
+      run: npm test
+      stage: every
+      timeoutSeconds: 300
+    - name: cargo-fmt
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      stage: every
+      timeoutSeconds: 120
+    - name: cargo-clippy
+      run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      stage: every
+      timeoutSeconds: 1200
+    - name: cargo-test
+      run: cargo test --manifest-path src-tauri/Cargo.toml
+      stage: every
+      timeoutSeconds: 1200
   ```
 - [ ] 5.2 (triage) Allow the registries the install needs
-  file: .harvaaja/network.yaml
-  content:
+  - file: .harvaaja/network.yaml
+  - content:
   ```yaml
   # Hosts the workspace's agents may reach: npm and crates.io registries for npm ci and cargo.
   allow: [registry.npmjs.org, index.crates.io, static.crates.io, crates.io]
   ```
 - [ ] 5.3 (triage) Update the planner's current state
-  file: .harvaaja/instructions/plan.md
-  content:
+  - file: .harvaaja/instructions/plan.md
+  - content:
   ```markdown
   # Planning this workspace
 
@@ -82,8 +106,8 @@
     `integration` or `host` lets härvääjä leave the slow ones to the release check.
   ```
 - [ ] 5.4 (triage) Update the builder's current state
-  file: .harvaaja/instructions/build.md
-  content:
+  - file: .harvaaja/instructions/build.md
+  - content:
   ```markdown
   # Building this workspace
 
