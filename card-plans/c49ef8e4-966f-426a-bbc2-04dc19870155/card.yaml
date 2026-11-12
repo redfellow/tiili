@@ -6,3 +6,10 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Only the placeholder Purpose of the main packaging spec needs real
+    text; no requirement changes.
+  citations:
+    - openspec/specs/packaging/spec.md:4
+  revision: 13d908b2-16f4-4d07-8176-d663d5306522
