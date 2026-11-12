@@ -1,0 +1,368 @@
+<meta charset="utf-8">
+<title>Tiili Brand Round 2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one long sheet, a section per chosen direction (hero on light + dark, icon sizes, one real use), then the four combined as a system. */
+:root {
+  --tiili: #A4472B; --klinkkeri: #6B2A1E; --savi: #C9764F; --laasti: #E8DECD; --graniitti: #8D877D;
+  --koski: #182023; --rauta: #3A3F45; --ikkuna: #8FA6A4; --muratti: #861B22; --koivu: #D9A43A;
+  --kalkki: #F6F1E9; /* lime-washed off-white */
+
+  --bg: #F3EEE7; --surface: #FBF8F4; --fg: #2A2321; --muted: #6F6560; --line: #DDD3C8;
+  --display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #151112; --surface: #1E1919; --fg: #EFE7DE; --muted: #A0948C; --line: #342B29; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #151112; --surface: #1E1919; --fg: #EFE7DE; --muted: #A0948C; --line: #342B29; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--display); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 56px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 6px 0 10px; font-size: clamp(28px, 4vw, 40px); font-weight: 600; letter-spacing: -0.03em; text-wrap: balance; }
+h2 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h2 .num { font-family: var(--mono); font-size: 13px; color: var(--muted); font-weight: 400; }
+h2 .fi { font-family: var(--mono); font-size: 13px; color: var(--muted); font-weight: 400; }
+h3 { margin: 0; font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; }
+.lede { max-width: 64ch; color: var(--muted); }
+
+section.dir { display: grid; gap: 18px; }
+.dir > header { display: grid; gap: 6px; }
+.dir > header p { max-width: 68ch; color: var(--muted); }
+
+.heroes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.panel { border-radius: 10px; min-height: 240px; display: grid; place-items: center; position: relative; overflow: hidden; padding: 24px; min-width: 0; }
+.panel .tag { position: absolute; left: 12px; bottom: 10px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; opacity: .6; }
+
+.row2 { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 760px) { .row2 { grid-template-columns: 1fr; } }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.icons { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.icons figure { margin: 0; display: grid; justify-items: center; gap: 6px; }
+.icons figcaption { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.notes { display: grid; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.notes b { color: var(--fg); font-weight: 500; }
+.use { overflow-x: auto; }
+
+/* ---------- Wordmark with brick dots ---------- */
+.wm { font-family: var(--display); font-weight: 700; letter-spacing: -0.035em; line-height: 1; white-space: nowrap; }
+.di { position: relative; display: inline-block; }
+.di::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); top: var(--dot-top, 0.1em);
+  width: 0.175em; height: 0.095em; background: var(--dot, var(--tiili)); border-radius: 0.012em; }
+
+/* ---------- App icons (scale with font-size) ---------- */
+.icon { font-size: var(--s, 128px); width: 1em; height: 1em; border-radius: 0.225em; position: relative; overflow: hidden; flex: none;
+  box-shadow: 0 0.04em 0.1em rgba(0,0,0,.22), inset 0 0 0 0.006em rgba(0,0,0,.25); }
+.icon.i-dots { background: var(--laasti); display: grid; place-items: center; }
+.icon.i-dots .wm { font-size: 0.74em; color: var(--rauta); letter-spacing: 0; margin-top: 0.02em; }
+.icon.i-dots .di::after { width: 0.26em; height: 0.13em; top: 0.06em; }
+
+.icon.i-stamp { background: linear-gradient(160deg, #B95A33, var(--tiili) 45%, #8A3820); display: grid; place-items: center; }
+.icon.i-stamp::before { content: ""; position: absolute; inset: 0; background:
+  radial-gradient(circle at 20% 30%, rgba(0,0,0,.08) 0 1px, transparent 1.5px) 0 0 / 0.09em 0.09em; opacity: .7; }
+.icon.i-stamp .frog { width: 0.64em; height: 0.36em; border-radius: 0.03em; background: rgba(0,0,0,.14);
+  box-shadow: inset 0 0.02em 0.03em rgba(0,0,0,.5), inset 0 -0.008em 0 rgba(255,255,255,.15);
+  display: grid; place-items: center; position: relative; }
+.icon.i-stamp .frog span { font-family: var(--mono); font-weight: 700; font-size: 0.2em; letter-spacing: .12em; margin-right: -.12em; color: #74301C;
+  text-shadow: 0 0.04em 0 rgba(255,255,255,.2), 0 -0.04em 0 rgba(0,0,0,.4); }
+
+.icon.i-cursor { background: radial-gradient(120% 100% at 30% 0%, #26302F, var(--koski)); display: flex; align-items: center; justify-content: center; gap: 0.06em; }
+.icon.i-cursor .p { font-family: var(--mono); font-weight: 500; font-size: 0.4em; color: var(--graniitti); line-height: 1; margin-top: -0.04em; }
+.icon.i-cursor .c { width: 0.24em; height: 0.4em; background: var(--tiili); border-radius: 0.012em; box-shadow: 0 0 0.08em rgba(201,118,79,.35); }
+
+.icon.i-grid { background: var(--laasti); padding: 0.15em; display: grid; grid-template-columns: 1fr 1fr; gap: 0.055em; }
+.icon.i-grid i { border-radius: 0.025em; display: block; box-shadow: inset 0 0.01em 0 rgba(255,255,255,.18); }
+.icon.i-grid.dark { background: #0E1314; }
+
+/* ---------- 02 brick dots ---------- */
+.p02l { background: #F7F2EA; color: var(--rauta); }
+.p02d { background: var(--koski); color: var(--kalkki); --dot: var(--savi); }
+.p02l .wm, .p02d .wm { font-size: clamp(84px, 13vw, 132px); }
+.banner02 { background: var(--kalkki); border-radius: 8px; padding: 22px 24px; display: flex; gap: 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--rauta); border: 1px solid #E2D8C9; }
+.banner02 .wm { font-size: 46px; }
+.banner02 p { font-family: var(--mono); font-size: 12.5px; color: #6A625C; margin-top: 8px; }
+.btn02 { font-family: var(--display); font-weight: 600; font-size: 14px; background: var(--tiili); color: #fff; border-radius: 6px; padding: 9px 14px; white-space: nowrap; }
+
+/* ---------- 05 maker's stamp ---------- */
+.p05l { background: #CFC7BB; }
+.p05d { background: var(--koski); }
+.brick { width: min(86%, 360px); aspect-ratio: 2.15 / 1; border-radius: 5px; display: grid; place-items: center; position: relative;
+  background: linear-gradient(165deg, #BA5A33, var(--tiili) 45%, #8A3820);
+  box-shadow: 0 14px 26px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -2px 0 rgba(0,0,0,.18); }
+.brick::before { content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: .8; background:
+  radial-gradient(circle at 30% 40%, rgba(0,0,0,.09) 0 1px, transparent 1.6px) 0 0 / 9px 9px,
+  radial-gradient(circle at 70% 60%, rgba(255,255,255,.07) 0 1px, transparent 1.6px) 4px 3px / 11px 11px; }
+.frog { position: relative; padding: 14px 26px 12px; border-radius: 4px; background: rgba(0,0,0,.14);
+  box-shadow: inset 0 3px 5px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.14);
+  display: grid; justify-items: center; gap: 4px; }
+.frog .t { font-family: var(--mono); font-weight: 700; font-size: clamp(30px, 4.6vw, 44px); letter-spacing: .24em; margin-right: -.24em; color: #74301C; line-height: 1;
+  text-shadow: 0 1px 0 rgba(255,255,255,.2), 0 -1px 0 rgba(0,0,0,.4); }
+.frog small { font-family: var(--mono); font-size: 11px; letter-spacing: .28em; margin-right: -.28em; color: #74301C; text-shadow: 0 1px 0 rgba(255,255,255,.16); }
+.use05 { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.about05 { background: #EDE7DE; color: #2A2321; border-radius: 10px; padding: 20px; width: 280px; max-width: 100%; display: grid; justify-items: center; gap: 10px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.about05 .brick { width: 150px; border-radius: 3px; }
+.about05 .frog { padding: 6px 10px 5px; }
+.about05 .frog .t { font-size: 18px; }
+.about05 .frog small { font-size: 7px; }
+.about05 b { font-weight: 600; }
+.about05 span { font-family: var(--mono); font-size: 11.5px; color: #6A625C; }
+.badge05 { display: inline-flex; align-items: center; border-radius: 4px; overflow: hidden; font-family: var(--mono); font-size: 12px; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.badge05 span:first-child { background: #74301C; color: #EBC9B6; padding: 4px 8px; letter-spacing: .14em; }
+.badge05 span:last-child { background: var(--tiili); color: #fff; padding: 4px 8px; }
+
+/* ---------- 06 brick cursor ---------- */
+.p06d { background: radial-gradient(120% 100% at 20% 0%, #232C2E, var(--koski)); color: var(--kalkki); }
+.p06l { background: var(--laasti); color: var(--klinkkeri); }
+.prompt { font-family: var(--mono); font-weight: 500; font-size: clamp(44px, 7vw, 68px); letter-spacing: -0.02em; display: flex; align-items: center; line-height: 1; }
+.prompt .p { opacity: .5; margin-right: .45ch; }
+.cur { display: inline-block; width: 0.6em; height: 1.02em; background: var(--tiili); margin-left: 0.06em; border-radius: 0.02em; animation: blink 1.1s steps(1) infinite; }
+.p06d .cur { box-shadow: 0 0 0.3em rgba(201,118,79,.35); }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cur, .term .cur { animation: none; } }
+.win { border-radius: 10px; overflow: hidden; background: #0F1516; box-shadow: 0 10px 30px rgba(0,0,0,.25); min-width: 560px; }
+.win .bar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #1C2427; color: #9FA7A6; font-family: var(--mono); font-size: 11px; }
+.win .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3A4447; display: block; }
+.win .bar .title { margin-left: auto; margin-right: auto; padding-right: 48px; display: flex; gap: 6px; align-items: center; }
+.win .bar .title b { width: 7px; height: 12px; background: var(--tiili); display: inline-block; border-radius: 1px; }
+.term { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; background: #0B0F10; }
+.term .pane { background: var(--koski); padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: #C9CFCD; min-height: 168px; white-space: pre; overflow: hidden; }
+.term .pane.focus { box-shadow: inset 0 2px 0 var(--tiili); }
+.term .dim { color: #6E7876; }
+.term .ok { color: #8FB59A; }
+.term .acc { color: var(--savi); }
+.term .cur { width: 0.62em; height: 1.2em; vertical-align: -0.25em; margin-left: 0; }
+.term .cur.idle { background: transparent; box-shadow: inset 0 0 0 1.5px #6E7876; animation: none; }
+
+/* ---------- 08 mortar grid ---------- */
+.p08l { background: var(--laasti); }
+.p08d { background: #0E1314; }
+.lock08 { display: flex; align-items: center; gap: 22px; }
+.lock08 .wm { font-size: clamp(56px, 8vw, 80px); }
+.p08l .wm { color: var(--klinkkeri); }
+.p08d .wm { color: var(--kalkki); --dot: var(--savi); }
+.app08 { border-radius: 10px; overflow: hidden; background: #0E1314; box-shadow: 0 10px 30px rgba(0,0,0,.25); min-width: 620px; }
+.app08 .bar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #1A2022; font-family: var(--mono); font-size: 11px; color: #9FA7A6; }
+.app08 .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3A4447; display: block; }
+.app08 .bar .legend { margin-left: auto; display: flex; gap: 12px; }
+.app08 .bar .legend span { display: inline-flex; align-items: center; gap: 5px; }
+.app08 .bar .legend b { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 150px 150px; gap: 4px; padding: 4px; background: #2A2422; }
+.tile { background: var(--koski); border-radius: 3px; overflow: hidden; display: grid; grid-template-rows: 22px 1fr; min-width: 0; }
+.tile .hd { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; font-family: var(--mono); font-size: 10.5px; color: rgba(255,255,255,.9); }
+.tile .bd { padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: #C2C9C7; white-space: pre; overflow: hidden; }
+.tile .bd .dim { color: #6E7876; }
+
+/* ---------- System ---------- */
+.system { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.sys { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-rows: 170px auto; min-width: 0; }
+.sys .stage { display: grid; place-items: center; }
+.sys .cap { padding: 12px 14px 14px; display: grid; gap: 3px; }
+.sys .cap b { font-weight: 600; }
+.sys .cap span { font-size: 13.5px; color: var(--muted); }
+.callout { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 8px; max-width: 78ch; }
+.callout ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+.callout b { color: var(--fg); font-weight: 500; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">tiili · round 2 · four directions at full size</div>
+    <h1>Brick dots, maker's stamp, brick cursor, mortar grid</h1>
+    <p class="lede">Each direction is shown on a light and a dark ground, as an app icon from 128 down to 16 pixels, and in one real place it would appear. The four also fit together as one system, shown at the end.</p>
+  </header>
+
+  <!-- 02 -->
+  <section class="dir">
+    <header>
+      <h2><span class="num">02</span>Brick dots <span class="fi">pisteet</span></h2>
+      <p>The three dots of "tiili" become small bricks. Geist Bold with tight spacing; the dots are slightly wider than tall, in the proportions of a real brick.</p>
+    </header>
+    <div class="heroes">
+      <div class="panel p02l"><span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span><span class="tag">kalkki + rauta + tiili</span></div>
+      <div class="panel p02d"><span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span><span class="tag">koski + kalkki + savi</span></div>
+    </div>
+    <div class="row2">
+      <div class="box">
+        <h3>App icon</h3>
+        <div class="icons">
+          <figure><div class="icon i-dots" style="--s:128px"><span class="wm"><span class="di">ı</span></span></div><figcaption>128</figcaption></figure>
+          <figure><div class="icon i-dots" style="--s:64px"><span class="wm"><span class="di">ı</span></span></div><figcaption>64</figcaption></figure>
+          <figure><div class="icon i-dots" style="--s:32px"><span class="wm"><span class="di">ı</span></span></div><figcaption>32</figcaption></figure>
+          <figure><div class="icon i-dots" style="--s:16px"><span class="wm"><span class="di">ı</span></span></div><figcaption>16</figcaption></figure>
+        </div>
+        <div class="notes"><span><b>Strong:</b> the best wordmark of the four. Reads instantly and needs no separate symbol.</span><span><b>Weak:</b> a lone "i" as an icon looks like an info button in a Dock or taskbar.</span></div>
+      </div>
+      <div class="box use">
+        <h3>In use: website or README header</h3>
+        <div class="banner02">
+          <div>
+            <span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span>
+            <p>Tiling terminal for running coding agents side by side.<br>macOS · Windows · Linux</p>
+          </div>
+          <span class="btn02">Download tiili</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="dir">
+    <header>
+      <h2><span class="num">05</span>Maker's stamp <span class="fi">leima</span></h2>
+      <p>Old bricks carry their brickworks' name pressed into the hollow on top. Here that hollow holds TIILI in Geist Mono, with "TRE · Nº 1" underneath: made in Tampere, first edition.</p>
+    </header>
+    <div class="heroes">
+      <div class="panel p05l"><div class="brick"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div><span class="tag" style="color:#2A2321">graniitti ground</span></div>
+      <div class="panel p05d"><div class="brick"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div><span class="tag" style="color:#E8DECD">koski ground</span></div>
+    </div>
+    <div class="row2">
+      <div class="box">
+        <h3>App icon</h3>
+        <div class="icons">
+          <figure><div class="icon i-stamp" style="--s:128px"><div class="frog"><span>TI</span></div></div><figcaption>128</figcaption></figure>
+          <figure><div class="icon i-stamp" style="--s:64px"><div class="frog"><span>TI</span></div></div><figcaption>64</figcaption></figure>
+          <figure><div class="icon i-stamp" style="--s:32px"><div class="frog"><span>TI</span></div></div><figcaption>32</figcaption></figure>
+          <figure><div class="icon i-stamp" style="--s:16px"><div class="frog"><span>TI</span></div></div><figcaption>16</figcaption></figure>
+        </div>
+        <div class="notes"><span><b>Strong:</b> the most tactile and local. Ideal for the About window, release badges, stickers and merch.</span><span><b>Weak:</b> the pressed lettering disappears below 32 px, so it can't be the only icon.</span></div>
+      </div>
+      <div class="box use">
+        <h3>In use: About window and release badge</h3>
+        <div class="use05">
+          <div class="about05">
+            <div class="brick"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div>
+            <b>tiili 0.1.0</b>
+            <span>Fired in Tampere · MIT licence</span>
+          </div>
+          <div style="display:grid; gap:10px">
+            <span class="badge05"><span>TIILI</span><span>v0.1.0</span></span>
+            <span class="badge05"><span>TIILI</span><span>macOS · win · linux</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section class="dir">
+    <header>
+      <h2><span class="num">06</span>Brick cursor <span class="fi">kursori</span></h2>
+      <p>The block cursor is a single brick. It is the mark that lives inside the product: the focused pane shows a solid brick, the others an outlined one.</p>
+    </header>
+    <div class="heroes">
+      <div class="panel p06d"><div class="prompt"><span class="p">~</span>tiili<span class="cur" aria-hidden="true"></span></div><span class="tag">koski + kalkki + tiili</span></div>
+      <div class="panel p06l"><div class="prompt"><span class="p">~</span>tiili<span class="cur" aria-hidden="true"></span></div><span class="tag">laasti + klinkkeri + tiili</span></div>
+    </div>
+    <div class="row2">
+      <div class="box">
+        <h3>App icon</h3>
+        <div class="icons">
+          <figure><div class="icon i-cursor" style="--s:128px"><span class="p">~</span><span class="c"></span></div><figcaption>128</figcaption></figure>
+          <figure><div class="icon i-cursor" style="--s:64px"><span class="p">~</span><span class="c"></span></div><figcaption>64</figcaption></figure>
+          <figure><div class="icon i-cursor" style="--s:32px"><span class="p">~</span><span class="c"></span></div><figcaption>32</figcaption></figure>
+          <figure><div class="icon i-cursor" style="--s:16px"><span class="p">~</span><span class="c"></span></div><figcaption>16</figcaption></figure>
+        </div>
+        <div class="notes"><span><b>Strong:</b> says "terminal" at every size, and the cursor ties the brand to the app's own UI.</span><span><b>Weak:</b> dark square plus prompt is how many terminal icons look; the brick colour is the only thing that sets it apart.</span></div>
+      </div>
+      <div class="box use">
+        <h3>In use: the app window</h3>
+        <div class="win">
+          <div class="bar"><i></i><i></i><i></i><span class="title"><b></b>tiili — 2 panes</span></div>
+          <div class="term">
+<div class="pane focus"><span class="dim">~/Koodit/sporeward</span>
+<span class="acc">$</span> claude
+<span class="ok">✓</span> Read 14 files
+<span class="ok">✓</span> Updated spec.md
+› add idempotency test<span class="cur" aria-hidden="true"></span></div>
+<div class="pane"><span class="dim">~/Koodit/tiili</span>
+<span class="acc">$</span> npm run tauri dev
+<span class="dim">  Compiling tiili v0.1.0</span>
+<span class="ok">  Finished</span> dev in 4.21s
+<span class="acc">$</span> <span class="cur idle" aria-hidden="true"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="dir">
+    <header>
+      <h2><span class="num">08</span>Mortar grid <span class="fi">laasti</span></h2>
+      <p>Four panes as four bricks, the mortar as the gaps. Each brick is a different firing, the same way the app tints each project's panes.</p>
+    </header>
+    <div class="heroes">
+      <div class="panel p08l">
+        <div class="lock08">
+          <div class="icon i-grid" style="--s:96px; box-shadow:none"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div>
+          <span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span>
+        </div>
+        <span class="tag">laasti + four firings</span>
+      </div>
+      <div class="panel p08d">
+        <div class="lock08">
+          <div class="icon i-grid dark" style="--s:96px; box-shadow:none"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div>
+          <span class="wm">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span>
+        </div>
+        <span class="tag" style="color:#E8DECD">dark mortar</span>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="box">
+        <h3>App icon</h3>
+        <div class="icons">
+          <figure><div class="icon i-grid" style="--s:128px"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div><figcaption>128</figcaption></figure>
+          <figure><div class="icon i-grid" style="--s:64px"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div><figcaption>64</figcaption></figure>
+          <figure><div class="icon i-grid" style="--s:32px"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div><figcaption>32</figcaption></figure>
+          <figure><div class="icon i-grid" style="--s:16px"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div><figcaption>16</figcaption></figure>
+        </div>
+        <div class="notes"><span><b>Strong:</b> the clearest icon of the four. Shows exactly what the app does and holds up at 16 px.</span><span><b>Weak:</b> four coloured squares is a familiar shape (Windows, Slack); the earthy brick tones keep it distinct.</span></div>
+      </div>
+      <div class="box use">
+        <h3>In use: projects tinted by repo</h3>
+        <div class="app08">
+          <div class="bar"><i></i><i></i><i></i><span class="legend"><span><b style="background:var(--tiili)"></b>sporeward</span><span><b style="background:var(--savi)"></b>tiili</span><span><b style="background:var(--rauta)"></b>dotfiles</span></span></div>
+          <div class="tiles">
+            <div class="tile"><div class="hd" style="background:var(--tiili)"><span>sporeward · claude</span><span>●</span></div><div class="bd">› write receipt tests
+<span class="dim">  editing server/receipts.ts</span></div></div>
+            <div class="tile"><div class="hd" style="background:var(--tiili)"><span>sporeward · codex</span><span></span></div><div class="bd">› review spec delta
+<span class="dim">  3 comments</span></div></div>
+            <div class="tile"><div class="hd" style="background:var(--savi)"><span>tiili · dev</span><span></span></div><div class="bd">$ npm run tauri dev
+<span class="dim">  watching src-tauri/</span></div></div>
+            <div class="tile"><div class="hd" style="background:var(--rauta)"><span>dotfiles · zsh</span><span></span></div><div class="bd">$ git status
+<span class="dim">  nothing to commit</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- System -->
+  <section class="dir">
+    <header>
+      <h2>As one system</h2>
+      <p>The four aren't rivals. Each covers a job the others do badly.</p>
+    </header>
+    <div class="system">
+      <div class="sys"><div class="stage" style="background:var(--laasti)"><div class="icon i-grid" style="--s:96px"><i style="background:var(--tiili)"></i><i style="background:var(--klinkkeri)"></i><i style="background:var(--savi)"></i><i style="background:var(--rauta)"></i></div></div><div class="cap"><b>Icon · mortar grid</b><span>Dock, taskbar, favicon. Clearest at small sizes.</span></div></div>
+      <div class="sys"><div class="stage" style="background:#F7F2EA; color:var(--rauta)"><span class="wm" style="font-size:64px">t<span class="di">ı</span><span class="di">ı</span>l<span class="di">ı</span></span></div><div class="cap"><b>Wordmark · brick dots</b><span>Website, README, docs, anywhere the name is written.</span></div></div>
+      <div class="sys"><div class="stage" style="background:var(--koski); color:var(--kalkki)"><div class="prompt" style="font-size:40px"><span class="p">~</span>tiili<span class="cur" aria-hidden="true"></span></div></div><div class="cap"><b>In-app · brick cursor</b><span>The cursor, focus ring and accent colour inside the terminal.</span></div></div>
+      <div class="sys"><div class="stage" style="background:#CFC7BB"><div class="brick" style="width:200px"><div class="frog" style="padding:8px 14px 7px"><span class="t" style="font-size:24px">TIILI</span><small style="font-size:8px">TRE · Nº 1</small></div></div></div><div class="cap"><b>Seal · maker's stamp</b><span>About window, release notes, stickers, the first-run screen.</span></div></div>
+    </div>
+    <div class="callout">
+      <h3>Colour roles for the app</h3>
+      <ul>
+        <li><b>tiili #A4472B</b> is the one accent: cursor, focus, primary button. On dark grounds it is a mark colour, not a text colour; text uses <b>savi #C9764F</b> instead.</li>
+        <li><b>klinkkeri</b>, <b>savi</b>, <b>rauta</b>, <b>ikkuna</b>, <b>muratti</b> and <b>koivu</b> are the project tints, assigned per git repo.</li>
+        <li><b>koski #182023</b> is the default terminal background; <b>laasti</b> and <b>kalkki</b> are the light theme's ground.</li>
+      </ul>
+    </div>
+  </section>
+</div>
