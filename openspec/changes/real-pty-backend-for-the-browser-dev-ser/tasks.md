@@ -22,7 +22,7 @@
 - [x] 3.1 Add the serve-only `devBridge()` Vite plugin in `vite.config.ts` (token meta injection, `/pty` ws proxy when env set) and `scripts/dev-browser.mjs` + `npm run dev:browser` (token, free port, start bridge and vite with forwarded args, stop bridge when vite exits or on signals)
   - proof: `npx eslint vite.config.ts scripts/dev-browser.mjs`
   - proof: `npm run build && ! grep -rE 'tiili-bridge-token|/pty' dist`
-- [ ] 3.2 (triage) Add the design check that runs the browser preview with a real shell
+- [x] 3.2 (triage) Add the design check that runs the browser preview with a real shell
   - file: .harvaaja/checks.yaml
   - content:
   ```yaml
