@@ -1,7 +1,7 @@
 # pane-tiling Specification
 
 ## Purpose
-Several terminal panes in the one tiili window, each with its own shell, laid out in an automatic grid that grows as terminals open, with shortcuts to open, close and move focus between panes.
+Several terminal panes in the one tiili window, each with its own shell, laid out in an automatic grid that re-flows as terminals open and close, with shortcuts to open, close and move focus between panes; focus styling, PTY sizing and starting folders follow the pane.
 
 ## Requirements
 
