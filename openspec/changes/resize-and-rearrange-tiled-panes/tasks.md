@@ -21,7 +21,7 @@
 
 ## 4. Rework: send the merged head through checks
 
-- [ ] 4.1 Confirm the branch head carries the `hv/main` merge (144bf17) and the review nits (fc4141b) with no further code change: `rowsOf` is gone from `src/layout` and its tests, and the layout model and keymap tests still pass on the merged head
+- [x] 4.1 Confirm the branch head carries the `hv/main` merge (144bf17) and the review nits (fc4141b) with no further code change: `rowsOf` is gone from `src/layout` and its tests, and the layout model and keymap tests still pass on the merged head
   - proof: `git merge-base --is-ancestor fc4141b HEAD`
   - proof: `npx vitest run src/layout/model.test.ts src/keymap.test.ts src/resize.test.ts`
   - proof: `npx eslint src/layout src/panes.ts src/terminal.ts src/resize.ts`
