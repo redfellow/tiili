@@ -6,3 +6,10 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Only the placeholder Purpose of the main pane-layout spec needs
+    replacing; no requirement changes, and a delta cannot replace Purpose.
+  citations:
+    - openspec/specs/pane-layout/spec.md:4
+  revision: 6063b56d-c6b8-4a9a-8c91-bc48e58ccb42
