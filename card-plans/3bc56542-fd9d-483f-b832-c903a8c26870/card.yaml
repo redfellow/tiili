@@ -6,3 +6,10 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Only the placeholder Purpose of the pane-tiling main spec needs
+    writing; no requirement changes.
+  citations:
+    - openspec/specs/pane-tiling/spec.md:4
+  revision: 2fbff90e-b065-46f3-b60b-e397d0808cd7
