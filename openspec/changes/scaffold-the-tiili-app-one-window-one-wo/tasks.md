@@ -1,30 +1,30 @@
 ## 1. Skeleton and tooling
 
-- [ ] 1.1 Merge `origin/main` so `docs/concept.md` and `docs/brand/` are present; scaffold the Tauri 2 + Vite + TypeScript app with npm (`package.json` scripts `typecheck` = `tsc --noEmit`, `lint` = `eslint`, `test` = `vitest run`), `src-tauri/` with Cargo.toml/tauri.conf.json (window title `tiili`), ESLint flat config, Vitest config; commit `package-lock.json` and `Cargo.lock`
+- [x] 1.1 Merge `origin/main` so `docs/concept.md` and `docs/brand/` are present; scaffold the Tauri 2 + Vite + TypeScript app with npm (`package.json` scripts `typecheck` = `tsc --noEmit`, `lint` = `eslint`, `test` = `vitest run`), `src-tauri/` with Cargo.toml/tauri.conf.json (window title `tiili`), ESLint flat config, Vitest config; commit `package-lock.json` and `Cargo.lock`
   - proof: `test -f docs/brand/tiili.css && test -f package-lock.json && test -f src-tauri/Cargo.lock`
   - proof: `npm run typecheck`
   - proof: `cargo check --manifest-path src-tauri/Cargo.toml`
 
 ## 2. PTY session (Rust)
 
-- [ ] 2.1 Add `src-tauri/src/pty.rs` (spawn default shell via `portable-pty`, write, resize, reader thread, exit notification) free of Tauri types, and Tauri commands `pty_spawn`/`pty_write`/`pty_resize` streaming output over a `Channel` and emitting an exit event
+- [x] 2.1 Add `src-tauri/src/pty.rs` (spawn default shell via `portable-pty`, write, resize, reader thread, exit notification) free of Tauri types, and Tauri commands `pty_spawn`/`pty_write`/`pty_resize` streaming output over a `Channel` and emitting an exit event
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
 - [ ] 2.2 Add integration test `src-tauri/tests/pty_session.rs` (first line `// @harvaaja-test-tier: integration`): spawn a shell, write `echo tiili-ok` + newline, read until `tiili-ok` appears (timeout), resize without error, write `exit` and observe exit
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
 
 ## 3. Terminal frontend
 
-- [ ] 3.1 Add `src/terminal.ts` wiring xterm.js + fit addon to the PTY commands, `ResizeObserver` → `pty_resize`, exit message `[process exited] Press Enter to start a new shell` and restart on Enter
+- [x] 3.1 Add `src/terminal.ts` wiring xterm.js + fit addon to the PTY commands, `ResizeObserver` → `pty_resize`, exit message `[process exited] Press Enter to start a new shell` and restart on Enter
   - proof: `npx eslint src/terminal.ts`
-- [ ] 3.2 Brand: import `docs/brand/tiili.css`; vendor Geist Mono woff2 + OFL licence under `src/assets/fonts/` with `@font-face`; `src/theme.ts` builds the xterm theme from `--term-bg`, `--term-fg`, `--ansi-0..15`, block cursor `--accent`, re-applied on `prefers-color-scheme` change; generate icons with `npx tauri icon` from `docs/brand/logo/icon-light.svg` into `src-tauri/icons/`
+- [x] 3.2 Brand: import `docs/brand/tiili.css`; vendor Geist Mono woff2 + OFL licence under `src/assets/fonts/` with `@font-face`; `src/theme.ts` builds the xterm theme from `--term-bg`, `--term-fg`, `--ansi-0..15`, block cursor `--accent`, re-applied on `prefers-color-scheme` change; generate icons with `npx tauri icon` from `docs/brand/logo/icon-light.svg` into `src-tauri/icons/`
   - proof: `npx eslint src/theme.ts`
   - proof: `test -f src-tauri/icons/icon.png && test -f src-tauri/icons/icon.icns && test -f src-tauri/icons/icon.ico`
 
 ## 4. Copy and paste
 
-- [ ] 4.1 Add pure `src/keymap.ts` `clipboardAction(event, platform)` and table-driven `src/keymap.test.ts` (first line `// @harvaaja-test-tier: fast`) covering macOS ⌘C/⌘V/⌘A, Windows/Linux Ctrl+Shift+C/V, plain Ctrl+C → null on every platform, Ctrl+Shift+C on macOS → null
+- [x] 4.1 Add pure `src/keymap.ts` `clipboardAction(event, platform)` and table-driven `src/keymap.test.ts` (first line `// @harvaaja-test-tier: fast`) covering macOS ⌘C/⌘V/⌘A, Windows/Linux Ctrl+Shift+C/V, plain Ctrl+C → null on every platform, Ctrl+Shift+C on macOS → null
   - proof: `npx vitest run src/keymap.test.ts`
-- [ ] 4.2 Wire clipboard: `attachCustomKeyEventHandler` using the keymap (Windows/Linux), macOS Edit menu (Copy/Paste/Select All with ⌘ accelerators) built in Rust and emitting events the frontend handles, right-click native context menu with Copy and Paste on all platforms, clipboard via `tauri-plugin-clipboard-manager`, paste through `term.paste()`
+- [x] 4.2 Wire clipboard: `attachCustomKeyEventHandler` using the keymap (Windows/Linux), macOS Edit menu (Copy/Paste/Select All with ⌘ accelerators) built in Rust and emitting events the frontend handles, right-click native context menu with Copy and Paste on all platforms, clipboard via `tauri-plugin-clipboard-manager`, paste through `term.paste()`
   - proof: `npx eslint src`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
   - proof: `npm run typecheck`
