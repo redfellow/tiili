@@ -110,7 +110,7 @@
   - Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,
     `integration` or `host` lets härvääjä leave the slow ones to the release check.
   ```
-- [ ] 5.4 (triage) Update the builder's current state
+- [x] 5.4 (triage) Update the builder's current state
   - file: .harvaaja/instructions/build.md
   - content:
   ```markdown
