@@ -1,7 +1,7 @@
 # pane-tiling Specification
 
 ## Purpose
-How tiili runs several terminals side by side in one window: each pane has its own shell session, panes tile themselves in a grid that re-flows as terminals open and close, and keyboard shortcuts, focus styling, PTY sizing and starting folders follow the pane.
+Several terminal panes in the one tiili window, each with its own shell, laid out in an automatic grid that re-flows as terminals open and close, with shortcuts to open, close and move focus between panes; focus styling, PTY sizing and starting folders follow the pane.
 
 ## Requirements
 
