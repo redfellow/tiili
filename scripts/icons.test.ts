@@ -50,6 +50,25 @@ function icoSizes(data: Buffer): number[] {
   return Array.from({ length: count }, (_, i) => data.readUInt8(6 + 16 * i) || 256);
 }
 
+/** Reads an .icns file's entries as a map from entry type to its data. */
+function icnsEntries(data: Buffer): Map<string, Buffer> {
+  expect(data.subarray(0, 4).toString("ascii")).toBe("icns");
+  const entries = new Map<string, Buffer>();
+  for (let offset = 8; offset < data.length; ) {
+    const length = data.readUInt32BE(offset + 4);
+    entries.set(data.toString("ascii", offset, offset + 4), data.subarray(offset + 8, offset + length));
+    offset += length;
+  }
+  return entries;
+}
+
+/** icon.icns entries of 32 px and below: icp4 is 16 px, icp5 32 px, ic11 16@2x (32 px). */
+const ICNS_SMALL: [type: string, size: number][] = [
+  ["icp4", 16],
+  ["icp5", 32],
+  ["ic11", 32],
+];
+
 describe("Icon set check: every icon each platform needs exists at its size", () => {
   const cases = Object.entries(REQUIRED).flatMap(([platform, files]) =>
     files.map(([file, size]) => ({ platform, file, size })),
@@ -65,7 +84,9 @@ describe("Icon set check: every icon each platform needs exists at its size", ()
     expect(icoSizes(readFileSync(join(iconsDir, "icon.ico")))).toEqual([16, 24, 32, 48, 64, 256]);
   });
 
-  it("macOS: icon.icns is an Apple icon file", () => {
-    expect(readFileSync(join(iconsDir, "icon.icns")).subarray(0, 4).toString("ascii")).toBe("icns");
+  it.each(ICNS_SMALL)("macOS: icon.icns holds %s as a %i px PNG", (type, size) => {
+    const entry = icnsEntries(readFileSync(join(iconsDir, "icon.icns"))).get(type);
+    expect(entry).toBeDefined();
+    expect(pngSize(entry!)).toEqual([size, size]);
   });
 });

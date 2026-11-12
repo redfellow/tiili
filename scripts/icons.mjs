@@ -27,12 +27,44 @@ const SMALL_PNGS = [
   ["Square30x30Logo.png", 30],
 ];
 
+/** Entries in icon.icns rendered from the small icon: type and pixel size. Larger entries stay as `tauri icon` wrote them. */
+const SMALL_ICNS = [
+  ["icp4", 16],
+  ["icp5", 32],
+  ["ic11", 32],
+];
+
+/** icon.icns entries of 32 px and below that `tauri icon` renders from the large icon; they are replaced. */
+const DROPPED_ICNS = new Set(["is32", "s8mk", "il32", "l8mk", "ic11", "icp4", "icp5"]);
+
 /** Entries in icon.ico, as `tauri icon` writes them. */
 const ICO_SIZES = [16, 24, 32, 48, 64, 256];
 
 function render(size) {
   const svg = size <= SMALL_MAX ? smallSvg : largeSvg;
   return new Resvg(svg, { fitTo: { mode: "width", value: size } }).render().asPng();
+}
+
+/** Rewrites an .icns file so that its entries of 32 px and below are PNGs rendered from the small icon. */
+function icns(data) {
+  const entries = [];
+  for (let offset = 8; offset < data.length; ) {
+    const length = data.readUInt32BE(offset + 4);
+    const type = data.toString("ascii", offset, offset + 4);
+    if (!DROPPED_ICNS.has(type)) entries.push(data.subarray(offset, offset + length));
+    offset += length;
+  }
+  for (const [type, size] of SMALL_ICNS) {
+    const png = render(size);
+    const head = Buffer.alloc(8);
+    head.write(type, 0, "ascii");
+    head.writeUInt32BE(png.length + 8, 4);
+    entries.unshift(Buffer.concat([head, png]));
+  }
+  const header = Buffer.alloc(8);
+  header.write("icns", 0, "ascii");
+  header.writeUInt32BE(8 + entries.reduce((sum, entry) => sum + entry.length, 0), 4);
+  return Buffer.concat([header, ...entries]);
 }
 
 /** Builds an .ico file whose entries are PNG images (supported since Windows Vista). */
@@ -77,6 +109,8 @@ try {
 
   for (const [name, size] of SMALL_PNGS) writeFileSync(join(outDir, name), render(size));
   writeFileSync(join(outDir, "icon.ico"), ico(ICO_SIZES));
+  const icnsPath = join(outDir, "icon.icns");
+  writeFileSync(icnsPath, icns(readFileSync(icnsPath)));
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
