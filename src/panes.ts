@@ -183,7 +183,7 @@ export class Panes {
     await terminal?.dispose();
   }
 
-  /** Focuses pane `index` (0-based, in opening order); does nothing when there is no such pane. */
+  /** Focuses pane `index` (0-based, in grid order: left to right, top to bottom); does nothing when there is no such pane. */
   focus(index: number): void {
     const pane = this.panes[index];
     if (!pane) return;
