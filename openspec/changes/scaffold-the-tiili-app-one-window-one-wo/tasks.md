@@ -41,8 +41,8 @@
     clean: [node_modules]
   checks:
     - name: install
-      run: npm ci --no-audit --no-fund --cache "$TMPDIR/harvaaja-npm-cache"
-      network: [registry.npmjs.org]
+      run: npm ci --no-audit --no-fund --cache "$TMPDIR/harvaaja-npm-cache" && cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+      network: [registry.npmjs.org, index.crates.io, static.crates.io]
       timeoutSeconds: 600
     - name: openspec
       run: openspec validate --all --strict --no-interactive
@@ -68,9 +68,15 @@
       run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       stage: every
       timeoutSeconds: 1200
+    # Unit tests only: the PTY integration test needs a pseudo-terminal, which the sandbox refuses.
     - name: cargo-test
-      run: cargo test --manifest-path src-tauri/Cargo.toml
+      run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins
       stage: every
+      timeoutSeconds: 1200
+    - name: cargo-test-pty
+      run: cargo test --manifest-path src-tauri/Cargo.toml --test pty_session
+      stage: release
+      sandbox: none
       timeoutSeconds: 1200
   ```
 - [ ] 5.2 (triage) Allow the registries the install needs
