@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod cwd;
 pub mod pty;
 pub mod repo;
