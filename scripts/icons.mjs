@@ -2,7 +2,7 @@
 //
 // The large icon (docs/brand/logo/icon-light.svg) is rasterised to a 1024 px PNG and handed to `tauri icon`,
 // which writes every desktop format. Sizes of 32 px and below are then re-rendered from the small icon
-// (icon-light-small.svg), both as PNG files and as entries in icon.ico.
+// (icon-light-small.svg): as PNG files, as entries in icon.ico, and as the 16 and 32 px entries in icon.icns.
 //
 // Run with `npm run icons`. The outputs are committed.
 import { execFileSync } from "node:child_process";
