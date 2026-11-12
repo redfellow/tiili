@@ -3,14 +3,22 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import { paneAction, settingsShortcut, type PaneAction, type Platform } from "./keymap";
 import { rowsOf } from "./layout";
+import { createPaneChip, folderName, PANE_CWD_EVENT, showPaneChip, type PaneCwd } from "./paneChip";
 import type { Settings } from "./settings";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
+import { TintAssigner, tintCounts } from "./tints";
 
 /** One pane: its element in the grid and, once its shell has started, its terminal. */
 interface Pane {
   element: HTMLElement;
+  /** The title chip naming the pane's repository or folder. */
+  chip: HTMLElement;
   ready: Promise<PaneTerminal | undefined>;
   terminal?: PaneTerminal;
+  /** The id of the shell session now running in the pane. */
+  session?: number;
+  /** The pane's project tint; `undefined` outside a repository. */
+  tint?: number;
 }
 
 /**
@@ -21,6 +29,9 @@ export class Panes {
   private panes: Pane[] = [];
   private focused = -1;
   private contextMenu: (event: MouseEvent) => void = () => {};
+  private readonly tints = new TintAssigner();
+  /** The latest `pane-cwd` report per session; a report can arrive before its pane knows its session id. */
+  private readonly places = new Map<number, PaneCwd>();
 
   private constructor(
     private readonly root: HTMLElement,
@@ -40,6 +51,7 @@ export class Panes {
     openSettings: () => void,
   ): Promise<Panes> {
     const panes = new Panes(root, platform, settings, openSettings);
+    await listen<PaneCwd>(PANE_CWD_EVENT, (event) => panes.onCwd(event.payload));
     panes.contextMenu = await attachClipboardMenus(() => panes.current()?.terminal?.term, platform, openSettings);
     if (platform === "macos") {
       // ⌘T and ⌘W are Shell menu items on macOS, so the webview may never see those keys.
@@ -69,22 +81,26 @@ export class Panes {
 
     const element = document.createElement("div");
     element.className = "pane";
+    const title = document.createElement("div");
+    title.className = "pane-title";
+    const chip = createPaneChip();
+    title.append(chip);
     const host = document.createElement("div");
     host.className = "pane-terminal";
-    element.append(host);
+    element.append(title, host);
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
     element.addEventListener("mousedown", () => this.focus(this.panes.indexOf(pane)));
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
-    const pane: Pane = { element, ready: new Promise((r) => (resolve = r)) };
+    const pane: Pane = { element, chip, ready: new Promise((r) => (resolve = r)) };
     this.panes.push(pane);
     // Laid out first, so the terminal opens at its pane's size.
     this.render();
     this.markFocused(this.panes.length - 1);
 
     try {
-      const opened = await openTerminal(host, this.settings, cwd);
+      const opened = await openTerminal(host, this.settings, cwd, (session) => this.onSession(pane, session));
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       pane.terminal = opened;
       resolve(opened);
@@ -133,9 +149,37 @@ export class Panes {
     );
   }
 
+  /** A `pane-cwd` report: updates the pane running that session, or keeps it until the pane hears its id. */
+  private onCwd(place: PaneCwd): void {
+    this.places.set(place.paneId, place);
+    const pane = this.panes.find((p) => p.session === place.paneId);
+    if (pane) this.showPlace(pane, place);
+  }
+
+  /** Pane `pane` now runs shell session `session`. */
+  private onSession(pane: Pane, session: number): void {
+    if (pane.session !== undefined) this.places.delete(pane.session);
+    pane.session = session;
+    const place = this.places.get(session);
+    if (place) this.showPlace(pane, place);
+  }
+
+  /** Shows the pane's repository in its tint, or its folder in the neutral chip outside a repository. */
+  private showPlace(pane: Pane, place: PaneCwd): void {
+    if (place.repo) {
+      const others = tintCounts(this.panes.filter((p) => p !== pane).map((p) => p.tint));
+      pane.tint = this.tints.assign(place.repo.root, others);
+      showPaneChip(pane.element, pane.chip, place.repo.name, pane.tint);
+    } else {
+      pane.tint = undefined;
+      showPaneChip(pane.element, pane.chip, folderName(place.cwd));
+    }
+  }
+
   private remove(pane: Pane): void {
     const index = this.panes.indexOf(pane);
     if (index < 0) return;
+    if (pane.session !== undefined) this.places.delete(pane.session);
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
     pane.element.remove();
