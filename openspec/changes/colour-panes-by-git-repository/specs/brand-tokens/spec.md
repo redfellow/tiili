@@ -1,3 +1,6 @@
+## Purpose
+The design tokens tiili's interface is drawn from, defined in `docs/brand/tiili.css` and documented in the brand README: the material palette and the project tints with their label colours.
+
 ## ADDED Requirements
 
 ### Requirement: Sixteen project tints

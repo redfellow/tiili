@@ -1,3 +1,6 @@
+## Purpose
+How tiili tells repositories apart at a glance: each pane follows its shell's working directory and git repository, panes in the same repository share a tint, and a title chip names the repository.
+
 ## ADDED Requirements
 
 ### Requirement: Pane follows its working directory
