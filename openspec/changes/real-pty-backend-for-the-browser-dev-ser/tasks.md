@@ -71,6 +71,7 @@
     # Browser preview with a real shell: the launcher starts the dev bridge (a PTY) and Vite, and stops the bridge with it.
     - name: design
       run: npm run dev:browser -- --port "$HV_PREVIEW_PORT" --strictPort
+      stage: manual
       sandbox: none
       timeoutSeconds: 1200
 
