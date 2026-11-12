@@ -1,30 +1,83 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
-import { followSystemTheme } from "./theme";
+import { LigaturesAddon } from "@xterm/addon-ligatures";
+import { Terminal, type FontWeight } from "@xterm/xterm";
+import { fontFamilyList, type FontSettings, type Settings } from "./settings";
+import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
 const EXIT_MESSAGE = "[process exited] Press Enter to start a new shell";
 
-/** Opens one terminal in `container` connected to the user's default shell. */
-export async function startTerminal(container: HTMLElement): Promise<Terminal> {
-  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim();
-  // xterm measures the font when it opens, so Geist Mono has to be loaded first.
-  await Promise.all([document.fonts.load(`14px "Geist Mono"`), document.fonts.load(`bold 14px "Geist Mono"`)]);
+/** The addons `applyFont` changes or refits with, per terminal. */
+const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
+
+/** Counts `applyFont` calls per terminal, so a call whose font loaded late doesn't undo a newer one. */
+const fontGenerations = new WeakMap<Terminal, number>();
+
+/** Waits until the font's regular and bold faces are loaded, since xterm measures the font when it changes. */
+async function loadFont(font: FontSettings): Promise<void> {
+  const family = fontFamilyList(font.family);
+  await Promise.all([
+    document.fonts.load(`${font.weight} ${font.size}px ${family}`),
+    document.fonts.load(`${font.weightBold} ${font.size}px ${family}`),
+  ]).catch(() => undefined);
+}
+
+/**
+ * Applies the font settings to `term`: family with Geist Mono as fallback, size, weights, line height, letter
+ * spacing and the ligatures addon on or off, then refits so the shell gets the new size.
+ */
+export async function applyFont(term: Terminal, settings: Settings): Promise<void> {
+  const { font } = settings;
+  const generation = (fontGenerations.get(term) ?? 0) + 1;
+  fontGenerations.set(term, generation);
+  await loadFont(font);
+  // A newer call started while this font loaded; its settings win.
+  if (fontGenerations.get(term) !== generation) return;
+  term.options.fontFamily = fontFamilyList(font.family);
+  term.options.fontSize = font.size;
+  term.options.fontWeight = String(font.weight) as FontWeight;
+  term.options.fontWeightBold = String(font.weightBold) as FontWeight;
+  term.options.lineHeight = font.lineHeight;
+  term.options.letterSpacing = font.letterSpacing;
+
+  const own = addons.get(term);
+  if (!own) return;
+  if (font.ligatures && !own.ligatures) {
+    own.ligatures = new LigaturesAddon();
+    term.loadAddon(own.ligatures);
+  } else if (!font.ligatures && own.ligatures) {
+    own.ligatures.dispose();
+    own.ligatures = undefined;
+  }
+  own.fit.fit();
+}
+
+/** Re-reads the theme tokens into the terminal, after the theme setting changed. */
+export function refreshTheme(term: Terminal): void {
+  term.options.theme = terminalTheme(documentTokens());
+}
+
+/**
+ * Opens one terminal in `container` connected to the user's default shell, styled by `settings()`, which the
+ * terminal asks again whenever the system switches light and dark.
+ */
+export async function startTerminal(container: HTMLElement, settings: () => Settings): Promise<Terminal> {
+  // xterm measures the font when it opens, so the font has to be loaded first.
+  await loadFont(settings().font);
 
   const term = new Terminal({
-    fontFamily,
-    fontSize: 14,
     cursorStyle: "block",
     cursorBlink: false,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  addons.set(term, { fit });
   term.open(container);
   followSystemTheme((theme) => {
     term.options.theme = theme;
-  });
-  fit.fit();
+  }, () => settings().theme === "system");
+  await applyFont(term, settings());
 
   let running = false;
 

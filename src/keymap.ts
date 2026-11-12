@@ -30,6 +30,13 @@ export function clipboardAction(event: KeyChord, platform: Platform): ClipboardA
   return null;
 }
 
+/** Whether a key press opens the settings: ⌘, on macOS, Ctrl+, on Windows and Linux. Null when it belongs to the shell. */
+export function settingsShortcut(event: KeyChord, platform: Platform): "settings" | null {
+  if (event.key !== "," || event.altKey || event.shiftKey) return null;
+  if (platform === "macos") return event.metaKey && !event.ctrlKey ? "settings" : null;
+  return event.ctrlKey && !event.metaKey ? "settings" : null;
+}
+
 /** The platform the webview runs on. */
 export function currentPlatform(userAgent: string = navigator.userAgent): Platform {
   if (/Mac/.test(userAgent)) return "macos";
