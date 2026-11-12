@@ -50,6 +50,18 @@ fn typing_reaches_the_shell_and_output_is_shown_then_exit_is_reported() {
     );
 
     session.resize(40, 120).expect("resize is accepted");
+    // Resize is sent to the shell: the shell sees the new rows and columns.
+    #[cfg(unix)]
+    {
+        session
+            .write(b"stty size\r")
+            .expect("stty reaches the shell");
+        assert!(
+            wait_for(&out_rx, &mut seen, "40 120"),
+            "shell never saw 40 rows and 120 columns: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+    }
 
     session.write(b"exit\r").expect("exit reaches the shell");
     exit_rx.recv_timeout(TIMEOUT).expect("exit is reported");

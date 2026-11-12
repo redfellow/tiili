@@ -15,7 +15,8 @@
 - [x] 3.1 Add `src/terminal.ts` wiring xterm.js + fit addon to the PTY commands, `ResizeObserver` → `pty_resize`, exit message `[process exited] Press Enter to start a new shell` and restart on Enter
   - proof: `npx eslint src/terminal.ts`
 - [x] 3.2 Brand: import `docs/brand/tiili.css`; vendor Geist Mono woff2 + OFL licence under `src/assets/fonts/` with `@font-face`; `src/theme.ts` builds the xterm theme from `--term-bg`, `--term-fg`, `--ansi-0..15`, block cursor `--accent`, re-applied on `prefers-color-scheme` change; generate icons with `npx tauri icon` from `docs/brand/logo/icon-light.svg` into `src-tauri/icons/`
-  - proof: `npx eslint src/theme.ts`
+  - proof: `npx eslint src/theme.ts src/theme.test.ts`
+  - proof: `npx vitest run src/theme.test.ts`
   - proof: `test -f src-tauri/icons/icon.png && test -f src-tauri/icons/icon.icns && test -f src-tauri/icons/icon.ico`
 
 ## 4. Copy and paste

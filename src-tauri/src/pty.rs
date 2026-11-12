@@ -1,8 +1,10 @@
 //! One shell on a pseudo-terminal (ConPTY on Windows), free of Tauri types so tests can drive it.
 
 use std::io::{self, Read, Write};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
@@ -11,14 +13,16 @@ pub type OutputFn = Box<dyn FnMut(&[u8]) + Send>;
 /// Called once after the shell has exited and its last output was delivered, with its exit code.
 pub type ExitFn = Box<dyn FnOnce(u32) + Send>;
 
-struct Pty {
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
-}
+/// How long the exit notice waits for the shell's last output after the shell has exited. A
+/// background job that outlives the shell keeps the pseudo-terminal open, so the reader may never
+/// see end of file.
+const LAST_OUTPUT_WAIT: Duration = Duration::from_millis(500);
 
 /// A running shell. Dropping the session kills the shell.
 pub struct PtySession {
-    pty: Arc<Mutex<Option<Pty>>>,
+    master: Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>,
+    /// Queue to the writer thread; `None` once the shell has exited.
+    input: Arc<Mutex<Option<Sender<Vec<u8>>>>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
@@ -64,13 +68,29 @@ impl PtySession {
 
         let killer = child.clone_killer();
         let mut reader = pair.master.try_clone_reader().map_err(to_io)?;
-        let writer = pair.master.take_writer().map_err(to_io)?;
-        let pty = Arc::new(Mutex::new(Some(Pty {
-            master: pair.master,
-            writer,
-        })));
+        let mut writer = pair.master.take_writer().map_err(to_io)?;
+        let master = Arc::new(Mutex::new(Some(pair.master)));
 
-        let reader_thread = thread::Builder::new()
+        // Writes happen on their own thread, in order, so a shell that is not reading its input
+        // never blocks the caller.
+        let (input_tx, input_rx) = mpsc::channel::<Vec<u8>>();
+        thread::Builder::new()
+            .name("pty-writer".into())
+            .spawn(move || {
+                for data in input_rx {
+                    if writer
+                        .write_all(&data)
+                        .and_then(|_| writer.flush())
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })?;
+        let input = Arc::new(Mutex::new(Some(input_tx)));
+
+        let (read_done_tx, read_done_rx) = mpsc::channel::<()>();
+        thread::Builder::new()
             .name("pty-reader".into())
             .spawn(move || {
                 let mut buf = [0u8; 8192];
@@ -82,35 +102,42 @@ impl PtySession {
                         Err(_) => break,
                     }
                 }
+                let _ = read_done_tx.send(());
             })?;
 
-        let waiter_pty = Arc::clone(&pty);
+        let waiter_master = Arc::clone(&master);
+        let waiter_input = Arc::clone(&input);
         thread::Builder::new()
             .name("pty-waiter".into())
             .spawn(move || {
                 let code = child.wait().map(|s| s.exit_code()).unwrap_or(1);
+                // Further writes fail; the writer thread ends once its queue is drained.
+                drop(waiter_input.lock().ok().and_then(|mut i| i.take()));
                 // Closing the pseudo-terminal lets the reader finish (ConPTY only ends its output then).
-                drop(waiter_pty.lock().ok().and_then(|mut p| p.take()));
-                let _ = reader_thread.join();
+                drop(waiter_master.lock().ok().and_then(|mut m| m.take()));
+                let _ = read_done_rx.recv_timeout(LAST_OUTPUT_WAIT);
                 on_exit(code);
             })?;
 
-        Ok(Self { pty, killer })
+        Ok(Self {
+            master,
+            input,
+            killer,
+        })
     }
 
-    /// Sends input to the shell.
+    /// Queues input for the shell, in order; never blocks on the shell. Fails once the shell has exited.
     pub fn write(&self, data: &[u8]) -> io::Result<()> {
-        let mut guard = self.pty.lock().map_err(to_io)?;
-        let pty = guard.as_mut().ok_or_else(gone)?;
-        pty.writer.write_all(data)?;
-        pty.writer.flush()
+        let guard = self.input.lock().map_err(to_io)?;
+        let input = guard.as_ref().ok_or_else(gone)?;
+        input.send(data.to_vec()).map_err(|_| gone())
     }
 
     /// Tells the shell the terminal now has `rows` x `cols`.
     pub fn resize(&self, rows: u16, cols: u16) -> io::Result<()> {
-        let guard = self.pty.lock().map_err(to_io)?;
-        let pty = guard.as_ref().ok_or_else(gone)?;
-        pty.master.resize(size(rows, cols)).map_err(to_io)
+        let guard = self.master.lock().map_err(to_io)?;
+        let master = guard.as_ref().ok_or_else(gone)?;
+        master.resize(size(rows, cols)).map_err(to_io)
     }
 }
 
