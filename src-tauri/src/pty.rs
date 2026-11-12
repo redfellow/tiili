@@ -4,13 +4,15 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
+
+use crate::cwd::{CwdTracker, PaneCwd};
 
 /// Called with each chunk the shell writes.
 pub type OutputFn = Box<dyn FnMut(&[u8]) + Send>;
@@ -183,6 +185,13 @@ pub type SessionId = u32;
 pub type SessionOutputFn = Box<dyn FnMut(SessionId, &[u8]) + Send>;
 /// Called once with the session's id and exit code after its shell has exited.
 pub type SessionExitFn = Box<dyn FnOnce(SessionId, u32) + Send>;
+/// Called with the session's id whenever its shell's working directory or repository changes.
+pub type SessionCwdFn = Box<dyn FnMut(SessionId, &PaneCwd) + Send>;
+
+/// The home folder, where a shell starts when given no folder.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
 
 fn unknown(id: SessionId) -> io::Error {
     io::Error::new(io::ErrorKind::NotFound, format!("no session {id}"))
@@ -206,17 +215,61 @@ impl SessionRegistry {
         cwd: Option<&Path>,
         rows: u16,
         cols: u16,
+        on_output: SessionOutputFn,
+        on_exit: SessionExitFn,
+    ) -> io::Result<SessionId> {
+        self.spawn_tracked(cwd, rows, cols, on_output, None, on_exit)
+    }
+
+    /// Like [`spawn`](Self::spawn), and with `on_cwd` follows the shell's working directory and
+    /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
+    /// on macOS and Linux, the shell process's working directory about once a second.
+    pub fn spawn_tracked(
+        &self,
+        cwd: Option<&Path>,
+        rows: u16,
+        cols: u16,
         mut on_output: SessionOutputFn,
+        on_cwd: Option<SessionCwdFn>,
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+        let tracker = on_cwd.map(|mut on_cwd| {
+            Arc::new(Mutex::new(CwdTracker::new(Box::new(move |c| {
+                on_cwd(id, c)
+            }))))
+        });
+        let output_tracker = tracker.clone();
+        let alive = Arc::new(AtomicBool::new(true));
+        let exit_alive = Arc::clone(&alive);
         let session = PtySession::spawn_in(
             cwd,
             rows,
             cols,
-            Box::new(move |data| on_output(id, data)),
-            Box::new(move |code| on_exit(id, code)),
+            Box::new(move |data| {
+                if let Some(Ok(mut tracker)) = output_tracker.as_ref().map(|t| t.lock()) {
+                    tracker.feed_output(data);
+                }
+                on_output(id, data)
+            }),
+            Box::new(move |code| {
+                exit_alive.store(false, Ordering::Relaxed);
+                on_exit(id, code)
+            }),
         )?;
+        if let Some(tracker) = tracker {
+            // Where the platform cannot read the shell's folder, the pane keeps this one until OSC 7.
+            let start = cwd
+                .filter(|d| d.is_dir())
+                .map(Path::to_path_buf)
+                .or_else(home_dir);
+            if let (Some(dir), Ok(mut t)) = (start, tracker.lock()) {
+                t.report_polled(dir);
+            }
+            if let Some(pid) = session.pid() {
+                crate::cwd::poll(pid, tracker, alive)?;
+            }
+        }
         self.sessions.lock().map_err(to_io)?.insert(id, session);
         Ok(id)
     }

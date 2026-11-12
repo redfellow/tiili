@@ -81,12 +81,14 @@ export function refreshTheme(term: Terminal): void {
 /**
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
- * dark. The cursor is a solid block while the terminal has focus and an outline otherwise.
+ * dark. The cursor is a solid block while the terminal has focus and an outline otherwise. `onSession` hears the
+ * id of each shell session the terminal starts, the first and any after the shell exits.
  */
 export async function openTerminal(
   container: HTMLElement,
   settings: () => Settings,
   cwd?: string,
+  onSession: (id: number) => void = () => {},
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -120,6 +122,7 @@ export async function openTerminal(
     output.onmessage = (bytes) => term.write(new Uint8Array(bytes));
     session = await invoke<number>("pty_spawn", { rows: term.rows, cols: term.cols, cwd: dir, onOutput: output });
     running = true;
+    onSession(session);
   };
 
   const unlistenExit = await listen<{ id: number; code: number }>("pty-exit", (event) => {
