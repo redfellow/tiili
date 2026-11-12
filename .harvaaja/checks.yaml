@@ -1,0 +1,24 @@
+# Proposed by härvääjä setup for this workspace, from commit 006e836 ("Set up OpenSpec").
+#
+# What the repository holds: OpenSpec scaffolding only (openspec/config.yaml and empty
+# specs/ and changes/archive/ folders) plus OpenSpec skill files under .agents/, .claude/
+# and .omp/. There are no build files, package manifests, lockfiles, test configuration,
+# CI workflows or README, and no other branch holds more (main has the same single commit).
+# So there is no install, lint, type check or test command to propose yet.
+#
+# setup: left out. There are no dependencies to install in a fresh worktree. Add it with the
+# first package manifest: install check first, with network for that registry only.
+#
+# Outdated and audit checks (role: outdated, role: audit): left out. The repository has no
+# package manager, and the OpenSpec CLI has no outdated or audit command to read.
+#
+# Check that is proposed: `openspec validate --all --strict` checks OpenSpec changes and
+# specs. It is local, needs no network and runs on every change. It currently finds no items
+# and passes trivially. Unverified: the CLI may read its own configuration from the home
+# folder, which the sandbox hides. If the trial run fails for that reason, add the folder to
+# sandbox.yaml read: list, or drop the check.
+checks:
+  - name: openspec
+    run: openspec validate --all --strict --no-interactive
+    stage: every
+    timeoutSeconds: 120
