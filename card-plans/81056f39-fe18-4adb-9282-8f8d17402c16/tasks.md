@@ -1,6 +1,6 @@
 ## 1. Network allowlist
 
-- [ ] 1.1 (triage) Allow the package registries and GitHub release downloads
+- [x] 1.1 (triage) Allow the package registries and GitHub release downloads
   - file: .harvaaja/network.yaml
   - content:
   ```yaml
