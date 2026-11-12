@@ -1,0 +1,99 @@
+/* tiili design tokens. Source of truth for the website and the app's webview.
+   Light values on :root; dark values under [data-theme="dark"] and the dark colour-scheme media query. */
+
+:root {
+  /* Core palette */
+  --tiili-tiili: #A4472B;
+  --tiili-klinkkeri: #6B2A1E;
+  --tiili-savi: #C9764F;
+  --tiili-laasti: #E8DECD;
+  --tiili-kalkki: #F6F1E9;
+  --tiili-graniitti: #8D877D;
+  --tiili-koski: #182023;
+  --tiili-rauta: #3A3F45;
+  --tiili-ikkuna: #8FA6A4;
+  --tiili-muratti: #861B22;
+  --tiili-koivu: #D9A43A;
+  --tiili-sammal: #6E7F4E;
+  --tiili-taivas: #6F97B3;
+
+  /* Project tints, in assignment order, each with its label colour */
+  --tint-1: #A4472B; --tint-1-on: #FFFFFF;
+  --tint-2: #C9764F; --tint-2-on: #2A2321;
+  --tint-3: #8FA6A4; --tint-3-on: #1B2224;
+  --tint-4: #D9A43A; --tint-4-on: #2A2321;
+  --tint-5: #6E7F4E; --tint-5-on: #FFFFFF;
+  --tint-6: #861B22; --tint-6-on: #FFFFFF;
+  --tint-7: #6F97B3; --tint-7-on: #16222B;
+  --tint-8: #3A3F45; --tint-8-on: #FFFFFF;
+
+  /* Type */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Shape and spacing */
+  --radius-brick: 3px;
+  --radius-control: 6px;
+  --radius-window: 10px;
+  --pane-gap: 3px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+
+  /* Semantic: light */
+  --bg: #F6F1E9;
+  --surface: #FFFDF9;
+  --sunken: #ECE5DA;
+  --fg: #2A2321;
+  --muted: #6B625C;
+  --line: #DCD2C5;
+  --accent: #A4472B;
+  --accent-hover: #8A3820;
+  --accent-press: #6B2A1E;
+  --on-accent: #FFFFFF;
+  --accent-text: #A4472B;
+  --focus: #A4472B;
+  --term-bg: #F6F1E9;
+  --term-fg: #2A2321;
+  --term-dim: #8D877D;
+  --term-gap: #D8CEC0;
+  --mark-ground: #F6F1E9;
+  --mark-focus: #6B2A1E;
+  --mark-prompt: #FFFFFF;
+  --dot: #A4472B;
+
+  /* Terminal ANSI 0–15: light */
+  --ansi-0: #2A2321;  --ansi-1: #A4472B;  --ansi-2: #4C7356;  --ansi-3: #8C5F0E;
+  --ansi-4: #3C6680;  --ansi-5: #844B66;  --ansi-6: #3F6E6B;  --ansi-7: #8D877D;
+  --ansi-8: #5E5650;  --ansi-9: #C2512F;  --ansi-10: #5E8A69; --ansi-11: #A87414;
+  --ansi-12: #4D7C99; --ansi-13: #9C5A7A; --ansi-14: #4F8481; --ansi-15: #B9B1A6;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111617; --surface: #182023; --sunken: #0C1011; --fg: #EFE7DE; --muted: #A0978F; --line: #2A3437;
+    --accent: #A4472B; --accent-hover: #BA5A33; --accent-press: #8A3820; --on-accent: #FFFFFF;
+    --accent-text: #D3865F; --focus: #D3865F;
+    --term-bg: #182023; --term-fg: #D9D3CA; --term-dim: #6E7876; --term-gap: #0B0F10;
+    --mark-ground: #182023; --mark-focus: #C9764F; --mark-prompt: #111617; --dot: #C9764F;
+    --ansi-0: #222B2E;  --ansi-1: #D05B3F;  --ansi-2: #8DB596;  --ansi-3: #D9A43A;
+    --ansi-4: #7FA2B8;  --ansi-5: #B97C92;  --ansi-6: #8FB0AD;  --ansi-7: #CFC8BE;
+    --ansi-8: #56615F;  --ansi-9: #E57A57;  --ansi-10: #A9CBB0; --ansi-11: #EDC066;
+    --ansi-12: #9DBCD0; --ansi-13: #D198AC; --ansi-14: #ADCBC8; --ansi-15: #F6F1E9;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111617; --surface: #182023; --sunken: #0C1011; --fg: #EFE7DE; --muted: #A0978F; --line: #2A3437;
+  --accent: #A4472B; --accent-hover: #BA5A33; --accent-press: #8A3820; --on-accent: #FFFFFF;
+  --accent-text: #D3865F; --focus: #D3865F;
+  --term-bg: #182023; --term-fg: #D9D3CA; --term-dim: #6E7876; --term-gap: #0B0F10;
+  --mark-ground: #182023; --mark-focus: #C9764F; --mark-prompt: #111617; --dot: #C9764F;
+  --ansi-0: #222B2E;  --ansi-1: #D05B3F;  --ansi-2: #8DB596;  --ansi-3: #D9A43A;
+  --ansi-4: #7FA2B8;  --ansi-5: #B97C92;  --ansi-6: #8FB0AD;  --ansi-7: #CFC8BE;
+  --ansi-8: #56615F;  --ansi-9: #E57A57;  --ansi-10: #A9CBB0; --ansi-11: #EDC066;
+  --ansi-12: #9DBCD0; --ansi-13: #D198AC; --ansi-14: #ADCBC8; --ansi-15: #F6F1E9;
+  color-scheme: dark;
+}
