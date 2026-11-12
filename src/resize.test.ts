@@ -46,10 +46,5 @@ describe("sizeReporter", () => {
     reporter.schedule();
     vi.advanceTimersByTime(50);
     expect(send).toHaveBeenCalledTimes(1);
-
-    reporter.reset();
-    reporter.schedule();
-    vi.advanceTimersByTime(50);
-    expect(send).toHaveBeenCalledTimes(2);
   });
 });

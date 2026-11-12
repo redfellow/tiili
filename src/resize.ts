@@ -29,7 +29,7 @@ export function sizeReporter(
   measure: () => Size,
   send: (size: Size) => void,
   waitMs: number,
-): { schedule: () => void; reset: () => void } {
+): { schedule: () => void } {
   let last: Size | undefined;
   const schedule = debounce(() => {
     const size = measure();
@@ -37,11 +37,5 @@ export function sizeReporter(
     last = size;
     send(size);
   }, waitMs);
-  return {
-    schedule,
-    // A new shell has to be told its size again.
-    reset: () => {
-      last = undefined;
-    },
-  };
+  return { schedule };
 }

@@ -5,10 +5,12 @@ tiered, what its end-to-end tests are, and anything every plan must include.
 
 ## Current state
 
-- As of commit 006e836 the repository has no test runner, linter, type checker or build. Its only checked
-  artifacts are OpenSpec changes and specs (`openspec validate --all --strict`).
-- Do not plan a proof command that the repository does not have. If a task needs a test, lint or type check,
-  plan a task that adds that tool first, and name it in the plan.
+- tiili is a Tauri 2 app: Rust core in `src-tauri/`, TypeScript frontend in `src/` built with Vite, npm.
+- Commands: `npm run typecheck` (tsc), `npm run lint` (ESLint; one file: `npx eslint <file>`), `npx vitest run
+  <file>` (unit tests), `cargo fmt --manifest-path src-tauri/Cargo.toml --check`, `cargo clippy --manifest-path
+  src-tauri/Cargo.toml --all-targets -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml --test
+  <name>`, and `openspec validate --all --strict`.
+- The app window cannot run in the sandbox: anything seen in the window is a manual host check.
 
 ## Proofs
 
