@@ -1,5 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Backend } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import { paneAction, settingsShortcut, type PaneAction, type Platform } from "./keymap";
 import { rowsOf } from "./layout";
@@ -23,6 +22,7 @@ export class Panes {
   private contextMenu: (event: MouseEvent) => void = () => {};
 
   private constructor(
+    private readonly backend: Backend,
     private readonly root: HTMLElement,
     private readonly platform: Platform,
     private readonly settings: () => Settings,
@@ -31,23 +31,35 @@ export class Panes {
 
   /**
    * Sets up the panes in `root`, with the menus and shortcuts that act on them. Every pane is styled by
-   * `settings()`; the settings shortcut and the right-click menu's Settings… item call `openSettings`.
+   * `settings()`; the settings shortcut and the right-click menu's Settings… item call `openSettings`. Shells,
+   * clipboard, menus and the window come from `backend`.
    */
   static async create(
+    backend: Backend,
     root: HTMLElement,
     platform: Platform,
     settings: () => Settings,
     openSettings: () => void,
   ): Promise<Panes> {
-    const panes = new Panes(root, platform, settings, openSettings);
-    panes.contextMenu = await attachClipboardMenus(() => panes.current()?.terminal?.term, platform, openSettings);
-    if (platform === "macos") {
+    const panes = new Panes(backend, root, platform, settings, openSettings);
+    panes.contextMenu = await attachClipboardMenus(
+      backend,
+      () => panes.current()?.terminal?.term,
+      platform,
+      openSettings,
+    );
+    if (panes.viaMenu()) {
       // ⌘T and ⌘W are Shell menu items on macOS, so the webview may never see those keys.
-      await listen<"new" | "close">("pane", (event) => {
-        panes.act(event.payload === "new" ? { type: "new" } : { type: "close" });
+      await backend.onAppEvent("pane", (payload) => {
+        panes.act(payload === "new" ? { type: "new" } : { type: "close" });
       });
     }
     return panes;
+  }
+
+  /** True when the native macOS menus carry out the ⌘ shortcuts, so the page only keeps them from the shell. */
+  private viaMenu(): boolean {
+    return this.platform === "macos" && this.backend.nativeMenus;
   }
 
   private current(): Pane | undefined {
@@ -84,7 +96,7 @@ export class Panes {
     this.markFocused(this.panes.length - 1);
 
     try {
-      const opened = await openTerminal(host, this.settings, cwd);
+      const opened = await openTerminal(this.backend, host, this.settings, cwd);
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       pane.terminal = opened;
       resolve(opened);
@@ -102,7 +114,7 @@ export class Panes {
     if (!pane) return;
     this.remove(pane);
     if (this.panes.length === 0) {
-      await getCurrentWindow().close();
+      await this.backend.closeWindow();
     }
     const terminal = await pane.ready;
     await terminal?.dispose();
@@ -171,8 +183,8 @@ export class Panes {
   /** xterm's key hook: pane, settings and clipboard shortcuts are kept from the shell. */
   private onKey(terminal: PaneTerminal, event: KeyboardEvent): boolean {
     if (settingsShortcut(event, this.platform)) {
-      // On macOS the app menu's ⌘, opens the settings; here the key is only kept from the shell.
-      if (this.platform !== "macos" && event.type === "keydown") {
+      // In the macOS app the app menu's ⌘, opens the settings; here the key is only kept from the shell.
+      if (!this.viaMenu() && event.type === "keydown") {
         event.preventDefault();
         this.openSettings();
       }
@@ -180,15 +192,15 @@ export class Panes {
     }
     const action = paneAction(event, this.platform);
     if (action) {
-      // On macOS ⌘T and ⌘W come from the Shell menu; here those keys are only kept from the shell.
-      const viaMenu = this.platform === "macos" && action.type !== "focus";
+      // In the macOS app ⌘T and ⌘W come from the Shell menu; here those keys are only kept from the shell.
+      const viaMenu = this.viaMenu() && action.type !== "focus";
       if (event.type === "keydown") {
         event.preventDefault();
         if (!viaMenu) this.act(action);
       }
       return false;
     }
-    return !handleClipboardKey(terminal.term, event, this.platform);
+    return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
   }
 
   private report(error: unknown): void {

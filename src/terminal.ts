@@ -1,8 +1,7 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { Terminal, type FontWeight } from "@xterm/xterm";
+import type { Backend, SessionId } from "./backend";
 import { sizeReporter } from "./resize";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
@@ -73,9 +72,11 @@ export function refreshTheme(term: Terminal): void {
 /**
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
- * dark. The cursor is a solid block while the terminal has focus and an outline otherwise.
+ * dark. The cursor is a solid block while the terminal has focus and an outline otherwise. The shell runs on
+ * `backend`.
  */
 export async function openTerminal(
+  backend: Backend,
   container: HTMLElement,
   settings: () => Settings,
   cwd?: string,
@@ -100,7 +101,7 @@ export async function openTerminal(
   );
   await applyFont(term, settings());
 
-  let session: number | undefined;
+  let session: SessionId | undefined;
   let running = false;
 
   const reportError = (error: unknown) => {
@@ -108,25 +109,23 @@ export async function openTerminal(
   };
 
   const spawn = async (dir?: string) => {
-    const output = new Channel<number[]>();
-    output.onmessage = (bytes) => term.write(new Uint8Array(bytes));
-    session = await invoke<number>("pty_spawn", { rows: term.rows, cols: term.cols, cwd: dir, onOutput: output });
+    session = await backend.spawn(term.rows, term.cols, dir, (bytes) => term.write(bytes));
     running = true;
   };
 
-  const unlistenExit = await listen<{ id: number; code: number }>("pty-exit", (event) => {
-    if (event.payload.id !== session) return;
+  const unlistenExit = await backend.onExit((id) => {
+    if (id !== session) return;
     running = false;
     term.write(`\r\n${EXIT_MESSAGE}\r\n`);
   });
 
   term.onData((data) => {
     if (running) {
-      invoke("pty_write", { id: session, data }).catch(reportError);
+      backend.write(session as SessionId, data).catch(reportError);
     } else if (data.includes("\r")) {
       const ended = session;
       session = undefined;
-      const restart = ended === undefined ? Promise.resolve() : invoke("pty_close", { id: ended });
+      const restart = ended === undefined ? Promise.resolve() : backend.close(ended);
       restart.then(() => spawn()).catch(reportError);
     }
   });
@@ -139,7 +138,7 @@ export async function openTerminal(
       return { rows: term.rows, cols: term.cols };
     },
     ({ rows, cols }) => {
-      if (running) invoke("pty_resize", { id: session, rows, cols }).catch(reportError);
+      if (running) backend.resize(session as SessionId, rows, cols).catch(reportError);
     },
     RESIZE_SETTLE_MS,
   );
@@ -153,7 +152,7 @@ export async function openTerminal(
     term,
     cwd: async () => {
       if (!running || session === undefined) return undefined;
-      return (await invoke<string | null>("pty_cwd", { id: session })) ?? undefined;
+      return backend.cwd(session);
     },
     dispose: async () => {
       observer.disconnect();
@@ -163,7 +162,7 @@ export async function openTerminal(
       session = undefined;
       running = false;
       term.dispose();
-      if (ended !== undefined) await invoke("pty_close", { id: ended });
+      if (ended !== undefined) await backend.close(ended);
     },
   };
 }
