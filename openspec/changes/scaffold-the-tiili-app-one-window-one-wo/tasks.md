@@ -35,7 +35,7 @@
   file: .harvaaja/checks.yaml
   content:
   ```yaml
-  # Checks for tiili: a Tauri 2 app (Rust in src-tauri/, TypeScript + Vite frontend, npm).
+  # Checks for the tiili Tauri app, a Rust core and a TypeScript frontend installed with npm
   setup:
     - name: install
       run: npm ci
