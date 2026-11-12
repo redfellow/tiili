@@ -15,7 +15,7 @@
   - proof: `npx eslint src/layout`
   - proof: `npx eslint src/panes.ts src/terminal.ts src/resize.ts`
   - proof: `npx vitest run src/resize.test.ts`
-- [ ] 3.2 Integration test `src-tauri/tests/pty_resize_panes.rs` (first line `// @harvaaja-test-tier: integration`): spawn two PTY sessions, resize each to sizes from a simulated divider move, and check `stty size` output in each shell reports the new rows/columns
+- [x] 3.2 Integration test `src-tauri/tests/pty_resize_panes.rs` (first line `// @harvaaja-test-tier: integration`): spawn two PTY sessions, resize each to sizes from a simulated divider move, and check `stty size` output in each shell reports the new rows/columns
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_resize_panes`
   - proof: `npm run typecheck`
 
