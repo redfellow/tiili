@@ -1,0 +1,16 @@
+format: 1
+slug: add-a-readme
+title: Add a README
+x-harvaaja-card: 2f9eae27-c373-4acf-bcdc-98922e8bcf4a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: A documentation-only README; no observable contract or spec changes,
+    and openspec/specs is empty.
+  citations:
+    - openspec/specs (empty)
+    - openspec/changes (only archive)
+    - "card description: No code, no new tools"
+  revision: c4b281ae-c0f1-4dcf-a8a5-2c925967ff07
