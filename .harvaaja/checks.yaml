@@ -31,20 +31,21 @@ checks:
     run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
     stage: every
     timeoutSeconds: 1200
-  # Every Rust test the sandbox can run. Tests that need a pseudo-terminal (or anything else the sandbox refuses)
-  # are #[ignore = "host: ..."] and tagged @harvaaja-test-tier: host, so they are skipped here.
+  # Unit tests only: the PTY integration test needs a pseudo-terminal, which the sandbox refuses.
   - name: cargo-test
-    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests
+    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins
     stage: every
     timeoutSeconds: 1200
-  # The whole Rust suite, host tests included, outside the sandbox before a release.
-  - name: cargo-test-host
-    run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests -- --include-ignored
+  - name: cargo-test-pty
+    run: cargo test --manifest-path src-tauri/Cargo.toml --test pty_session
     stage: release
     sandbox: none
     timeoutSeconds: 1200
-  # Design preview: the Vite dev server for the frontend, on the port härvääjä assigns.
+  # Browser preview with a real shell: the launcher starts the dev bridge (a PTY) and Vite, and stops the bridge with it.
   - name: design
-    run: npm run dev -- --port "$HV_PREVIEW_PORT" --strictPort
+    run: npm run dev:browser -- --port "$HV_PREVIEW_PORT" --strictPort
     role: design
     stage: manual
+    sandbox: none
+    timeoutSeconds: 1200
+
