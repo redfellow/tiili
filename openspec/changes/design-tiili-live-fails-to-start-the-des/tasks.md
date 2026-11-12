@@ -1,10 +1,10 @@
 ## 1. Bridge protocol
-- [ ] 1.1 Add `ready_message` and `error_message` to `src-tauri/src/bridge.rs`, with table tests. In `src-tauri/src/bin/dev-bridge.rs`, send `error` and close when `PtySession::spawn` fails, and send `ready` after a successful spawn.
+- [x] 1.1 Add `ready_message` and `error_message` to `src-tauri/src/bridge.rs`, with table tests. In `src-tauri/src/bin/dev-bridge.rs`, send `error` and close when `PtySession::spawn` fails, and send `ready` after a successful spawn.
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib bridge`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 
 ## 2. Browser backend
-- [ ] 2.1 In `src/backend-ws.ts`, decode `ready` and `error`, resolve `spawn` on `ready`, and reject on `error` with the readable line. Update the `FakeSocket` setup in `src/backend-ws.test.ts` to send `ready`, and add table cases for `decodeServer` and for spawn rejecting on `error`.
+- [x] 2.1 In `src/backend-ws.ts`, decode `ready` and `error`, resolve `spawn` on `ready`, and reject on `error` with the readable line. Update the `FakeSocket` setup in `src/backend-ws.test.ts` to send `ready`, and add table cases for `decodeServer` and for spawn rejecting on `error`.
   - Tests to update: src/backend-ws.test.ts
   - proof: `npx vitest run src/backend-ws.test.ts`
   - proof: `npx eslint src/backend-ws.ts src/backend-ws.test.ts`
