@@ -1,4 +1,4 @@
-// @harvaaja-test-tier: integration
+// @harvaaja-test-tier: host
 //! A real default shell `cd`s between git repositories and a plain folder; the repository the
 //! registry reports for it follows.
 
@@ -50,6 +50,7 @@ fn root_of(report: &PaneCwd) -> Option<&Path> {
 }
 
 #[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
 fn change_directory_into_a_repository_tracked_root_follows() {
     let repo_a = temp_dir("alpha");
     let repo_b = temp_dir("beta");
