@@ -4,7 +4,13 @@ import { showContextMenu } from "./context-menu";
 /** A message the page sends the dev bridge: typed input, or the terminal's new size. */
 export type ClientMessage = { type: "input"; data: string } | { type: "resize"; rows: number; cols: number };
 /** A text message the dev bridge sends the page; shell output arrives as binary messages instead. */
-export type ServerMessage = { type: "exit"; code: number };
+export type ServerMessage =
+  | { type: "ready" }
+  | { type: "error"; message: string }
+  | { type: "exit"; code: number };
+
+/** The line a spawn fails with when the bridge reports it could not start the shell. */
+const SHELL_FAILED = "The dev bridge could not open a shell: ";
 
 /** The name of the meta tag the dev server puts the bridge's per-run token in. */
 export const TOKEN_META = "tiili-bridge-token";
@@ -13,7 +19,7 @@ export function encodeClient(message: ClientMessage): string {
   return JSON.stringify(message);
 }
 
-/** Reads a text message from the bridge; anything other than a well-formed exit message is null. */
+/** Reads a text message from the bridge; anything other than a well-formed ready, error or exit message is null. */
 export function decodeServer(text: string): ServerMessage | null {
   let value: unknown;
   try {
@@ -22,9 +28,11 @@ export function decodeServer(text: string): ServerMessage | null {
     return null;
   }
   if (typeof value !== "object" || value === null) return null;
-  const { type, code } = value as { type?: unknown; code?: unknown };
-  if (type !== "exit" || typeof code !== "number") return null;
-  return { type, code };
+  const { type, code, message } = value as { type?: unknown; code?: unknown; message?: unknown };
+  if (type === "ready") return { type };
+  if (type === "error" && typeof message === "string") return { type, message };
+  if (type === "exit" && typeof code === "number") return { type, code };
+  return null;
 }
 
 /** The bridge's address on the dev server that served the page, with the shell's size and the token. */
@@ -92,22 +100,33 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
         const id = ++nextId;
         const socket = options.openSocket(bridgeUrl(options.page, rows, cols, options.token));
         socket.binaryType = "arraybuffer";
-        let opened = false;
+        // The session is registered on open, but the spawn resolves only once the bridge says the shell runs.
+        let ready = false;
         socket.onopen = () => {
-          opened = true;
           sockets.set(id, socket);
-          resolve(id);
         };
         socket.onmessage = (event) => {
           if (event.data instanceof ArrayBuffer) {
             onOutput(new Uint8Array(event.data));
-          } else if (typeof event.data === "string") {
-            const message = decodeServer(event.data);
-            if (message) exited(id, message.code);
+            return;
+          }
+          if (typeof event.data !== "string") return;
+          const message = decodeServer(event.data);
+          if (message?.type === "ready") {
+            ready = true;
+            resolve(id);
+          } else if (message?.type === "error") {
+            sockets.delete(id);
+            reject(new Error(SHELL_FAILED + message.message));
+          } else if (message?.type === "exit") {
+            exited(id, message.code);
           }
         };
         socket.onclose = () => {
-          if (!opened) reject(new Error("Could not start the shell: the dev bridge refused the connection"));
+          if (!ready) {
+            sockets.delete(id);
+            reject(new Error("Could not start the shell: the dev bridge refused the connection"));
+          }
           // The bridge went away without an exit message: the shell is gone all the same.
           else exited(id, -1);
         };

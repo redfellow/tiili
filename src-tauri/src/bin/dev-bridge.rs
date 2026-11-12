@@ -85,7 +85,23 @@ fn serve(stream: TcpStream, token: &str) -> io::Result<()> {
             }
             on_exit_flag.store(true, Ordering::SeqCst);
         }),
-    )?;
+    );
+    let session = match session {
+        Ok(session) => session,
+        Err(e) => {
+            // Tell the page why no shell runs, rather than leaving it on a silent socket.
+            let mut ws = socket
+                .lock()
+                .map_err(|_| io::Error::other("socket lock poisoned"))?;
+            let _ = ws.send(Message::text(bridge::error_message(&e.to_string())));
+            let _ = ws.close(None);
+            let _ = ws.flush();
+            return Ok(());
+        }
+    };
+    if let Ok(mut ws) = socket.lock() {
+        let _ = ws.send(Message::text(bridge::ready_message()));
+    }
 
     let mut closing_since: Option<Instant> = None;
     loop {

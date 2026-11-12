@@ -2,6 +2,14 @@
 import { describe, expect, it } from "vitest";
 import { decodeServer, wsBackend, type SocketLike } from "./backend-ws";
 
+type Opening = (socket: FakeSocket) => void;
+
+/** The bridge started the shell. */
+const startsShell: Opening = (socket) => {
+  socket.onopen?.({} as Event);
+  socket.receive(JSON.stringify({ type: "ready" }));
+};
+
 class FakeSocket implements SocketLike {
   binaryType: BinaryType = "blob";
   onopen: ((event: Event) => void) | null = null;
@@ -22,13 +30,13 @@ class FakeSocket implements SocketLike {
   }
 }
 
-function setup() {
+function setup(opening: Opening = startsShell) {
   const sockets: FakeSocket[] = [];
   const backend = wsBackend({
     openSocket: (url) => {
       const socket = new FakeSocket(url);
       sockets.push(socket);
-      queueMicrotask(() => socket.onopen?.({} as Event));
+      queueMicrotask(() => opening(socket));
       return socket;
     },
     page: { protocol: "http:", host: "127.0.0.1:5173" },
@@ -77,21 +85,42 @@ describe("WebSocket backend", () => {
   });
 
   it("Wrong token: a connection closed before it opens fails the spawn", async () => {
-    const backend = wsBackend({
-      openSocket: (url) => {
-        const socket = new FakeSocket(url);
-        queueMicrotask(() => socket.onclose?.({} as CloseEvent));
-        return socket;
-      },
-      page: { protocol: "http:", host: "localhost" },
-      token: "wrong",
-      clipboard: { readText: async () => "", writeText: async () => undefined },
-    });
+    const { backend } = setup((socket) => socket.onclose?.({} as CloseEvent));
     await expect(backend.spawn(24, 80, undefined, () => undefined)).rejects.toThrow();
+  });
+
+  it("No pseudo-terminal available: the bridge's error fails the spawn with the reason, and no exit follows", async () => {
+    const { backend } = setup((socket) => {
+      socket.onopen?.({} as Event);
+      socket.receive(JSON.stringify({ type: "error", message: "openpty: Operation not permitted" }));
+      socket.onclose?.({} as CloseEvent);
+    });
+    const exits: number[] = [];
+    await backend.onExit((id) => exits.push(id));
+    await expect(backend.spawn(24, 80, undefined, () => undefined)).rejects.toThrow(
+      "The dev bridge could not open a shell: openpty: Operation not permitted",
+    );
+    expect(exits).toEqual([]);
+  });
+
+  it("Shell starts: the spawn waits for the bridge's ready message", async () => {
+    const { backend, sockets } = setup((socket) => socket.onopen?.({} as Event));
+    let resolved = false;
+    const spawned = backend.spawn(24, 80, undefined, () => undefined).then((id) => {
+      resolved = true;
+      return id;
+    });
+    await new Promise((settle) => setTimeout(settle, 0));
+    expect(resolved).toBe(false);
+    sockets[0].receive(JSON.stringify({ type: "ready" }));
+    await expect(spawned).resolves.toBeTypeOf("number");
   });
 
   it.each([
     ['{"type":"exit","code":0}', { type: "exit", code: 0 }],
+    ['{"type":"ready"}', { type: "ready" }],
+    ['{"type":"error","message":"no pty"}', { type: "error", message: "no pty" }],
+    ['{"type":"error"}', null],
     ['{"type":"exit"}', null],
     ['{"type":"other","code":1}', null],
     ["not json", null],

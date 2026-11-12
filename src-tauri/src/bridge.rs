@@ -42,6 +42,16 @@ pub fn exit_message(code: u32) -> String {
     serde_json::json!({ "type": "exit", "code": code }).to_string()
 }
 
+/// The message sent to the page once the shell has started.
+pub fn ready_message() -> String {
+    serde_json::json!({ "type": "ready" }).to_string()
+}
+
+/// The message sent to the page when the shell cannot start, with the reason.
+pub fn error_message(reason: &str) -> String {
+    serde_json::json!({ "type": "error", "message": reason }).to_string()
+}
+
 /// Whether `token` is long enough and hex, so it can serve as a per-run secret.
 pub fn valid_token(token: &str) -> bool {
     token.len() >= MIN_TOKEN_LEN && token.bytes().all(|b| b.is_ascii_hexdigit())
@@ -172,8 +182,25 @@ mod tests {
     }
 
     #[test]
-    fn exit_message_names_the_code() {
-        let value: serde_json::Value = serde_json::from_str(&exit_message(3)).unwrap();
-        assert_eq!(value, serde_json::json!({ "type": "exit", "code": 3 }));
+    fn server_messages_encode_as_json() {
+        let cases: &[(String, serde_json::Value)] = &[
+            (
+                exit_message(3),
+                serde_json::json!({ "type": "exit", "code": 3 }),
+            ),
+            (ready_message(), serde_json::json!({ "type": "ready" })),
+            (
+                error_message("openpty: Operation not permitted"),
+                serde_json::json!({ "type": "error", "message": "openpty: Operation not permitted" }),
+            ),
+            (
+                error_message("quote \" and\nnewline"),
+                serde_json::json!({ "type": "error", "message": "quote \" and\nnewline" }),
+            ),
+        ];
+        for (text, expected) in cases {
+            let value: serde_json::Value = serde_json::from_str(text).unwrap();
+            assert_eq!(&value, expected, "{text}");
+        }
     }
 }
