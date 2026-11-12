@@ -36,39 +36,18 @@
   content:
   ```yaml
   # Checks for the tiili Tauri app, a Rust core and a TypeScript frontend installed with npm
-  setup:
-    - name: install
-      run: npm ci
-      timeoutSeconds: 600
-  checks:
-    - name: openspec
-      run: openspec validate --all --strict --no-interactive
-      stage: every
-      timeoutSeconds: 120
-    - name: typecheck
-      run: npm run typecheck
-      stage: every
-      timeoutSeconds: 300
-    - name: lint
-      run: npm run lint
-      stage: every
-      timeoutSeconds: 300
-    - name: unit
-      run: npm test
-      stage: every
-      timeoutSeconds: 300
-    - name: cargo-fmt
-      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      stage: every
-      timeoutSeconds: 120
-    - name: cargo-clippy
-      run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      stage: every
-      timeoutSeconds: 1200
-    - name: cargo-test
-      run: cargo test --manifest-path src-tauri/Cargo.toml
-      stage: every
-      timeoutSeconds: 1200
+  setup: [
+      {name: install, run: npm ci, timeoutSeconds: 600}
+    ]
+  checks: [
+      {name: openspec, run: openspec validate --all --strict --no-interactive, stage: every, timeoutSeconds: 120},
+      {name: typecheck, run: npm run typecheck, stage: every, timeoutSeconds: 300},
+      {name: lint, run: npm run lint, stage: every, timeoutSeconds: 300},
+      {name: unit, run: npm test, stage: every, timeoutSeconds: 300},
+      {name: cargo-fmt, run: cargo fmt --manifest-path src-tauri/Cargo.toml --check, stage: every, timeoutSeconds: 120},
+      {name: cargo-clippy, run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings, stage: every, timeoutSeconds: 1200},
+      {name: cargo-test, run: cargo test --manifest-path src-tauri/Cargo.toml, stage: every, timeoutSeconds: 1200}
+    ]
   ```
 - [ ] 5.2 (triage) Allow the registries the install needs
   file: .harvaaja/network.yaml
