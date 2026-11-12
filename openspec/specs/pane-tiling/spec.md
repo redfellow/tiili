@@ -1,7 +1,7 @@
 # pane-tiling Specification
 
 ## Purpose
-TBD - created by archiving change auto-tile-terminals-multiple-panes-in-a. Update Purpose after archive.
+How tiili runs several terminals side by side in one window: each pane has its own shell session, panes tile themselves in a grid that re-flows as terminals open and close, and keyboard shortcuts, focus styling, PTY sizing and starting folders follow the pane.
 
 ## Requirements
 
