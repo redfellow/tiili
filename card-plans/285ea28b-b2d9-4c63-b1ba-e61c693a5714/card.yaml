@@ -6,3 +6,11 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Only the placeholder Purpose lines of two main specs need writing; no
+    requirement or behaviour changes.
+  citations:
+    - openspec/specs/clipboard/spec.md:4
+    - openspec/specs/terminal-session/spec.md:4
+  revision: 24533494-c976-411e-9980-0109f035debb
