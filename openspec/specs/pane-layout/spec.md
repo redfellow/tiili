@@ -1,7 +1,7 @@
 # pane-layout Specification
 
 ## Purpose
-TBD - created by archiving change resize-and-rearrange-tiled-panes. Update Purpose after archive.
+Manual control over the tiled pane grid in the tiili window: dragging dividers to resize grid rows and columns, swapping panes, resetting the layout, and keeping applicable manual sizes when the grid re-flows; each pane's PTY follows its new size.
 
 ## Requirements
 
