@@ -1,6 +1,5 @@
 import "./styles.css";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { loadBackend } from "./backend";
 import { currentPlatform } from "./keymap";
 import { Panes } from "./panes";
 import { normalize, type Settings } from "./settings";
@@ -11,13 +10,14 @@ import { applyTheme } from "./themes";
 const OPEN_SETTINGS_EVENT = "open-settings";
 
 async function start(root: HTMLElement): Promise<void> {
+  const backend = await loadBackend();
   // A missing or broken settings file loads as null, which normalizes to the defaults.
-  let settings: Settings = normalize(await invoke("settings_load").catch(() => null));
+  let settings: Settings = normalize(await backend.loadSettings().catch(() => null));
   applyTheme(settings.theme);
 
   const platform = currentPlatform();
   const openSettings = () => dialog.open();
-  const panes = await Panes.create(root, platform, () => settings, openSettings);
+  const panes = await Panes.create(backend, root, platform, () => settings, openSettings);
   const dialog = createSettingsDialog({
     initial: settings,
     apply: async (next) => {
@@ -26,11 +26,11 @@ async function start(root: HTMLElement): Promise<void> {
       if (themeChanged) applyTheme(next.theme);
       await panes.applySettings(next, themeChanged);
     },
-    save: (next) => invoke("settings_save", { value: next }),
+    save: (next) => backend.saveSettings(next),
     onClose: () => panes.focusCurrent(),
   });
 
-  if (platform === "macos") await listen(OPEN_SETTINGS_EVENT, openSettings);
+  if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
   await panes.open();
 }
 
