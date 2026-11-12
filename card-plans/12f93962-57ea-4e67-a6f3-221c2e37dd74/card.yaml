@@ -7,13 +7,7 @@ x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 route:
   kind: chore
-  rationale: 'No work remains: openspec/specs/packaging/spec.md already has a
-    written Purpose (commit fd7b75c), so the warning is stale. Reijo answered
-    "Nothing, discard card" (batch ed038a8b). Nothing to build; the user can
-    discard the card.'
+  rationale: "Chore: built without a plan"
   citations:
-    - "openspec/specs/packaging/spec.md:3-4 ## Purpose: How tiili is packaged
-      for release..."
-    - commit fd7b75c Give the packaging spec a real Purpose (#13)
-    - "question batch ed038a8b answer: Nothing, discard card (Recommended)"
-  revision: d059875c-7b9e-490c-bedf-f3c87b74b61d
+    - The user pressed Build on this chore
+  revision: b00d3ce0-7b5d-4844-8a62-d1d9e18c797a
