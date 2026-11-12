@@ -10,7 +10,9 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "node scripts/icons.mjs",
+    "bundle": "node scripts/bundle.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.19.2",
     "eslint": "^10.14.0",
