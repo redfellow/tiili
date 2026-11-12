@@ -1,5 +1,4 @@
-import type { Plugin } from "vite";
-import { defineConfig } from "vitest/config";
+import type { Plugin, UserConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -21,7 +20,9 @@ function devBridge(): Plugin {
 }
 
 // Vite settings for Tauri: fixed port, no screen clearing, and src-tauri left to cargo.
-export default defineConfig({
+// Keep runtime imports out of this file other than plain vite: the design preview's dev
+// server loads it before vitest is necessarily installed. Test settings live in vitest.config.ts.
+const config: UserConfig = {
   clearScreen: false,
   plugins: [devBridge()],
   server: {
@@ -34,7 +35,6 @@ export default defineConfig({
   build: {
     target: "es2022",
   },
-  test: {
-    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
-  },
-});
+};
+
+export default config;

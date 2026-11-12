@@ -15,6 +15,14 @@ export interface PaneTerminal {
   term: Terminal;
   /** The working directory of the pane's shell, when it runs and the platform can read it. */
   cwd(): Promise<string | undefined>;
+  /**
+   * Holds the terminal at its size while its pane is being resized by hand: it neither refits nor tells
+   * its shell. `releaseSize(true)` refits once and sends the new size; `releaseSize(false)` just lets go.
+   */
+  holdSize(): void;
+  releaseSize(refit: boolean): void;
+  /** The size of one character cell in CSS pixels, once the terminal has been laid out. */
+  cellSize(): { width: number; height: number } | undefined;
   /** Ends the shell and frees the terminal. */
   dispose(): Promise<void>;
 }
@@ -73,13 +81,15 @@ export function refreshTheme(term: Terminal): void {
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
  * dark. The cursor is a solid block while the terminal has focus and an outline otherwise. The shell runs on
- * `backend`.
+ * `backend`; `onSession` hears the id of each shell session the terminal starts, the first and any after the
+ * shell exits.
  */
 export async function openTerminal(
   backend: Backend,
   container: HTMLElement,
   settings: () => Settings,
   cwd?: string,
+  onSession: (id: number) => void = () => {},
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -111,6 +121,7 @@ export async function openTerminal(
   const spawn = async (dir?: string) => {
     session = await backend.spawn(term.rows, term.cols, dir, (bytes) => term.write(bytes));
     running = true;
+    onSession(session);
   };
 
   const unlistenExit = await backend.onExit((id) => {
@@ -142,9 +153,13 @@ export async function openTerminal(
     },
     RESIZE_SETTLE_MS,
   );
-  const observer = new ResizeObserver(() => reporter.schedule());
+  let held = false;
+  const schedule = () => {
+    if (!held) reporter.schedule();
+  };
+  const observer = new ResizeObserver(schedule);
   observer.observe(container);
-  term.onResize(() => reporter.schedule());
+  term.onResize(schedule);
 
   await spawn(cwd).catch(reportError);
 
@@ -153,6 +168,19 @@ export async function openTerminal(
     cwd: async () => {
       if (!running || session === undefined) return undefined;
       return backend.cwd(session);
+    },
+    holdSize: () => {
+      held = true;
+      reporter.cancel();
+    },
+    releaseSize: (refit) => {
+      held = false;
+      if (refit) reporter.schedule();
+    },
+    cellSize: () => {
+      const screen = term.element?.querySelector(".xterm-screen")?.getBoundingClientRect();
+      if (!screen || term.cols <= 0 || term.rows <= 0 || screen.width <= 0) return undefined;
+      return { width: screen.width / term.cols, height: screen.height / term.rows };
     },
     dispose: async () => {
       observer.disconnect();

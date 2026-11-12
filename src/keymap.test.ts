@@ -2,10 +2,12 @@
 import { describe, expect, it } from "vitest";
 import {
   clipboardAction,
+  layoutAction,
   paneAction,
   settingsShortcut,
   type ClipboardAction,
   type KeyChord,
+  type LayoutAction,
   type PaneAction,
   type Platform,
 } from "./keymap";
@@ -90,5 +92,45 @@ const settingsCases: [string, Platform, KeyChord, "settings" | null][] = [
 describe("settingsShortcut", () => {
   it.each(settingsCases)("%s", (_name, platform, event, expected) => {
     expect(settingsShortcut(event, platform)).toBe(expected);
+  });
+});
+
+const mac = { ctrlKey: true, metaKey: true };
+const pc = { ctrlKey: true, altKey: true, shiftKey: true };
+
+const layoutCases: [string, Platform, KeyChord, LayoutAction | null][] = [
+  ["Keyboard move: ⌃⌘→ moves right on macOS", "macos", chord("ArrowRight", mac), { move: "right" }],
+  ["Keyboard move: ⌃⌘← moves left on macOS", "macos", chord("ArrowLeft", mac), { move: "left" }],
+  ["Keyboard move: ⌃⌘↑ moves up on macOS", "macos", chord("ArrowUp", mac), { move: "up" }],
+  ["Keyboard move: ⌃⌘↓ moves down on macOS", "macos", chord("ArrowDown", mac), { move: "down" }],
+  ["Reset: ⌃⌘0 on macOS", "macos", chord("0", mac), "reset"],
+  ["Keyboard move: Ctrl+Alt+Shift+→ moves right on Windows", "windows", chord("ArrowRight", pc), { move: "right" }],
+  ["Keyboard move: Ctrl+Alt+Shift+↓ moves down on Linux", "linux", chord("ArrowDown", pc), { move: "down" }],
+  ["Reset: Ctrl+Alt+Shift+0 on Windows", "windows", chord("0", pc), "reset"],
+  ["Reset: Ctrl+Alt+Shift+0 on Linux, where Shift turns 0 into )", "linux", { ...chord(")", pc), code: "Digit0" }, "reset"],
+  ["Ctrl+arrow reaches the shell on Linux", "linux", chord("ArrowLeft", { ctrlKey: true }), null],
+  ["Ctrl+Shift+arrow reaches the shell on Windows", "windows", chord("ArrowRight", { ctrlKey: true, shiftKey: true }), null],
+  ["Ctrl+Alt+arrow is not a layout key on Linux", "linux", chord("ArrowRight", { ctrlKey: true, altKey: true }), null],
+  ["Win+Shift+arrow is not a layout key on Windows", "windows", chord("ArrowLeft", { metaKey: true, shiftKey: true }), null],
+  ["macOS: Ctrl+Alt+Shift+arrow is not a layout key", "macos", chord("ArrowRight", pc), null],
+  ["macOS: ⌘→ reaches the shell", "macos", chord("ArrowRight", { metaKey: true }), null],
+  ["macOS: ⌃⌘⇧→ is not a layout key", "macos", chord("ArrowRight", { ...mac, shiftKey: true }), null],
+  ["Windows: ⌃⌘-style Ctrl+Meta+0 is not a layout key", "windows", chord("0", mac), null],
+  ["Clipboard keys are not layout keys: ⌘C", "macos", chord("c", { metaKey: true }), null],
+  ["Clipboard keys are not layout keys: Ctrl+Shift+V", "linux", chord("V", { ctrlKey: true, shiftKey: true }), null],
+  ["Other letters with the chord reach the shell", "linux", chord("T", pc), null],
+];
+
+describe("layoutAction", () => {
+  it.each(layoutCases)("%s", (_name, platform, event, expected) => {
+    expect(layoutAction(event, platform)).toEqual(expected);
+  });
+
+  it("Keyboard move: layout keys are neither pane nor clipboard keys", () => {
+    for (const [, platform, event, expected] of layoutCases) {
+      if (expected === null) continue;
+      expect(paneAction(event, platform)).toBeNull();
+      expect(clipboardAction(event, platform)).toBeNull();
+    }
   });
 });

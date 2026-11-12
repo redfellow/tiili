@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod cwd;
 pub mod pty;
+pub mod repo;
 pub mod settings;
 
 use std::path::Path;
@@ -19,6 +20,8 @@ pub const CLIPBOARD_EVENT: &str = "clipboard";
 pub const PANE_EVENT: &str = "pane";
 /// Event sent when the app menu's Settings… item is chosen.
 pub const OPEN_SETTINGS_EVENT: &str = "open-settings";
+/// Event sent when a shell's working directory or repository changes; its payload is a [`PaneCwdEvent`].
+pub const PANE_CWD_EVENT: &str = "pane-cwd";
 
 #[derive(Clone, Serialize)]
 struct PtyExit {
@@ -26,12 +29,42 @@ struct PtyExit {
     code: u32,
 }
 
+/// A repository as the frontend sees it: root folder and name.
+#[derive(Clone, Serialize)]
+struct RepoInfo {
+    root: String,
+    name: String,
+}
+
+/// Where session `pane_id`'s shell is now, and its repository (`None` outside any).
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneCwdEvent {
+    pane_id: SessionId,
+    cwd: String,
+    repo: Option<RepoInfo>,
+}
+
+impl PaneCwdEvent {
+    fn new(pane_id: SessionId, at: &cwd::PaneCwd) -> Self {
+        Self {
+            pane_id,
+            cwd: at.cwd.to_string_lossy().into_owned(),
+            repo: at.repo.as_ref().map(|r| RepoInfo {
+                root: r.root.to_string_lossy().into_owned(),
+                name: r.name.clone(),
+            }),
+        }
+    }
+}
+
 fn text(err: std::io::Error) -> String {
     err.to_string()
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) and returns its
-/// session id; its output streams over `on_output`, a channel of its own.
+/// session id; its output streams over `on_output`, a channel of its own, and its working directory
+/// as `pane-cwd` events.
 #[tauri::command]
 fn pty_spawn(
     app: AppHandle,
@@ -41,14 +74,18 @@ fn pty_spawn(
     cwd: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
+    let cwd_app = app.clone();
     sessions
-        .spawn(
+        .spawn_tracked(
             cwd.as_deref().map(Path::new),
             rows,
             cols,
             Box::new(move |_id, data| {
                 let _ = on_output.send(data.to_vec());
             }),
+            Some(Box::new(move |id, at| {
+                let _ = cwd_app.emit(PANE_CWD_EVENT, PaneCwdEvent::new(id, at));
+            })),
             Box::new(move |id, code| {
                 let _ = app.emit(PTY_EXIT_EVENT, PtyExit { id, code });
             }),
