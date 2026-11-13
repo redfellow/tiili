@@ -15,9 +15,14 @@ const cases: [string, Step[], unknown, Settings, Settings][] = [
   ["Cancel reverts the preview: cancel returns the opening settings",
     [(s) => s.edit(dracula), (s) => s.edit(big), (s) => s.cancel()], opening, opening, opening],
   ["Save keeps the preview: commit makes the draft the new baseline",
-    [(s) => s.edit(big), (s) => s.commit()], undefined, big, big],
+    [(s) => s.edit(big), (s) => s.commit(s.draft)], undefined, big, big],
   ["cancel after commit returns the committed settings",
-    [(s) => s.edit(big), (s) => s.commit(), (s) => s.edit(dracula), (s) => s.cancel()], big, big, big],
+    [(s) => s.edit(big), (s) => s.commit(s.draft), (s) => s.edit(dracula), (s) => s.cancel()], big, big, big],
+  ["commit records what was written, not an edit made while saving", [(s) => s.edit(big), (s) => {
+    const written = s.draft;
+    s.edit(dracula);
+    s.commit(written);
+  }], undefined, big, dracula],
 ];
 
 describe("createSettingsSession", () => {

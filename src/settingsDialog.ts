@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, FONT_RANGES, normalize, type Settings } from "./settings";
-import { createSettingsSession } from "./settingsSession";
+import { createSettingsSession, same } from "./settingsSession";
 import { THEMES } from "./themes";
 
 const WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900];
@@ -47,10 +47,8 @@ function weightSelect(name: string): HTMLSelectElement {
   return element("select", { name }, ...WEIGHTS.map((w) => element("option", { value: String(w) }, String(w))));
 }
 
-const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
-
-/** A focusable single-select list of the themes; Up/Down, Home/End and clicks select at once. */
-function themeList(onSelect: () => void) {
+/** A focusable single-select list of the themes; Up/Down, Home/End and clicks select at once unless `locked`. */
+function themeList(onSelect: () => void, locked: () => boolean) {
   let value: string = THEMES[0].id;
   const items = THEMES.map((t) => {
     const item = element("div", { className: "settings-theme", id: `settings-theme-${t.id}` }, t.name);
@@ -76,7 +74,7 @@ function themeList(onSelect: () => void) {
   };
   const select = (index: number) => {
     const id = THEMES[Math.max(0, Math.min(THEMES.length - 1, index))].id;
-    if (id === value) return;
+    if (id === value || locked()) return;
     show(id);
     onSelect();
   };
@@ -106,7 +104,7 @@ function themeList(onSelect: () => void) {
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
   const session = createSettingsSession(options.initial);
 
-  const theme = themeList(() => change(read()));
+  const theme = themeList(() => change(read()), () => saving);
   const family = element("input", { type: "text", name: "family", spellcheck: false, autocomplete: "off" });
   family.setAttribute("list", "settings-font-families");
   const families = element("datalist", { id: "settings-font-families" },
@@ -126,19 +124,21 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const cancel = element("button", { type: "button", className: "settings-cancel" }, "Cancel");
   const save = element("button", { type: "button", className: "settings-save" }, "Save");
 
+  const fontFields = element("fieldset", {},
+    element("legend", {}, "Font"),
+    field("Family", family), families,
+    field("Size (px)", size),
+    field("Weight", weight),
+    field("Bold weight", weightBold),
+    field("Line height", lineHeight),
+    field("Letter spacing (px)", letterSpacing),
+    element("label", { className: "settings-check" }, ligatures, element("span", {}, "Ligatures")),
+  );
+
   const form = element("form", { method: "dialog" },
     element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close),
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
-    element("fieldset", {},
-      element("legend", {}, "Font"),
-      field("Family", family), families,
-      field("Size (px)", size),
-      field("Weight", weight),
-      field("Bold weight", weightBold),
-      field("Line height", lineHeight),
-      field("Letter spacing (px)", letterSpacing),
-      element("label", { className: "settings-check" }, ligatures, element("span", {}, "Ligatures")),
-    ),
+    fontFields,
     status,
     element("footer", { className: "settings-footer" },
       reset, element("div", { className: "settings-actions" }, cancel, save)),
@@ -184,6 +184,12 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   };
 
   let saving = false;
+  /** While saving, nothing can be edited, so what is written is what stays applied. */
+  const lock = (on: boolean) => {
+    saving = on;
+    fontFields.disabled = reset.disabled = save.disabled = cancel.disabled = on;
+    theme.list.setAttribute("aria-disabled", String(on));
+  };
 
   /** Cancel, Esc and ×: back to the settings from when the dialogue opened, unsaved. */
   const revert = () => {
@@ -197,18 +203,17 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   /** Save: write the previewed settings and close; on failure stay open with the error. */
   const commit = async () => {
     if (saving) return;
-    saving = true;
-    save.disabled = cancel.disabled = true;
+    lock(true);
+    const written = session.draft;
     try {
-      await options.save(session.draft);
-      session.commit();
+      await options.save(written);
+      session.commit(written);
       status.textContent = "";
       dialog.close();
     } catch (error) {
       report(error);
     } finally {
-      saving = false;
-      save.disabled = cancel.disabled = false;
+      lock(false);
     }
   };
 

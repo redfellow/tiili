@@ -10,11 +10,12 @@ export interface SettingsSession {
   edit(next: Settings): boolean;
   /** Drops the draft and returns the saved settings, to be applied again. */
   cancel(): Settings;
-  /** Makes the draft the saved settings, after it has been written to the settings file. */
-  commit(): void;
+  /** Makes `written` the saved settings once it is in the settings file; the draft is left as it is. */
+  commit(written: Settings): void;
 }
 
-const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
+/** Whether two settings are equal by value. */
+export const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
 
 export function createSettingsSession(saved: Settings): SettingsSession {
   let baseline = saved;
@@ -31,8 +32,8 @@ export function createSettingsSession(saved: Settings): SettingsSession {
       draft = baseline;
       return baseline;
     },
-    commit() {
-      baseline = draft;
+    commit(written) {
+      baseline = written;
     },
   };
 }
