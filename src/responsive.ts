@@ -4,6 +4,14 @@ export const MIN_RESPONSIVE_SIZE = 7;
 /** Line height never shrinks below this: xterm refuses anything under 1 ("lineHeight cannot be less than 1"). */
 export const MIN_RESPONSIVE_LINE_HEIGHT = 1;
 
+/** A zoomed pane's font size stays within these pixels. */
+export const ZOOM_SIZE = { min: 6, max: 48 } as const;
+
+/** The font size `size` with a pane's zoom offset `zoom` added, kept within ZOOM_SIZE. */
+export function zoomedSize(size: number, zoom: number): number {
+  return Math.min(ZOOM_SIZE.max, Math.max(ZOOM_SIZE.min, size + zoom));
+}
+
 /** How strongly text shrinks with pane size: 0 not at all, 1 in proportion to the pane's width, 2 twice as fast. */
 export const RESPONSIVE_STRENGTH = { min: 0, max: 2, step: 0.05 } as const;
 

@@ -1,6 +1,15 @@
 import type { Backend } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
-import { layoutAction, paneAction, settingsShortcut, type LayoutAction, type PaneAction, type Platform } from "./keymap";
+import {
+  layoutAction,
+  paneAction,
+  settingsShortcut,
+  zoomAction,
+  type LayoutAction,
+  type PaneAction,
+  type Platform,
+  type ZoomAction,
+} from "./keymap";
 import {
   addPane,
   changedPanes,
@@ -26,6 +35,7 @@ import {
   type PaneCwd,
 } from "./paneChip";
 import type { Settings } from "./settings";
+import { zoomedSize } from "./responsive";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
 import { TintAssigner, tintCounts } from "./tints";
 
@@ -49,6 +59,8 @@ interface Pane {
   tint?: number;
   /** Set for a Heynote pane, which holds Heynote instead of a terminal. */
   note?: HeynoteFrame;
+  /** Pixels added to the Settings font size by the zoom keys; not saved, so a new pane starts at 0. */
+  zoom: number;
 }
 
 /**
@@ -199,7 +211,7 @@ export class Panes {
       return;
     }
     const { element, chip, host } = this.paneElement();
-    const pane: Pane = { id: this.nextId++, element, chip, ready: Promise.resolve(undefined) };
+    const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
     element.addEventListener("mousedown", () => this.focus(this.panes.indexOf(pane)));
     showPaneChip(element, chip, "Heynote");
@@ -253,7 +265,7 @@ export class Panes {
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
-    const pane: Pane = { id: this.nextId++, element, chip, ready: new Promise((r) => (resolve = r)) };
+    const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: new Promise((r) => (resolve = r)) };
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
     // Laid out first, so the terminal opens at its pane's size.
@@ -267,6 +279,7 @@ export class Panes {
         this.settings,
         cwd,
         (session) => this.onSession(pane, session),
+        () => pane.zoom,
         () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
@@ -313,12 +326,13 @@ export class Panes {
     if ((this.layout.mode ?? "grid") !== settings.tiling.layout) {
       this.relayout(setMode(this.layout, settings.tiling.layout));
     }
-    const terminals = await Promise.all(this.panes.map((pane) => pane.ready));
+    // Each pane keeps its zoom offset on top of the new font size.
     await Promise.all(
-      terminals.map(async (terminal) => {
+      this.panes.map(async (pane) => {
+        const terminal = await pane.ready;
         if (!terminal) return;
         if (themeChanged) refreshTheme(terminal.term);
-        await applyFont(terminal.term, settings);
+        await applyFont(terminal.term, settings, pane.zoom);
       }),
     );
   }
@@ -406,8 +420,25 @@ export class Panes {
   }
 
   /**
-   * Carries out a layout, pane or settings shortcut on keydown. Returns true when `event` is one of those keys,
-   * which then must not reach the pane's shell or Heynote.
+   * Steps the focused terminal pane's zoom offset one pixel in or out, or back to 0, keeping its size within the
+   * zoom range, then refits it so its shell gets the new size.
+   */
+  private zoom(pane: Pane, action: ZoomAction): void {
+    const terminal = pane.terminal;
+    if (!terminal) return;
+    const settings = this.settings();
+    const base = settings.font.size;
+    const current = zoomedSize(base, pane.zoom);
+    const next = action === "reset" ? base : zoomedSize(current, action === "in" ? 1 : -1);
+    if (action !== "reset" && next === current) return;
+    pane.zoom = next - base;
+    applyFont(terminal.term, settings, pane.zoom).catch((error: unknown) => this.report(error));
+  }
+
+  /**
+   * Carries out a layout, pane, settings or zoom shortcut on keydown. Returns true when `event` is one of those
+   * keys, which then must not reach the pane's shell or Heynote. Zoom keys act only in terminal panes; in a
+   * Heynote pane they reach Heynote.
    */
   private shortcut(event: KeyboardEvent): boolean {
     const layout = layoutAction(event, this.platform);
@@ -434,6 +465,15 @@ export class Panes {
       if (!viaMenu && event.type === "keydown") {
         event.preventDefault();
         this.act(action);
+      }
+      return true;
+    }
+    const zoom = zoomAction(event, this.platform);
+    const pane = this.current();
+    if (zoom && pane && !pane.note) {
+      if (event.type === "keydown") {
+        event.preventDefault();
+        this.zoom(pane, zoom);
       }
       return true;
     }

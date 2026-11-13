@@ -7,6 +7,8 @@ export type LayoutAction = { move: Direction } | "reset";
 /** A pane shortcut: open a new pane, close the focused one, or focus pane `index` (0-based). */
 /** A pane action; `heynote` opens (or focuses) the Heynote pane and has no shortcut of its own. */
 export type PaneAction = { type: "new" } | { type: "heynote" } | { type: "close" } | { type: "focus"; index: number };
+/** A zoom shortcut: the focused pane's text one step larger, smaller, or back to the Settings size. */
+export type ZoomAction = "in" | "out" | "reset";
 
 /** The parts of a keyboard event the shortcut mappings read. */
 export interface KeyChord {
@@ -87,6 +89,26 @@ export function layoutAction(event: KeyChord, platform: Platform): LayoutAction 
   if (dir) return { move: dir };
   // With Shift held, the 0 key reads as ")" or "=" depending on the keyboard layout.
   if (event.key === "0" || event.code === "Digit0") return "reset";
+  return null;
+}
+
+/**
+ * Which zoom action a key press asks for, or null when the key belongs to the shell.
+ * macOS: ⌘= or ⌘+ in, ⌘− out, ⌘0 reset. Windows and Linux: Ctrl+= or Ctrl++ in, Ctrl+− out, Ctrl+0 reset, numpad
+ * keys too. Shift is allowed where it is needed to type `+`; Alt and ⌃⌘ belong to other shortcuts.
+ */
+export function zoomAction(event: KeyChord, platform: Platform): ZoomAction | null {
+  if (event.altKey) return null;
+  if (platform === "macos") {
+    if (!event.metaKey || event.ctrlKey) return null;
+  } else if (!event.ctrlKey || event.metaKey) {
+    return null;
+  }
+  const { key, code } = event;
+  if (key === "=" || key === "+" || code === "Equal" || code === "NumpadAdd") return "in";
+  if (platform === "macos" && event.shiftKey) return null;
+  if (key === "-" || code === "Minus" || code === "NumpadSubtract") return "out";
+  if (key === "0" || code === "Digit0" || code === "Numpad0") return "reset";
   return null;
 }
 

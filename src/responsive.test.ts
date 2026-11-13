@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { responsiveFont, type ResponsiveSettings } from "./responsive";
+import { responsiveFont, zoomedSize, type ResponsiveSettings } from "./responsive";
 
 const area = { width: 800, height: 600 };
 const quarter = { width: 400, height: 300 };
@@ -27,5 +27,19 @@ const cases: [string, typeof font, ResponsiveSettings, { width: number; height: 
 describe("responsiveFont", () => {
   it.each(cases)("%s", (_name, chosen, responsive, pane, expected) => {
     expect(responsiveFont(chosen, responsive, pane, area)).toEqual(expected);
+  });
+});
+
+// [name, size, zoom offset, expected size]
+const zoomCases: [string, number, number, number][] = [
+  ["Zoom in one pane: 14 zoomed in twice draws at 16", 14, 2, 16],
+  ["Zoom in one pane: 14 zoomed out three times draws at 11", 14, -3, 11],
+  ["Zoom stops at 48 px", 32, 20, 48],
+  ["Zoom stops at 6 px", 8, -5, 6],
+];
+
+describe("zoomedSize", () => {
+  it.each(zoomCases)("%s", (_name, size, zoom, expected) => {
+    expect(zoomedSize(size, zoom)).toBe(expected);
   });
 });
