@@ -7,7 +7,8 @@
 // save everything at once (window.tiiliFlush) before it closes the pane. Several Heynote pages stay in sync: each
 // passes its own origin id with every change, hears every change through the store's subscribe, and follows the
 // ones other pages made, handing new note text to Heynote's buffer.addOnChangeCallback callbacks and refreshing
-// its notes list. Heynote starts with tiili's Geist Mono instead of Hack, and without its left panel until the
+// its notes list; on close it does not save again the notes other pages deleted or moved (save-on-close.js).
+// Heynote starts with tiili's Geist Mono instead of Hack, and without its left panel until the
 // user opens it.
 
 import {
@@ -26,6 +27,7 @@ import { generateClientId } from "@/src/common/client-id";
 import { CURRENCY_RATES_URL, getCurrencyFetchOptions } from "@/src/common/currency-request";
 import { normalizeLibrarySearchMatch } from "@/src/common/library-search-match";
 import { isLibrarySearchQueryLongEnough } from "@/src/common/library-search-query.js";
+import { notesToSave, pathsGone } from "./save-on-close.js";
 
 /** A store kept in this page's localStorage, for when the page is opened on its own, outside tiili. */
 function localStore() {
@@ -119,6 +121,9 @@ const state = Object.assign({}, library.state || {})
 
 /** This page's id, sent with each change so it can tell its own changes from other Heynote pages'. */
 const origin = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+
+/** Paths other pages deleted or moved away, which this page must not save again when it closes. */
+const gone = new Set()
 
 /** Heynote's callbacks for each open note, called with the note's new text when another page changed it. */
 const onChangeCallbacks = {}
@@ -262,6 +267,7 @@ function createLibrarySearchPattern(options, flags) {
 }
 
 function putNote(path, content) {
+    gone.delete(path)
     notes.set(path, content)
     return store.write(path, content, origin)
 }
@@ -284,6 +290,14 @@ function refreshLibrary() {
 function followChange(change) {
     if (change.origin === origin) {
         return
+    }
+    for (const path of pathsGone(change)) {
+        gone.add(path)
+    }
+    if (change.kind === "write") {
+        gone.delete(change.path)
+    } else if (change.kind === "move") {
+        gone.delete(change.to)
     }
     switch (change.kind) {
         case "write": {
@@ -383,7 +397,7 @@ const Heynote = {
         },
 
         async saveAndQuit(contents) {
-            await Promise.all([...contents].map(([path, content]) => putNote(path, content)))
+            await Promise.all(notesToSave(contents, gone).map(([path, content]) => putNote(path, content)))
         },
 
         async exists(path) {

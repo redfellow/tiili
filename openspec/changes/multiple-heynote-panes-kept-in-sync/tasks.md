@@ -22,6 +22,7 @@
   `directories`, implement `addOnChangeCallback`/`removeOnChangeCallback` and refresh Heynote's library for
   created, deleted and moved notes; update the header comment
   - proof: `grep -n "addOnChangeCallback(path" heynote/bridge.js`
+  - proof: `npx vitest run src/heynoteSaveOnClose.test.ts`
 - [x] 3.2 Make `Panes.openHeynote` always open a new pane and update its doc comment
   - proof: `npx eslint src/panes.ts`
   - proof: `npm run typecheck`
