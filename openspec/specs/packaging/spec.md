@@ -6,7 +6,7 @@ How tiili is packaged for release: installers for macOS, Windows and Linux built
 ## Requirements
 
 ### Requirement: Installers per platform
-The project SHALL build installers through Tauri's bundler: a universal `.dmg` on macOS, an NSIS setup `.exe` on Windows, and `.AppImage` and `.deb` on Linux. Each installer SHALL carry the product name `tiili`, the version from `package.json` and the short description.
+The project SHALL build installers through Tauri's bundler: an Apple Silicon `.dmg` on macOS, an NSIS setup `.exe` on Windows, and `.AppImage` and `.deb` on Linux. Each installer SHALL carry the product name `tiili`, the version from `package.json` and the short description.
 
 #### Scenario: Local bundle on the host
 - **WHEN** a developer runs `npm run bundle`
@@ -57,7 +57,7 @@ Pushing a tag `v<version>` SHALL build the installers on macOS, Windows and Linu
 
 #### Scenario: Tag pushed
 - **WHEN** the tag `v0.2.0` is pushed
-- **THEN** a draft release `v0.2.0` holds the universal `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb`
+- **THEN** a draft release `v0.2.0` holds the Apple Silicon `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb`
 
 #### Scenario: Tag and version disagree
 - **WHEN** the tag `v0.3.0` is pushed but `package.json` says `0.2.0`

@@ -13,7 +13,7 @@ bumps it (see [Releasing](#releasing)).
 
 | Platform | Installers | What `npm run bundle` runs |
 | --- | --- | --- |
-| macOS | one universal `.dmg` (Apple Silicon + Intel) | `tauri build --target universal-apple-darwin --bundles dmg` |
+| macOS | `.dmg` for Apple Silicon (Intel Macs are not supported) | `tauri build --target aarch64-apple-darwin --bundles dmg` |
 | Windows | NSIS setup `.exe` | `tauri build --bundles nsis` |
 | Linux | `.AppImage` and `.deb` | `tauri build --bundles appimage,deb` |
 
@@ -43,8 +43,8 @@ error elsewhere.
 
 All platforms need Node.js with `npm ci` run, and Rust through rustup.
 
-- **macOS**: Xcode Command Line Tools, and both Rust targets for the universal build:
-  `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
+- **macOS**: an Apple Silicon Mac with the Xcode Command Line Tools. Rust's host target is the one the build
+  needs.
 - **Windows**: the Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10 and 11). The setup `.exe`
   is built with NSIS, which Tauri downloads on the first build.
 - **Linux**: webkit2gtk 4.1 and its build dependencies (on Debian and Ubuntu: `libwebkit2gtk-4.1-dev
@@ -92,7 +92,7 @@ Needs an Apple Developer account and a "Developer ID Application" certificate.
 - App Store Connect API key: `APPLE_API_KEY` (the key ID), `APPLE_API_ISSUER` (the issuer ID) and
   `APPLE_API_KEY_PATH` (the path to the `.p8` private key file).
 
-With these set, `npm run bundle` signs and notarises the universal `.dmg`.
+With these set, `npm run bundle` signs and notarises the `.dmg`.
 
 ### Windows: code signing
 
@@ -121,7 +121,7 @@ No signing. The `.AppImage` and `.deb` are built unsigned.
 
 ## Platform differences
 
-- **macOS**: the `.dmg` holds one universal binary; `lipo -archs` on it shows `x86_64 arm64`. Without
+- **macOS**: the `.dmg` holds an Apple Silicon binary; `lipo -archs` on it shows `arm64`. Without
   notarisation, Gatekeeper warns on first launch (open with right-click → Open).
 - **Windows**: the setup `.exe` (`tiili_<version>_x64-setup.exe`) is built with NSIS, downloaded by Tauri on
   the first build. Unsigned installers trigger a
@@ -150,7 +150,7 @@ The tag starts `.github/workflows/release.yml`:
 1. It fails unless the tag is `v` + the version in `package.json`.
 2. It creates a draft GitHub Release for the tag with generated notes (or reuses the draft if it exists).
 3. It builds on `macos-latest`, `windows-latest` and `ubuntu-22.04` with `npm ci` and `npm run bundle`, and
-   uploads the universal `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb` to the draft.
+   uploads the `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb` to the draft.
 
 Signing stays off until its secrets exist. The workflow copies each macOS signing secret (`APPLE_CERTIFICATE`,
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`) into the

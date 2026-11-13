@@ -1,7 +1,6 @@
 // Builds tiili's installers for the host platform with Tauri's bundler. Run with `npm run bundle`.
 //
-// - macOS: one universal .dmg (Apple Silicon + Intel). Needs the rustup targets aarch64-apple-darwin and
-//   x86_64-apple-darwin.
+// - macOS: a .dmg for Apple Silicon. Intel Macs are not supported.
 // - Windows: NSIS setup .exe.
 // - Linux: .AppImage and .deb.
 //
@@ -15,7 +14,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ARGS_BY_PLATFORM = {
-  darwin: ["--target", "universal-apple-darwin", "--bundles", "dmg"],
+  darwin: ["--target", "aarch64-apple-darwin", "--bundles", "dmg"],
   win32: ["--bundles", "nsis"],
   linux: ["--bundles", "appimage,deb"],
 };
