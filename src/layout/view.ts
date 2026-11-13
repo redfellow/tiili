@@ -152,10 +152,14 @@ export class TileView {
     divider.addEventListener("pointercancel", onEnd);
   }
 
-  /** Highlights the pane under the pointer while a grab strip is dragged, and swaps with it on drop. */
+  /**
+   * While a grab strip is dragged, shows a ghost label following the pointer with the source pane dimmed, so the
+   * drag is visible from the first pixels; highlights the pane under the pointer and swaps with it on drop.
+   */
   private dragPane(grab: HTMLElement, source: HTMLElement, down: PointerEvent): void {
     const from = Number(source.dataset[PANE_ID]);
     let target: HTMLElement | undefined;
+    let ghost: HTMLElement | undefined;
     grab.setPointerCapture(down.pointerId);
 
     const mark = (pane: HTMLElement | undefined) => {
@@ -164,7 +168,18 @@ export class TileView {
       target = pane;
       target?.toggleAttribute("data-drop-target", true);
     };
+    /** The drag has begun once the pointer has moved a few pixels: until then a click is just a click. */
+    const begin = () => {
+      ghost = document.createElement("div");
+      ghost.className = "pane-drag-ghost";
+      ghost.textContent = source.querySelector(".pane-chip")?.textContent?.trim() || "Terminal";
+      document.body.append(ghost);
+      source.toggleAttribute("data-drag-source", true);
+      document.documentElement.toggleAttribute("data-pane-dragging", true);
+    };
     const onMove = (event: PointerEvent) => {
+      if (!ghost && Math.hypot(event.clientX - down.clientX, event.clientY - down.clientY) > 3) begin();
+      if (ghost) ghost.style.transform = `translate(${event.clientX + 14}px, ${event.clientY + 14}px)`;
       const under = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(".pane");
       mark(under && under !== source && this.root.contains(under) ? under : undefined);
     };
@@ -174,6 +189,9 @@ export class TileView {
       grab.removeEventListener("pointercancel", onCancel);
       const to = target ? Number(target.dataset[PANE_ID]) : undefined;
       mark(undefined);
+      ghost?.remove();
+      source.toggleAttribute("data-drag-source", false);
+      document.documentElement.toggleAttribute("data-pane-dragging", false);
       if (drop && to !== undefined) this.hooks.swap(from, to);
     };
     const onUp = () => finish(true);

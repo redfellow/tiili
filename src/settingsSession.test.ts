@@ -7,6 +7,8 @@ const opening: Settings = { ...DEFAULT_SETTINGS, theme: "nord" };
 const dracula: Settings = { ...DEFAULT_SETTINGS, theme: "dracula" };
 const big: Settings = { ...opening, font: { ...opening.font, size: 16 } };
 const faded: Settings = { ...opening, inactive: { opacity: 0.5, desaturate: true } };
+const stacked: Settings = { ...opening, tiling: { layout: "rows" } };
+const flatText: Settings = { ...opening, responsive: { enabled: false, strength: 0.5 } };
 const noHover: Settings = { ...opening, behaviour: { hoverHighlight: false } };
 
 type Step = (s: SettingsSession) => unknown;
@@ -15,6 +17,8 @@ const cases: [string, Step[], unknown, Settings, Settings][] = [
   ["edit with the same settings marks no change", [(s) => s.edit({ ...opening })], false, opening, opening],
   ["edit with different settings marks a change", [(s) => s.edit(dracula)], true, opening, dracula],
   ["Change inactive looks: a new opacity and desaturate marks a change", [(s) => s.edit(faded)], true, opening, faded],
+  ["choosing another tiling mode marks a change", [(s) => s.edit(stacked)], true, opening, stacked],
+  ["turning off responsive text marks a change", [(s) => s.edit(flatText)], true, opening, flatText],
   ["turning off mouseover highlight marks a change", [(s) => s.edit(noHover)], true, opening, noHover],
   ["Change inactive looks: Save keeps the faded preview",
     [(s) => s.edit(faded), (s) => s.commit(s.draft)], undefined, faded, faded],
