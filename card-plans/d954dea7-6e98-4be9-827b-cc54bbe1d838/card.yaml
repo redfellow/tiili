@@ -1,0 +1,13 @@
+format: 1
+slug: tiili-repo-security-review-and-removal-o
+title: Tiili repo security review and removal of suspicious content
+x-harvaaja-card: d954dea7-6e98-4be9-827b-cc54bbe1d838
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: d2dc0160-c15f-48bd-be36-99fab719f677
