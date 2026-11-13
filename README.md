@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>A tiling terminal for running many coding agents side by side.</b><br>
+  <b>A tiling terminal for running many terminals side by side.</b><br>
   macOS · Windows · Linux
 </p>
 
@@ -106,9 +106,19 @@ Signing, notarisation and icons are covered in [`docs/packaging.md`](docs/packag
 
 ## License
 
-[MIT](LICENSE). The bundled fonts keep their own licences: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
+tiili is [MIT](LICENSE). It ships third-party work under its own licences, listed in full in
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) (regenerate with `npm run licenses`):
 
-The Heynote pane bundles [Heynote](https://github.com/heyman/heynote) by Jonatan Heyman, built from its source by
-`npm run heynote` into [`public/heynote`](public/heynote). Heynote is licensed under the MIT License with the
-"Commons Clause" License Condition v1.0, which does not allow selling it: see
-[`public/heynote/LICENSE`](public/heynote/LICENSE). Thank you, Jonatan, for making Heynote.
+- **Fonts:** Geist Mono, Victor Mono, Commit Mono, Recursive Mono and Cascadia Code, all under the SIL Open Font
+  License 1.1: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
+- **Heynote:** the Heynote pane bundles [Heynote](https://github.com/heyman/heynote) by Jonatan Heyman, built from
+  its source by `npm run heynote` into [`public/heynote`](public/heynote). Heynote is licensed under the MIT License
+  with the "Commons Clause" License Condition v1.0, which does not allow selling it: see
+  [`public/heynote/LICENSE`](public/heynote/LICENSE). Thank you, Jonatan, for making Heynote.
+- **Inside the Heynote build:** the Hack font (MIT and Bitstream Vera), Open Sans (Apache-2.0), math.js (Apache-2.0),
+  guesslang-js, Vue, CodeMirror, PrimeVue, Prettier and other npm packages (MIT, Apache-2.0, ISC): see
+  [`public/heynote/THIRD_PARTY.md`](public/heynote/THIRD_PARTY.md).
+- **Frontend:** xterm.js and its addons, the Tauri JavaScript APIs and their dependencies (MIT, Apache-2.0, ISC).
+- **App core:** Tauri, portable-pty and the other Rust crates compiled into the app, mostly MIT or Apache-2.0, with
+  some under MPL-2.0 (file-level copyleft; their unmodified source is on crates.io), Unicode-3.0, Zlib, BSD,
+  BSL-1.0 and ISC.

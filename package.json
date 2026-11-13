@@ -16,7 +16,8 @@
     "bundle": "node scripts/bundle.mjs",
     "install-app": "node scripts/install-app.mjs",
     "release": "node scripts/release.mjs",
-    "heynote": "node scripts/heynote.mjs"
+    "heynote": "node scripts/heynote.mjs",
+    "licenses": "node scripts/licenses.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
