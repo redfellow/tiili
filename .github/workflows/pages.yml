@@ -1,0 +1,38 @@
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/brand/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # site/brand is a symlink to docs/brand, so the tokens and logos have one source. Copy it in for real.
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp -R site/. _site/
+          rm _site/brand
+          cp -R docs/brand _site/brand
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
