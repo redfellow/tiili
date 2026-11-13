@@ -1,0 +1,2 @@
+## Approach
+In `src/settingsDialog.ts`, replace the `appearance` panel with two panels, `style` (`settings-panel-style`: Theme, Cursor, Inactive terminals, app icon when shown) and `typography` (`settings-panel-typography`: `fontFields`), and make the tab names `["Style", "Typography", "Behaviour"]`. The existing tab logic already works over `panels`/`tabs` arrays, so arrow wrapping and `showTab(0)` carry over. Update the doc comment and any CSS selector naming the old panel id in `src/styles.css`. No settings data changes.
