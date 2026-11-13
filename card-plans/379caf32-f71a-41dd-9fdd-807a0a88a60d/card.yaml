@@ -5,3 +5,13 @@ x-harvaaja-card: 379caf32-f71a-41dd-9fdd-807a0a88a60d
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds a new visible window top bar with settings gear and pane
+    buttons: new observable contracts in settings, pane-tiling and pane-layout;
+    no active change to polish."
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement: Settings dialogue"
+    - "src-tauri/tauri.conf.json: windows (native decorations)"
+    - "openspec/changes: only archive"
+  revision: af53205d-2ff7-45c1-887b-32d7a515e854
