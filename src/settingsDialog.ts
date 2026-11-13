@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS, FONT_RANGES, normalize, type Settings } from "./settings";
+import { createSettingsSession, same } from "./settingsSession";
 import { THEMES } from "./themes";
 
-const SAVE_DELAY_MS = 300;
 const WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900];
 /** Suggestions for the font family field; any installed font can be typed. */
 const COMMON_MONO_FONTS = [
@@ -11,9 +11,9 @@ const COMMON_MONO_FONTS = [
 
 export interface SettingsDialogOptions {
   initial: Settings;
-  /** Applies settings live; called on every change. */
+  /** Applies settings live; called on every change, and with the opening settings again on Cancel. */
   apply: (settings: Settings) => Promise<void> | void;
-  /** Saves settings; called once the user has stopped changing them for a moment. */
+  /** Saves settings; called when the user presses Save, and the dialogue closes once it resolves. */
   save: (settings: Settings) => Promise<void>;
   /** Called after the dialogue closes, e.g. to give the terminal its focus back. */
   onClose: () => void;
@@ -47,13 +47,64 @@ function weightSelect(name: string): HTMLSelectElement {
   return element("select", { name }, ...WEIGHTS.map((w) => element("option", { value: String(w) }, String(w))));
 }
 
-/** Builds the settings dialogue into `document.body`: Theme and Font sections, Reset to defaults, live apply. */
-export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
-  let current = options.initial;
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+/** A focusable single-select list of the themes; Up/Down, Home/End and clicks select at once unless `locked`. */
+function themeList(onSelect: () => void, locked: () => boolean) {
+  let value: string = THEMES[0].id;
+  const items = THEMES.map((t) => {
+    const item = element("div", { className: "settings-theme", id: `settings-theme-${t.id}` }, t.name);
+    item.setAttribute("role", "option");
+    item.dataset.theme = t.id;
+    return item;
+  });
+  const list = element("div", { className: "settings-themes", tabIndex: 0 }, ...items);
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", "Theme");
 
-  const theme = element("select", { name: "theme" },
-    ...THEMES.map((t) => element("option", { value: t.id }, t.name)));
+  /** Marks `id` selected and scrolls it into view, without applying it. */
+  const show = (id: string) => {
+    value = id;
+    for (const item of items) {
+      const selected = item.dataset.theme === id;
+      item.setAttribute("aria-selected", String(selected));
+      if (selected) {
+        list.setAttribute("aria-activedescendant", item.id);
+        item.scrollIntoView({ block: "nearest" });
+      }
+    }
+  };
+  const select = (index: number) => {
+    const id = THEMES[Math.max(0, Math.min(THEMES.length - 1, index))].id;
+    if (id === value || locked()) return;
+    show(id);
+    onSelect();
+  };
+
+  list.addEventListener("keydown", (event) => {
+    const index = THEMES.findIndex((t) => t.id === value);
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: THEMES.length - 1 };
+    const next = moves[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    select(next);
+  });
+  list.addEventListener("click", (event) => {
+    const item = (event.target as Element).closest<HTMLElement>("[role=option]");
+    if (!item) return;
+    list.focus();
+    select(THEMES.findIndex((t) => t.id === item.dataset.theme));
+  });
+
+  return { list, show, value: () => value };
+}
+
+/**
+ * Builds the settings dialogue into `document.body`: Theme and Font sections, Reset to defaults, Cancel and Save.
+ * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
+ */
+export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
+  const session = createSettingsSession(options.initial);
+
+  const theme = themeList(() => change(read()), () => saving);
   const family = element("input", { type: "text", name: "family", spellcheck: false, autocomplete: "off" });
   family.setAttribute("list", "settings-font-families");
   const families = element("datalist", { id: "settings-font-families" },
@@ -70,28 +121,34 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const close = element("button", { type: "button", className: "settings-close", title: "Close" }, "×");
   close.setAttribute("aria-label", "Close");
   const reset = element("button", { type: "button", className: "settings-reset" }, "Reset to defaults");
+  const cancel = element("button", { type: "button", className: "settings-cancel" }, "Cancel");
+  const save = element("button", { type: "button", className: "settings-save" }, "Save");
+
+  const fontFields = element("fieldset", {},
+    element("legend", {}, "Font"),
+    field("Family", family), families,
+    field("Size (px)", size),
+    field("Weight", weight),
+    field("Bold weight", weightBold),
+    field("Line height", lineHeight),
+    field("Letter spacing (px)", letterSpacing),
+    element("label", { className: "settings-check" }, ligatures, element("span", {}, "Ligatures")),
+  );
 
   const form = element("form", { method: "dialog" },
     element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close),
-    element("fieldset", {}, element("legend", {}, "Theme"), field("Theme", theme)),
-    element("fieldset", {},
-      element("legend", {}, "Font"),
-      field("Family", family), families,
-      field("Size (px)", size),
-      field("Weight", weight),
-      field("Bold weight", weightBold),
-      field("Line height", lineHeight),
-      field("Letter spacing (px)", letterSpacing),
-      element("label", { className: "settings-check" }, ligatures, element("span", {}, "Ligatures")),
-    ),
-    element("footer", { className: "settings-footer" }, status, reset),
+    element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
+    fontFields,
+    status,
+    element("footer", { className: "settings-footer" },
+      reset, element("div", { className: "settings-actions" }, cancel, save)),
   );
   const dialog = element("dialog", { className: "settings" }, form);
   dialog.setAttribute("aria-label", "Settings");
   document.body.append(dialog);
 
   const show = (settings: Settings) => {
-    theme.value = settings.theme;
+    theme.show(settings.theme);
     family.value = settings.font.family;
     size.value = String(settings.font.size);
     weight.value = String(settings.font.weight);
@@ -102,7 +159,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   };
 
   const read = (): Settings => normalize({
-    theme: theme.value,
+    theme: theme.value(),
     font: {
       family: family.value,
       size: size.valueAsNumber,
@@ -118,40 +175,77 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     status.textContent = String(error);
   };
 
-  const scheduleSave = () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = undefined;
-      options.save(current).then(() => { status.textContent = ""; }, report);
-    }, SAVE_DELAY_MS);
+  const apply = (settings: Settings) => {
+    Promise.resolve(options.apply(settings)).catch(report);
   };
 
   const change = (next: Settings) => {
-    if (JSON.stringify(next) === JSON.stringify(current)) return;
-    current = next;
-    Promise.resolve(options.apply(next)).catch(report);
-    scheduleSave();
+    if (session.edit(next)) apply(next);
+  };
+
+  let saving = false;
+  /** While saving, nothing can be edited, so what is written is what stays applied. */
+  const lock = (on: boolean) => {
+    saving = on;
+    fontFields.disabled = reset.disabled = save.disabled = cancel.disabled = on;
+    theme.list.setAttribute("aria-disabled", String(on));
+  };
+
+  /** Cancel, Esc and ×: back to the settings from when the dialogue opened, unsaved. */
+  const revert = () => {
+    if (saving) return;
+    const draft = session.draft;
+    const saved = session.cancel();
+    if (!same(draft, saved)) apply(saved);
+    dialog.close();
+  };
+
+  /** Save: write the previewed settings and close; on failure stay open with the error. */
+  const commit = async () => {
+    if (saving) return;
+    lock(true);
+    const written = session.draft;
+    try {
+      await options.save(written);
+      session.commit(written);
+      status.textContent = "";
+      dialog.close();
+    } catch (error) {
+      report(error);
+    } finally {
+      lock(false);
+    }
   };
 
   // Apply while the user types; once a field is left, show the value that was actually applied.
   form.addEventListener("input", () => change(read()));
   form.addEventListener("change", () => {
     change(read());
-    show(current);
+    show(session.draft);
   });
+  // Submitting the form would close the dialogue without deciding; only Save and Cancel close it.
+  form.addEventListener("submit", (event) => event.preventDefault());
   reset.addEventListener("click", () => {
     change(DEFAULT_SETTINGS);
-    show(current);
+    show(session.draft);
   });
-  close.addEventListener("click", () => dialog.close());
+  save.addEventListener("click", () => void commit());
+  cancel.addEventListener("click", revert);
+  close.addEventListener("click", revert);
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    revert();
+  });
   dialog.addEventListener("close", () => options.onClose());
 
   return {
     open() {
       if (dialog.open) return;
-      show(current);
+      status.textContent = "";
       dialog.showModal();
-      theme.focus();
+      // Shown once open, so the selected theme can scroll into view.
+      show(session.saved);
+      theme.list.focus();
     },
   };
 }
