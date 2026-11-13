@@ -15,7 +15,16 @@ import {
 } from "./layout/model";
 import { TileView } from "./layout/view";
 import { openHeynote, type HeynoteFrame } from "./heynotePane";
-import { createPaneChip, folderName, PANE_CWD_EVENT, showPaneChip, type PaneCwd } from "./paneChip";
+import {
+  chipLabel,
+  createPaneChip,
+  folderName,
+  PANE_COMMAND_EVENT,
+  PANE_CWD_EVENT,
+  showPaneChip,
+  type PaneCommand,
+  type PaneCwd,
+} from "./paneChip";
 import type { Settings } from "./settings";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
 import { TintAssigner, tintCounts } from "./tints";
@@ -30,7 +39,7 @@ const FALLBACK_CELL = { width: 8, height: 17 };
 interface Pane {
   id: PaneId;
   element: HTMLElement;
-  /** The title chip naming the pane's repository or folder. */
+  /** The title chip naming the pane's repository or folder and what runs in it. */
   chip: HTMLElement;
   ready: Promise<PaneTerminal | undefined>;
   terminal?: PaneTerminal;
@@ -57,6 +66,8 @@ export class Panes {
   private readonly tints = new TintAssigner();
   /** The latest `pane-cwd` report per session; a report can arrive before its pane knows its session id. */
   private readonly places = new Map<number, PaneCwd>();
+  /** The latest `pane-command` report per session, kept like `places`. */
+  private readonly commands = new Map<number, string>();
 
   private constructor(
     private readonly backend: Backend,
@@ -101,6 +112,7 @@ export class Panes {
   ): Promise<Panes> {
     const panes = new Panes(backend, root, platform, settings, openSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
+    await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
     panes.contextMenu = await attachClipboardMenus(
       backend,
       () => panes.current()?.terminal?.term,
@@ -313,30 +325,48 @@ export class Panes {
     if (pane) this.showPlace(pane, place);
   }
 
+  /** A `pane-command` report: relabels the pane running that session once its place is known. */
+  private onCommand(report: PaneCommand): void {
+    this.commands.set(report.paneId, report.command);
+    const pane = this.panes.find((p) => p.session === report.paneId);
+    const place = this.places.get(report.paneId);
+    if (pane && place) this.showPlace(pane, place);
+  }
+
   /** Pane `pane` now runs shell session `session`. */
   private onSession(pane: Pane, session: number): void {
-    if (pane.session !== undefined) this.places.delete(pane.session);
+    if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
     const place = this.places.get(session);
     if (place) this.showPlace(pane, place);
   }
 
-  /** Shows the pane's repository in its tint, or its folder in the neutral chip outside a repository. */
+  /** Drops what was heard about session `session`. */
+  private forget(session: number): void {
+    this.places.delete(session);
+    this.commands.delete(session);
+  }
+
+  /**
+   * Shows the pane's repository in its tint, or its folder in the neutral chip outside a repository, followed by
+   * what runs in the pane.
+   */
   private showPlace(pane: Pane, place: PaneCwd): void {
+    const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
     if (place.repo) {
       const others = tintCounts(this.panes.filter((p) => p !== pane).map((p) => p.tint));
       pane.tint = this.tints.assign(place.repo.root, others);
-      showPaneChip(pane.element, pane.chip, place.repo.name, pane.tint);
+      showPaneChip(pane.element, pane.chip, chipLabel(place.repo.name, command), pane.tint);
     } else {
       pane.tint = undefined;
-      showPaneChip(pane.element, pane.chip, folderName(place.cwd));
+      showPaneChip(pane.element, pane.chip, chipLabel(folderName(place.cwd), command));
     }
   }
 
   private remove(pane: Pane): void {
     const index = this.panes.indexOf(pane);
     if (index < 0) return;
-    if (pane.session !== undefined) this.places.delete(pane.session);
+    if (pane.session !== undefined) this.forget(pane.session);
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
     this.layout = removePane(this.layout, pane.id);

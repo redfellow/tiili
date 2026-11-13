@@ -6,12 +6,13 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
+use crate::command::{CommandTracker, Foreground};
 use crate::cwd::{CwdTracker, PaneCwd};
 
 /// Called with each chunk the shell writes.
@@ -24,9 +25,33 @@ pub type ExitFn = Box<dyn FnOnce(u32) + Send>;
 /// see end of file.
 const LAST_OUTPUT_WAIT: Duration = Duration::from_millis(500);
 
+/// The pseudo-terminal's master side; `None` once the shell has exited.
+type SharedMaster = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
+
+/// Reads which process is in a session's foreground, from any thread.
+#[derive(Clone)]
+pub struct ForegroundReader(SharedMaster);
+
+impl ForegroundReader {
+    /// The pseudo-terminal's foreground process group and its leader's name, where the platform
+    /// can read them (macOS and Linux) and the shell still runs.
+    pub fn read(&self) -> Option<Foreground> {
+        #[cfg(unix)]
+        {
+            let pgid = self.0.lock().ok()?.as_ref()?.process_group_leader()?;
+            let name = crate::command::process_name(pgid)?;
+            Some(Foreground { pgid, name })
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
+    }
+}
+
 /// A running shell. Dropping the session kills the shell.
 pub struct PtySession {
-    master: Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>,
+    master: SharedMaster,
     /// Queue to the writer thread; `None` once the shell has exited.
     input: Arc<Mutex<Option<Sender<Vec<u8>>>>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
@@ -164,6 +189,11 @@ impl PtySession {
         self.pid
     }
 
+    /// Reads which process is in this session's foreground.
+    pub fn foreground_reader(&self) -> ForegroundReader {
+        ForegroundReader(Arc::clone(&self.master))
+    }
+
     /// Tells the shell the terminal now has `rows` x `cols`.
     pub fn resize(&self, rows: u16, cols: u16) -> io::Result<()> {
         let guard = self.master.lock().map_err(to_io)?;
@@ -178,6 +208,23 @@ impl Drop for PtySession {
     }
 }
 
+/// Runs every tick about once a second while `alive` holds, on macOS and Linux; elsewhere neither
+/// the working directory nor the foreground process can be read, so it does nothing.
+fn poll(mut ticks: Vec<Box<dyn FnMut() + Send>>, alive: Arc<AtomicBool>) -> io::Result<()> {
+    if ticks.is_empty() || cfg!(not(any(target_os = "linux", target_os = "macos"))) {
+        return Ok(());
+    }
+    thread::Builder::new()
+        .name("pty-poll".into())
+        .spawn(move || {
+            while alive.load(Ordering::Relaxed) {
+                ticks.iter_mut().for_each(|tick| tick());
+                thread::sleep(POLL_INTERVAL);
+            }
+        })?;
+    Ok(())
+}
+
 /// Identifies one session in a [`SessionRegistry`].
 pub type SessionId = u32;
 
@@ -187,6 +234,12 @@ pub type SessionOutputFn = Box<dyn FnMut(SessionId, &[u8]) + Send>;
 pub type SessionExitFn = Box<dyn FnOnce(SessionId, u32) + Send>;
 /// Called with the session's id whenever its shell's working directory or repository changes.
 pub type SessionCwdFn = Box<dyn FnMut(SessionId, &PaneCwd) + Send>;
+/// Called with the session's id whenever what runs in its pane changes: the title the foreground
+/// program set, else the foreground process's name, else the shell's name.
+pub type SessionCommandFn = Box<dyn FnMut(SessionId, &str) + Send>;
+
+/// How often a shell's working directory and foreground process are read on macOS and Linux.
+const POLL_INTERVAL: Duration = crate::cwd::POLL_INTERVAL;
 
 /// The home folder, where a shell starts when given no folder.
 fn home_dir() -> Option<PathBuf> {
@@ -218,12 +271,15 @@ impl SessionRegistry {
         on_output: SessionOutputFn,
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
-        self.spawn_tracked(cwd, rows, cols, on_output, None, on_exit)
+        self.spawn_tracked(cwd, rows, cols, on_output, None, None, on_exit)
     }
 
     /// Like [`spawn`](Self::spawn), and with `on_cwd` follows the shell's working directory and
     /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
-    /// on macOS and Linux, the shell process's working directory about once a second.
+    /// on macOS and Linux, the shell process's working directory about once a second. With
+    /// `on_command` it follows what runs in the pane: titles from OSC 0 and 2 and, on macOS and
+    /// Linux, the foreground process about once a second.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_tracked(
         &self,
         cwd: Option<&Path>,
@@ -231,6 +287,7 @@ impl SessionRegistry {
         cols: u16,
         mut on_output: SessionOutputFn,
         on_cwd: Option<SessionCwdFn>,
+        on_command: Option<SessionCommandFn>,
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
@@ -240,6 +297,16 @@ impl SessionRegistry {
             }))))
         });
         let output_tracker = tracker.clone();
+        let commands = on_command.map(|mut on_command| {
+            Arc::new(Mutex::new(CommandTracker::new(
+                crate::command::shell_name(),
+                Box::new(move |c| on_command(id, c)),
+            )))
+        });
+        let output_commands = commands.clone();
+        // Filled once the session exists; output before then finds nobody in front yet.
+        let reader: Arc<OnceLock<ForegroundReader>> = Arc::new(OnceLock::new());
+        let output_reader = Arc::clone(&reader);
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
         let session = PtySession::spawn_in(
@@ -250,6 +317,9 @@ impl SessionRegistry {
                 if let Some(Ok(mut tracker)) = output_tracker.as_ref().map(|t| t.lock()) {
                     tracker.feed_output(data);
                 }
+                if let Some(Ok(mut commands)) = output_commands.as_ref().map(|t| t.lock()) {
+                    commands.feed_output(data, || output_reader.get().and_then(|r| r.read()));
+                }
                 on_output(id, data)
             }),
             Box::new(move |code| {
@@ -257,6 +327,8 @@ impl SessionRegistry {
                 on_exit(id, code)
             }),
         )?;
+        let _ = reader.set(session.foreground_reader());
+        let mut ticks: Vec<Box<dyn FnMut() + Send>> = Vec::new();
         if let Some(tracker) = tracker {
             // Where the platform cannot read the shell's folder, the pane keeps this one until OSC 7.
             let start = cwd
@@ -267,9 +339,25 @@ impl SessionRegistry {
                 t.report_polled(dir);
             }
             if let Some(pid) = session.pid() {
-                crate::cwd::poll(pid, tracker, alive)?;
+                ticks.push(Box::new(move || {
+                    if let Some(dir) = crate::cwd::process_cwd(pid) {
+                        if let Ok(mut tracker) = tracker.lock() {
+                            tracker.report_polled(dir);
+                        }
+                    }
+                }));
             }
         }
+        if let Some(commands) = commands {
+            let reader = session.foreground_reader();
+            ticks.push(Box::new(move || {
+                let foreground = reader.read();
+                if let Ok(mut commands) = commands.lock() {
+                    commands.report_foreground(foreground);
+                }
+            }));
+        }
+        poll(ticks, alive)?;
         self.sessions.lock().map_err(to_io)?.insert(id, session);
         Ok(id)
     }
