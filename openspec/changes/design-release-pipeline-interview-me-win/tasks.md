@@ -1,21 +1,21 @@
 ## 1. Windows installer as .exe
 
-- [ ] 1.1 Change the Windows bundle target from `msi` to `nsis` in `src-tauri/tauri.conf.json` and `--bundles nsis` in `scripts/bundle.mjs` (and its header comment)
+- [x] 1.1 Change the Windows bundle target from `msi` to `nsis` in `src-tauri/tauri.conf.json` and `--bundles nsis` in `scripts/bundle.mjs` (and its header comment)
   - proof: `grep -E '"nsis"' src-tauri/tauri.conf.json`
   - proof: `npx eslint scripts/bundle.mjs`
 
 ## 2. Release command
 
-- [ ] 2.1 Add `scripts/release.mjs` (+ `scripts/release.d.mts`) exporting `bumpVersion(version, kind)`, `setJsonVersion(text, version)` and `setCargoVersion(text, version)` (only the `[package]` version line), and a CLI that refuses a missing/unknown kind or a dirty tree, rewrites `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, syncs `package-lock.json` (`npm install --package-lock-only`) and `src-tauri/Cargo.lock`, commits `Release vX.Y.Z`, tags `vX.Y.Z` and runs `git push --follow-tags`; add `"release": "node scripts/release.mjs"` to `package.json`
+- [x] 2.1 Add `scripts/release.mjs` (+ `scripts/release.d.mts`) exporting `bumpVersion(version, kind)`, `setJsonVersion(text, version)` and `setCargoVersion(text, version)` (only the `[package]` version line), and a CLI that refuses a missing/unknown kind or a dirty tree, rewrites `package.json` and `src-tauri/Cargo.toml` (leaving `src-tauri/tauri.conf.json`, which takes its version from `package.json` as `"../package.json"`, untouched unless it holds a literal version), syncs `package-lock.json` (`npm install --package-lock-only`) and `src-tauri/Cargo.lock`, commits `Release vX.Y.Z`, tags `vX.Y.Z` and runs `git push --follow-tags`; add `"release": "node scripts/release.mjs"` to `package.json`
   - proof: `npx eslint scripts/release.mjs`
-- [ ] 2.2 Add `scripts/release.test.ts` (`@harvaaja-test-tier: fast`), one table-driven test for `bumpVersion` (patch/minor/major, unknown kind throws) and one for the rewriters (Cargo dependency `version =` lines untouched)
+- [x] 2.2 Add `scripts/release.test.ts` (`@harvaaja-test-tier: fast`), one table-driven test for `bumpVersion` (patch/minor/major, unknown kind throws) and one for the rewriters (Cargo dependency `version =` lines untouched, a `"../package.json"` version left as it is)
   - proof: `npx vitest run scripts/release.test.ts`
   - proof: `npx eslint scripts/release.mjs scripts/release.test.ts`
   - proof: `npm run typecheck`
 
 ## 3. Docs and spec
 
-- [ ] 3.1 Update `docs/packaging.md`: `.exe` instead of `.msi`, a "Releasing" section (`npm run release <kind>`, what CI does, publishing the draft), and point the CI section at `.github/workflows/release.yml` instead of the sample
+- [x] 3.1 Update `docs/packaging.md`: `.exe` instead of `.msi`, a "Releasing" section (`npm run release <kind>`, what CI does, publishing the draft), and point the CI section at `.github/workflows/release.yml` instead of the sample
   - proof: `grep -E 'npm run release' docs/packaging.md`
   - proof: `openspec validate design-release-pipeline-interview-me-win --strict`
 
@@ -111,6 +111,6 @@
 
 ## Manual checks after merge (The user)
 
-- Run `npm run release patch` on a clean checkout and confirm the tag is pushed and the four version files agree.
+- Run `npm run release patch` on a clean checkout and confirm the tag is pushed, `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` agree, and `src-tauri/tauri.conf.json` still reads `"../package.json"`.
 - On GitHub, confirm the draft release for that tag holds the universal `.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb`, then publish it.
 - Install the `.exe` on Windows and the `.dmg` on an Intel and an Apple Silicon Mac, and confirm tiili starts.

@@ -14,11 +14,11 @@ The project SHALL build installers through Tauri's bundler: a universal `.dmg` o
 ## ADDED Requirements
 
 ### Requirement: Release command
-The project SHALL provide `npm run release <patch|minor|major>`. It SHALL refuse to run when the working tree has uncommitted changes or the argument is missing or unknown. Otherwise it SHALL bump the version by that kind in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` to the same value, commit them, tag the commit `v<version>` and push the commit and tag.
+The project SHALL provide `npm run release <patch|minor|major>`. It SHALL refuse to run when the working tree has uncommitted changes or the argument is missing or unknown. Otherwise it SHALL bump the version by that kind in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` to the same value, leave `src-tauri/tauri.conf.json` taking its version from `package.json` (`"../package.json"`), commit them, tag the commit `v<version>` and push the commit and tag.
 
 #### Scenario: Minor release
 - **WHEN** the version is `0.1.3` and `npm run release minor` runs on a clean tree
-- **THEN** all four files read `0.2.0` and the tag `v0.2.0` is pushed
+- **THEN** `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` read `0.2.0`, `src-tauri/tauri.conf.json` still takes its version from `package.json`, and the tag `v0.2.0` is pushed
 
 #### Scenario: Dirty tree
 - **WHEN** `npm run release patch` runs with uncommitted changes

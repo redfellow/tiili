@@ -7,7 +7,8 @@ tiili with a Windows `.exe`, a universal macOS `.dmg` and Linux packages.
 ## What Changes
 
 - New `npm run release <patch|minor|major>`: checks the working tree is clean, bumps the version in `package.json`,
-  `package-lock.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` together, commits `Release vX.Y.Z`,
+  `package-lock.json` and `src-tauri/Cargo.toml` together (`src-tauri/tauri.conf.json` takes its version from
+  `package.json`), commits `Release vX.Y.Z`,
   tags `vX.Y.Z` and pushes the commit and tag.
 - New GitHub Actions workflow `.github/workflows/release.yml` (human-only path, approved in Triage): on a `v*` tag
   it builds on macOS, Windows and Linux runners with `npm run bundle` and attaches the installers to a draft GitHub

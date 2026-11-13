@@ -8,12 +8,13 @@ npm run bundle
 
 The installers land under `src-tauri/target/**/bundle/`. Builds are unsigned unless the signing variables
 below are set. Product name, version and descriptions come from `src-tauri/tauri.conf.json`; the version is
-read from `package.json`, so bump it there only.
+read from `package.json` (`"version": "../package.json"`), so it is never edited there; `npm run release`
+bumps it (see [Releasing](#releasing)).
 
 | Platform | Installers | What `npm run bundle` runs |
 | --- | --- | --- |
 | macOS | one universal `.dmg` (Apple Silicon + Intel) | `tauri build --target universal-apple-darwin --bundles dmg` |
-| Windows | `.msi` | `tauri build --bundles msi` |
+| Windows | NSIS setup `.exe` | `tauri build --bundles nsis` |
 | Linux | `.AppImage` and `.deb` | `tauri build --bundles appimage,deb` |
 
 Bundling only works on the matching OS: there is no cross-building. Extra arguments are passed on to
@@ -39,8 +40,8 @@ All platforms need Node.js with `npm ci` run, and Rust through rustup.
 
 - **macOS**: Xcode Command Line Tools, and both Rust targets for the universal build:
   `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
-- **Windows**: the Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10 and 11). The `.msi` is
-  built with WiX, which Tauri downloads on the first build.
+- **Windows**: the Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10 and 11). The setup `.exe`
+  is built with NSIS, which Tauri downloads on the first build.
 - **Linux**: webkit2gtk 4.1 and its build dependencies (on Debian and Ubuntu: `libwebkit2gtk-4.1-dev
   build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`). The
   AppImage tools are downloaded by Tauri. The `.deb` package's dependencies are declared by Tauri.
@@ -111,64 +112,42 @@ No signing. The `.AppImage` and `.deb` are built unsigned.
 
 - **macOS**: the `.dmg` holds one universal binary; `lipo -archs` on it shows `x86_64 arm64`. Without
   notarisation, Gatekeeper warns on first launch (open with right-click → Open).
-- **Windows**: the `.msi` needs WiX, downloaded by Tauri on the first build. Unsigned installers trigger a
+- **Windows**: the setup `.exe` (`tiili_<version>_x64-setup.exe`) is built with NSIS, downloaded by Tauri on
+  the first build. Unsigned installers trigger a
   SmartScreen warning.
 - **Linux**: needs webkit2gtk and the AppImage tools on the build host. Build on the oldest distribution you
   want to support (glibc is linked dynamically), such as Ubuntu 22.04.
 
-## Proposed CI release workflow
+## Releasing
 
-Not added to the repository: `.github/workflows` is the owner's to add. A matrix workflow that builds every
-platform and uploads the installers as artifacts could look like this:
+One command cuts a release from a clean checkout:
 
-```yaml
-name: release
-on:
-  push:
-    tags: ["v*"]
-  workflow_dispatch:
-
-jobs:
-  bundle:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - name: Linux dependencies
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - run: npm ci
-      - run: npm run bundle
-        env:
-          # Drop this env block to build unsigned: an empty variable may still be read as set.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tiili-${{ matrix.os }}
-          path: |
-            src-tauri/target/**/bundle/dmg/*.dmg
-            src-tauri/target/**/bundle/msi/*.msi
-            src-tauri/target/**/bundle/appimage/*.AppImage
-            src-tauri/target/**/bundle/deb/*.deb
+```sh
+npm run release patch   # or minor, major
 ```
 
-For Windows signing in CI, add a step before `npm run bundle` that imports the certificate and sets
-`TAURI_CONFIG` as shown above.
+It refuses to run without a kind (`patch`, `minor` or `major`) or with uncommitted changes. Otherwise it bumps the
+version in `package.json`, `package-lock.json` (through `npm install --package-lock-only`), `src-tauri/Cargo.toml`
+and `src-tauri/Cargo.lock` (through `cargo update -p tiili`), commits `Release vX.Y.Z`, tags it `vX.Y.Z` and
+pushes the commit and the tag. `src-tauri/tauri.conf.json` is left alone: it takes its version from
+`package.json`. The command does not insist on a branch; release from the one you mean to.
+
+### What CI does
+
+The tag starts `.github/workflows/release.yml`:
+
+1. It fails unless the tag is `v` + the version in `package.json`.
+2. It creates a draft GitHub Release for the tag with generated notes (or reuses the draft if it exists).
+3. It builds on `macos-latest`, `windows-latest` and `ubuntu-22.04` with `npm ci` and `npm run bundle`, and
+   uploads the universal `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb` to the draft.
+
+Signing stays off until its secrets exist. The workflow copies each macOS signing secret (`APPLE_CERTIFICATE`,
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`) into the
+build's environment only when it is set, because Tauri may treat an empty variable as set and try to sign.
+Adding the secrets in the repository settings turns signing on with no edit to the workflow. For Windows signing,
+add a step before `npm run bundle` that imports the certificate and sets `TAURI_CONFIG` as shown above.
+
+### Publishing
+
+The release stays a draft. When all three build jobs have finished, open the draft on GitHub, check it holds the
+`.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb`, and publish it by hand.
