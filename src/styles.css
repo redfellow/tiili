@@ -1,34 +1,99 @@
 @import "../docs/brand/tiili.css";
 @import "@xterm/xterm/css/xterm.css";
 
+/* Bundled monospace fonts (all SIL OFL). Variable ones take any weight in their range; Commit Mono is regular + bold only. */
 @font-face {
   font-family: "Geist Mono";
-  src: url("./assets/fonts/GeistMono-Regular.woff2") format("woff2");
+  src: url("./assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./assets/fonts/GeistMono-Italic-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Victor Mono";
+  src: url("./assets/fonts/VictorMono-Variable.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Victor Mono";
+  src: url("./assets/fonts/VictorMono-Italic-Variable.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Commit Mono";
+  src: url("./assets/fonts/CommitMono-400-Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: block;
 }
 
 @font-face {
-  font-family: "Geist Mono";
-  src: url("./assets/fonts/GeistMono-Bold.woff2") format("woff2");
+  font-family: "Commit Mono";
+  src: url("./assets/fonts/CommitMono-700-Regular.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: block;
 }
 
 @font-face {
-  font-family: "Geist Mono";
-  src: url("./assets/fonts/GeistMono-Italic.woff2") format("woff2");
+  font-family: "Commit Mono";
+  src: url("./assets/fonts/CommitMono-400-Italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: block;
 }
 
 @font-face {
-  font-family: "Geist Mono";
-  src: url("./assets/fonts/GeistMono-BoldItalic.woff2") format("woff2");
+  font-family: "Commit Mono";
+  src: url("./assets/fonts/CommitMono-700-Italic.woff2") format("woff2");
   font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Recursive Mono";
+  src: url("./assets/fonts/RecursiveMono-Variable.woff2") format("woff2");
+  font-weight: 300 1000;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Recursive Mono";
+  src: url("./assets/fonts/RecursiveMono-Italic-Variable.woff2") format("woff2");
+  font-weight: 300 1000;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./assets/fonts/CascadiaCode-Variable.woff2") format("woff2");
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./assets/fonts/CascadiaCode-Italic-Variable.woff2") format("woff2");
+  font-weight: 200 700;
   font-style: italic;
   font-display: block;
 }
@@ -102,6 +167,43 @@ body {
   color: var(--fg);
 }
 
+/* Popover tooltip under each top bar button: name plus shortcut, right-aligned to the button. */
+.top-bar {
+  z-index: 20;
+}
+
+.top-bar-button {
+  position: relative;
+}
+
+.top-bar-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg);
+  font: 500 11.5px/16px var(--font-sans);
+  white-space: nowrap;
+  box-shadow: 0 4px 12px color-mix(in srgb, #000 35%, transparent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.top-bar-tooltip kbd {
+  color: var(--muted);
+  font: 500 11px/16px var(--font-mono);
+}
+
+.top-bar-button:hover .top-bar-tooltip {
+  opacity: 1;
+}
+
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
   --pane-gap: 3px;
@@ -132,10 +234,19 @@ body {
   min-width: 0;
   padding: var(--space-2);
   background: var(--term-bg);
-  opacity: 0.82;
 }
 
-.pane[data-focused] {
+/* Panes without focus fade their content (title chip and terminal), never the pane's own background, and can also
+   lose most of their colour (a setting). */
+.pane > :is(.pane-title, .pane-terminal) {
+  opacity: var(--inactive-opacity, 0.82);
+}
+
+#panes[data-desaturate] .pane:not([data-focused]) > :is(.pane-title, .pane-terminal) {
+  filter: grayscale(0.8);
+}
+
+.pane[data-focused] > :is(.pane-title, .pane-terminal) {
   opacity: 1;
 }
 
@@ -148,6 +259,22 @@ body {
   left: 0;
   height: 2px;
   background: var(--accent);
+}
+
+/* Highlight on mouseover (a setting): the pane under the pointer undims and gets a faint accent line on its top edge. */
+#panes[data-hover-highlight] .pane:hover > :is(.pane-title, .pane-terminal) {
+  opacity: 1;
+  filter: none;
+}
+
+#panes[data-hover-highlight] .pane:hover:not([data-focused])::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .pane-terminal {
@@ -245,10 +372,12 @@ dialog.settings {
   background: var(--surface);
   color: var(--fg);
   font: 400 13.5px/1.5 var(--font-sans);
+  box-shadow: 0 8px 32px color-mix(in srgb, #000 45%, transparent), 0 2px 8px color-mix(in srgb, #000 30%, transparent);
 }
 
+/* No dimming, so the terminal behind shows the live effect of each setting; the dialogue's shadow lifts it instead. */
 dialog.settings::backdrop {
-  background: color-mix(in srgb, var(--term-gap) 60%, transparent);
+  background: transparent;
 }
 
 .settings form {
@@ -263,6 +392,21 @@ dialog.settings::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.settings-header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.settings-header[data-dragging] {
+  cursor: grabbing;
+}
+
+.settings-header button {
+  cursor: pointer;
 }
 
 .settings h2 {
@@ -311,23 +455,99 @@ dialog.settings::backdrop {
   color: var(--fg);
 }
 
+/* Fields: 32 px tall, hairline border, 6 px radius; the same 2 px focus ring as every other control. */
 .settings input[type="text"],
 .settings input[type="number"],
 .settings select {
   box-sizing: border-box;
   width: 100%;
-  padding: var(--space-1) var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--bg);
 }
 
-.settings input[type="checkbox"] {
-  accent-color: var(--accent);
+.settings input[type="text"]:hover,
+.settings input[type="number"]:hover,
+.settings select:hover,
+.settings-list:hover {
+  border-color: color-mix(in srgb, var(--fg) 35%, var(--line));
 }
 
+/* Sliders: a filled track like a progress bar, with the value beside it. */
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-range input {
+  --fill: 0%;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.settings-range input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--focus) var(--fill), var(--line) var(--fill));
+}
+
+.settings-range input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.settings-range input::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.settings-range input::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--focus);
+}
+
+.settings-range input::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.settings-range output {
+  min-width: 4ch;
+  text-align: right;
+  font: 500 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.settings input[type="checkbox"] {
+  accent-color: var(--focus);
+}
+
+/* Buttons: secondary (outlined) by default, the primary one in the accent with its own label colour. */
 .settings button {
-  padding: var(--space-1) var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: transparent;
@@ -335,18 +555,28 @@ dialog.settings::backdrop {
 }
 
 .settings button:hover {
-  background: var(--bg);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
 .settings .settings-close {
+  height: auto;
   padding: 0 var(--space-2);
   border-color: transparent;
   font-size: 20px;
   line-height: 1.2;
 }
 
+.settings .settings-reset {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.settings .settings-reset:hover {
+  color: var(--fg);
+}
+
 .settings :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -359,8 +589,10 @@ dialog.settings::backdrop {
   display: none;
 }
 
-.settings-themes {
-  max-height: 180px;
+/* Pick lists (themes, font families): about five rows tall, scrolling beyond that. */
+.settings-list {
+  box-sizing: border-box;
+  max-height: calc(5 * 28px + 2 * var(--space-1) + 2px);
   overflow-y: auto;
   padding: var(--space-1);
   border: 1px solid var(--line);
@@ -368,19 +600,58 @@ dialog.settings::backdrop {
   background: var(--bg);
 }
 
-.settings-theme {
-  padding: var(--space-1) var(--space-2);
+.settings-list-heading {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--muted);
+  font: 500 11px/16px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: default;
+}
+
+.settings-list-heading:first-child {
+  padding-top: var(--space-1);
+}
+
+.settings-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-control);
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.settings-theme:hover {
-  background: var(--surface);
+.settings-option:hover {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
 }
 
-.settings-theme[aria-selected="true"] {
-  background: var(--accent);
-  color: var(--bg);
+/* The selected row is marked by a bar in the focus colour and a light tint, not a full-width fill. */
+.settings-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
+  box-shadow: inset 3px 0 0 var(--focus);
+}
+
+.settings-default {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* A theme's colours: its terminal ground with sample text, and an accent line along the bottom. */
+.settings-swatch {
+  flex: none;
+  box-sizing: border-box;
+  width: 30px;
+  height: 18px;
+  border-radius: var(--radius-brick);
+  background: var(--sw-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 25%, transparent), inset 0 -3px 0 var(--sw-accent);
+  color: var(--sw-fg);
+  font: 600 10px/14px var(--font-mono);
+  text-align: center;
 }
 
 .settings-actions {
@@ -392,11 +663,11 @@ dialog.settings::backdrop {
 .settings .settings-save {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 
 .settings .settings-save:hover {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 88%, var(--fg));
 }
 
 .settings button:disabled {

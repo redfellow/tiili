@@ -16,6 +16,13 @@ The app SHALL open a settings dialogue with ⌘, on macOS (also from the app men
 - **WHEN** the user clicks the gear in the window's top bar
 - **THEN** the settings dialogue opens
 
+### Requirement: Settings dialogue placement
+The dialogue SHALL NOT dim the window behind it, so the terminal stays readable, and SHALL be movable by dragging its header within the window, opening centred each time.
+
+#### Scenario: Drag the dialogue
+- **WHEN** the user drags the dialogue's header towards the window's edge
+- **THEN** the dialogue follows the pointer and stops at the window's edge
+
 ### Requirement: Save and cancel
 The dialogue SHALL have Cancel and Save buttons: Save SHALL save the previewed settings and close the dialogue; Cancel, Esc and the × button SHALL restore and apply the settings from when the dialogue was opened and close it without saving. A failed save SHALL keep the dialogue open and show the error.
 
@@ -28,25 +35,50 @@ The dialogue SHALL have Cancel and Save buttons: Save SHALL save the previewed s
 - **THEN** the dialogue closes, the terminal shows Nord again and the settings file is unchanged
 
 ### Requirement: Theme choice
-The user SHALL be able to choose System (brand light/dark following the OS), tiili Light, tiili Dark, the tiili variants Savi, Muratti, Koski and Laasti, or Solarized Light, Solarized Dark, Gruvbox Dark, Nord and Dracula. Each theme SHALL define the app colours and all 16 ANSI colours. The themes SHALL be shown in the dialogue as a visible list, and moving through it with the arrow keys or clicking a theme name SHALL apply that theme at once.
+The user SHALL be able to choose System (brand light/dark following the OS), tiili Light, tiili Dark, the tiili variants Savi, Muratti, Koski and Laasti, or Solarized Light, Solarized Dark, Gruvbox Dark, Nord and Dracula. Each theme SHALL define the app colours and all 16 ANSI colours, and each fixed theme's text and muted colours SHALL reach a 4.5:1 contrast on its background and surface.
 
 #### Scenario: Fixed theme ignores the system
 - **WHEN** the user chooses Koski and the system switches to light
 - **THEN** the terminal keeps the Koski colours
 
+#### Scenario: Readable theme colours
+- **WHEN** any fixed theme is applied
+- **THEN** its text and muted colours have at least 4.5:1 contrast on its background and surface
+
+### Requirement: Theme list
+The themes SHALL be shown in the dialogue as a visible list with System first, then a Dark group and a Light group, each row led by a swatch of that theme's colours. Moving through the list with the arrow keys or clicking a theme name SHALL apply that theme at once.
+
 #### Scenario: Arrowing previews themes
 - **WHEN** the theme list has focus on Nord and the user presses the Down arrow
-- **THEN** Dracula is selected and the terminal shows the Dracula colours without the dialogue closing
+- **THEN** the next theme in the Dark group is selected and the terminal shows its colours without the dialogue closing
+
+### Requirement: Default theme
+Koski SHALL be the default theme and its row in the theme list SHALL show a muted "(default)" after its name.
+
+#### Scenario: Koski by default
+- **WHEN** tiili starts with no saved settings, or the user resets the settings
+- **THEN** the Koski theme is applied
 
 ### Requirement: Font settings
-The user SHALL be able to set font family (any installed font by name, falling back to Geist Mono), size, normal and bold weight, ligatures on or off, line height and letter spacing, and reset them to defaults.
+The user SHALL be able to set font family, size, normal and bold weight (100–900 in steps of 10), ligatures on or off, line height (1.0–2.0) and letter spacing (−2 to 5 px), and reset them to defaults. The default font SHALL be Geist Mono at weight 100. Weight, bold weight, line height and letter spacing SHALL be sliders showing their value. Turning ligatures on SHALL work without an error.
+
+#### Scenario: Negative letter spacing
+- **WHEN** the user sets letter spacing to −1
+- **THEN** the terminal draws its letters 1 px closer together
+
+### Requirement: Font family list
+The family SHALL be chosen from a keyboard-navigable list with a Bundled group (Geist Mono, Victor Mono, Commit Mono, Recursive Mono, Cascadia Code) and an OS group (the fixed-width fonts installed on the machine), and moving through it SHALL apply the font at once; a missing font SHALL fall back to Geist Mono.
 
 #### Scenario: Unavailable font
-- **WHEN** the user enters a font family that is not installed
+- **WHEN** the saved font family is not installed
 - **THEN** the terminal uses Geist Mono
 
+#### Scenario: Arrowing previews fonts
+- **WHEN** the family list has focus on Geist Mono and the user presses the Down arrow
+- **THEN** Victor Mono is selected and the terminal uses it at once
+
 ### Requirement: Settings persist
-Settings SHALL be saved as JSON in the OS app config folder and restored at start; a missing file, unreadable file or invalid value SHALL fall back to the default for that value.
+Settings SHALL be saved as JSON in the OS app config folder and restored at start; a missing file, unreadable file or invalid value SHALL fall back to the default for that value. A saved theme SHALL be kept even though the default theme changed.
 
 #### Scenario: Restart keeps settings
 - **WHEN** the user changes the theme and restarts tiili
@@ -55,3 +87,29 @@ Settings SHALL be saved as JSON in the OS app config folder and restored at star
 #### Scenario: Broken value
 - **WHEN** the settings file has a font size of `"huge"`
 - **THEN** the other settings load and the font size is the default
+
+#### Scenario: Saved theme survives the new default
+- **WHEN** a settings file saved earlier holds the Nord theme and no cursor settings
+- **THEN** Nord is applied and the cursor is a blinking Brick
+
+### Requirement: Cursor settings
+The dialogue SHALL have a Cursor section with a Style dropdown of Brick, Underline and Bar and a Blink checkbox, defaulting to Brick with blinking on. Changes SHALL apply live to the focused cursor of every terminal and be saved with the other settings. A missing or invalid saved cursor style or blink value SHALL fall back to Brick or blinking on respectively.
+
+#### Scenario: Change the cursor
+- **WHEN** the user chooses Bar, unticks Blink and presses Save
+- **THEN** every pane shows a steady bar cursor and the settings file holds that cursor
+
+#### Scenario: Invalid saved cursor
+- **WHEN** the settings file has a cursor style of `"beam"`
+- **THEN** the cursor is a Brick and the other settings load
+
+### Requirement: Inactive pane settings
+The dialogue SHALL have an Inactive panes section with an Opacity slider from 0.3 to 1 (default 0.82) and a Desaturate checkbox (default off), and a Highlight terminal on mouseover checkbox (default on). Changes SHALL apply live to every pane and be saved with the other settings. A missing or invalid saved value SHALL fall back to its default, and an out-of-range opacity SHALL be clamped into range.
+
+#### Scenario: Change inactive looks
+- **WHEN** the user sets Opacity to 0.5, ticks Desaturate and presses Save
+- **THEN** panes without focus show grey content at half opacity and the settings file holds those values
+
+#### Scenario: Invalid saved inactive settings
+- **WHEN** the settings file has an inactive opacity of `"dim"` and a hover highlight of `3`
+- **THEN** the opacity is 0.82, the highlight is on and the other settings load
