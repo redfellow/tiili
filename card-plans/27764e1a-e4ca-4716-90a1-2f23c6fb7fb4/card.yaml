@@ -6,3 +6,13 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: new-change
+  rationale: The pane-tiling "Focus appearance" requirement exceeds 500 characters
+    and fails strict validation; splitting it into two requirements restructures
+    the spec contract without changing behavior, which goes through a delta
+    change (MODIFIED + ADDED).
+  citations:
+    - "openspec/specs/pane-tiling/spec.md:52 Requirement: Focus appearance"
+    - openspec validate pane-tiling --type spec warning requirements[4]
+  revision: dee60e11-7e02-453f-86be-880797b099f7
