@@ -45,7 +45,8 @@ export function openHeynote(
       "keydown",
       (event) => {
         if (onKey(event)) {
-          event.preventDefault();
+          // `onKey` cancels the keys it carries out itself. The ones the macOS menus carry out stay uncancelled,
+          // since WKWebView hands a key to the menu bar only when the page leaves it; Heynote just never sees them.
           event.stopImmediatePropagation();
           return;
         }
