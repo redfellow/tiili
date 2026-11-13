@@ -1,6 +1,8 @@
 # tiili shell integration for zsh: the user's own .zshrc, with their ZDOTDIR, then tiili's prompt when the user's
 # files left zsh's default one. Colours are ANSI slots (%F{0..7}), so the terminal's theme picks the actual colours.
 ZDOTDIR="${TIILI_USER_ZDOTDIR:-$HOME}"
+# /etc/zshrc (macOS) put the history in tiili's folder, as ZDOTDIR pointed there: keep it where the user's is.
+[[ "$HISTFILE" == "$_tiili_zdotdir/.zsh_history" ]] && HISTFILE="$ZDOTDIR/.zsh_history"
 [[ -r "$ZDOTDIR/.zshrc" ]] && builtin source "$ZDOTDIR/.zshrc"
 TIILI_USER_ZDOTDIR="$ZDOTDIR"
 ZDOTDIR="$_tiili_zdotdir"

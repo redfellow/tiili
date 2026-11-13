@@ -97,9 +97,15 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 }
 
 /// Starts `shell` with the Classic prompt and a home holding only `rc` (if any) in `rc_name`, and returns what it
-/// printed until `pattern` showed or the timeout passed, and whether it showed.
+/// printed until `pattern` showed or the timeout passed, and whether it showed. With `then`, once `pattern` showed
+/// it types the command and waits for that pattern too.
 #[cfg(unix)]
-fn classic_shell(shell: &str, rc: Option<(&str, &str)>, pattern: &str) -> (bool, String) {
+fn classic_shell(
+    shell: &str,
+    rc: Option<(&str, &str)>,
+    pattern: &str,
+    then: Option<(&str, &str)>,
+) -> (bool, String) {
     let tag = format!(
         "{}-{}",
         tiili_lib::command::program_name(shell),
@@ -117,7 +123,7 @@ fn classic_shell(shell: &str, rc: Option<(&str, &str)>, pattern: &str) -> (bool,
     cmd.env_remove("ZDOTDIR");
     cmd.env("BASH_SILENCE_DEPRECATION_WARNING", "1");
     let (out_tx, out_rx) = mpsc::channel();
-    let _session = PtySession::spawn_command(
+    let session = PtySession::spawn_command(
         cmd,
         24,
         80,
@@ -128,7 +134,13 @@ fn classic_shell(shell: &str, rc: Option<(&str, &str)>, pattern: &str) -> (bool,
     )
     .expect("shell starts");
     let mut seen = Vec::new();
-    let found = wait_for(&out_rx, &mut seen, pattern);
+    let mut found = wait_for(&out_rx, &mut seen, pattern);
+    if let (true, Some((command, next))) = (found, then) {
+        session
+            .write(format!("{command}\r").as_bytes())
+            .expect("type the command");
+        found = wait_for(&out_rx, &mut seen, next);
+    }
     (found, String::from_utf8_lossy(&seen).into_owned())
 }
 
@@ -149,7 +161,7 @@ fn classic_prompt_applies_only_where_the_users_config_left_the_default() {
             eprintln!("{shell} is missing; skipped");
             continue;
         }
-        let (found, seen) = classic_shell(shell, None, CLASSIC);
+        let (found, seen) = classic_shell(shell, None, CLASSIC, None);
         assert!(found, "{shell} without a prompt of its own: {seen:?}");
 
         let mine = if shell.ends_with("zsh") {
@@ -157,7 +169,7 @@ fn classic_prompt_applies_only_where_the_users_config_left_the_default() {
         } else {
             "mine-bash> "
         };
-        let (found, seen) = classic_shell(shell, Some((rc_name, rc)), mine);
+        let (found, seen) = classic_shell(shell, Some((rc_name, rc)), mine, None);
         assert!(
             found,
             "{shell} with its own prompt never showed it: {seen:?}"
@@ -167,4 +179,29 @@ fn classic_prompt_applies_only_where_the_users_config_left_the_default() {
             "{shell} showed Classic over the user's prompt: {seen:?}"
         );
     }
+}
+
+/// History stays the user's: with Classic, a zsh whose /etc/zshrc puts HISTFILE in ZDOTDIR (macOS) keeps the history
+/// in the user's home, not in tiili's integration folder.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn classic_zsh_keeps_the_users_history_file() {
+    let sets_histfile = std::fs::read_to_string("/etc/zshrc")
+        .is_ok_and(|text| text.contains("HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history"));
+    if !std::path::Path::new("/bin/zsh").exists() || !sets_histfile {
+        eprintln!("no zsh whose /etc/zshrc sets HISTFILE from ZDOTDIR; skipped");
+        return;
+    }
+    // The typed command shows `${HISTFILE#$HOME/}` literally, so only its output matches.
+    let (found, seen) = classic_shell(
+        "/bin/zsh",
+        None,
+        "\x1b[39m@\x1b[32m",
+        Some((
+            "print -r -- \"hist:${HISTFILE#$HOME/}\"",
+            "\nhist:.zsh_history",
+        )),
+    );
+    assert!(found, "HISTFILE is not the home's .zsh_history: {seen:?}");
 }
