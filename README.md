@@ -100,3 +100,7 @@ Signing, notarisation and icons are covered in [`docs/packaging.md`](docs/packag
 - [Concept](docs/concept.md): what tiili is, why it exists, and the technology choices.
 - [Brand](docs/brand/README.md): logo, palette and design tokens.
 - Specs live in [`openspec/specs`](openspec/specs); work is planned and built through härvääjä with OpenSpec.
+
+## License
+
+[MIT](LICENSE). The bundled fonts keep their own licences: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
