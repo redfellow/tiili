@@ -1,5 +1,5 @@
 import {
-  CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
+  APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
@@ -19,6 +19,8 @@ const COMMON_MONO_FONTS = [
 
 export interface SettingsDialogOptions {
   initial: Settings;
+  /** Shows the Dock icon choice; only macOS lets the user pick it. */
+  showAppIcon: boolean;
   /** Applies settings live; called on every change, and with the opening settings again on Cancel. */
   apply: (settings: Settings) => Promise<void> | void;
   /** Saves settings; called when the user presses Save, and the dialogue closes once it resolves. */
@@ -104,6 +106,7 @@ async function installedMonospaceFonts(): Promise<string[]> {
 }
 
 const CURSOR_LABELS = { block: "Brick", underline: "Underline", bar: "Bar" } as const;
+const APP_ICON_LABELS: Record<AppIcon, string> = { system: "Follow system appearance", light: "Light", dark: "Dark" };
 
 interface PickItem { id: string; name: string }
 interface PickGroup { label?: string; items: PickItem[] }
@@ -249,6 +252,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const inactiveOpacity = rangeInput("inactiveOpacity", INACTIVE_OPACITY);
   const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
+  const appIcon = element("select", { name: "appIcon" },
+    ...APP_ICONS.map((icon) => element("option", { value: icon }, APP_ICON_LABELS[icon])));
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
@@ -287,6 +292,11 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("span", {}, "Highlight terminal on mouseover")),
   );
 
+  const appIconFields = element("fieldset", {},
+    element("legend", {}, "Dock icon"),
+    field("Icon", appIcon),
+  );
+
   const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close);
   const form = element("form", { method: "dialog" },
     header,
@@ -295,6 +305,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     cursorFields,
     inactiveFields,
     behaviourFields,
+    ...(options.showAppIcon ? [appIconFields] : []),
     status,
     element("footer", { className: "settings-footer" },
       reset, element("div", { className: "settings-actions" }, cancel, save)),
@@ -322,6 +333,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     inactiveOpacity.sync();
     inactiveDesaturate.checked = settings.inactive.desaturate;
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
+    appIcon.value = settings.appIcon;
   };
 
   const read = (): Settings => normalize({
@@ -338,6 +350,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     cursor: { style: cursorStyle.value, blink: cursorBlink.checked },
     behaviour: { hoverHighlight: hoverHighlight.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
+    appIcon: appIcon.value,
   });
 
   const report = (error: unknown) => {
@@ -357,6 +370,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const lock = (on: boolean) => {
     saving = on;
     fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = behaviourFields.disabled = on;
+    appIconFields.disabled = on;
     reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));

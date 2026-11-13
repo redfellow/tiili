@@ -53,6 +53,13 @@ export interface InactiveSettings {
   desaturate: boolean;
 }
 
+/**
+ * The Dock icon on macOS: the one matching the OS appearance, or always the light or the dark one. Other systems
+ * always follow the OS.
+ */
+export const APP_ICONS = ["system", "light", "dark"] as const;
+export type AppIcon = (typeof APP_ICONS)[number];
+
 /** Allowed range of the inactive opacity. */
 export const INACTIVE_OPACITY = { min: 0.3, max: 1, step: 0.01 } as const;
 
@@ -62,6 +69,7 @@ export interface Settings {
   cursor: CursorSettings;
   behaviour: BehaviourSettings;
   inactive: InactiveSettings;
+  appIcon: AppIcon;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -87,6 +95,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   behaviour: { hoverHighlight: true },
   inactive: { opacity: 0.82, desaturate: false },
+  appIcon: "system",
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
@@ -158,5 +167,6 @@ export function normalize(value: unknown): Settings {
       desaturate:
         typeof inactive.desaturate === "boolean" ? inactive.desaturate : DEFAULT_SETTINGS.inactive.desaturate,
     },
+    appIcon: APP_ICONS.includes(raw.appIcon as AppIcon) ? (raw.appIcon as AppIcon) : DEFAULT_SETTINGS.appIcon,
   };
 }

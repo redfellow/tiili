@@ -4,6 +4,9 @@
 // which writes every desktop format. Sizes of 32 px and below are then re-rendered from the small icon
 // (icon-light-small.svg): as PNG files, as entries in icon.ico, and as the 16 and 32 px entries in icon.icns.
 //
+// It also renders app-light.png and app-dark.png (512 px, large icon), which the app embeds and swaps in at run time
+// so its Dock or taskbar icon follows the OS light or dark mode.
+//
 // Run with `npm run icons`. The outputs are committed.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync, readFileSync } from "node:fs";
@@ -17,6 +20,10 @@ const logoDir = join(root, "docs/brand/logo");
 const outDir = join(root, "src-tauri/icons");
 const largeSvg = readFileSync(join(logoDir, "icon-light.svg"));
 const smallSvg = readFileSync(join(logoDir, "icon-light-small.svg"));
+const darkSvg = readFileSync(join(logoDir, "icon-dark.svg"));
+
+/** Size, in pixels, of the light and dark icons the app swaps in at run time. */
+const RUNTIME_SIZE = 512;
 
 /** Largest size, in pixels, that is rendered from the small icon. */
 const SMALL_MAX = 32;
@@ -111,6 +118,10 @@ try {
   writeFileSync(join(outDir, "icon.ico"), ico(ICO_SIZES));
   const icnsPath = join(outDir, "icon.icns");
   writeFileSync(icnsPath, icns(readFileSync(icnsPath)));
+
+  writeFileSync(join(outDir, "app-light.png"), render(RUNTIME_SIZE));
+  const dark = new Resvg(darkSvg, { fitTo: { mode: "width", value: RUNTIME_SIZE } }).render().asPng();
+  writeFileSync(join(outDir, "app-dark.png"), dark);
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

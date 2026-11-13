@@ -49,6 +49,12 @@ All platforms need Node.js with `npm ci` run, and Rust through rustup.
 
 The app icons in `src-tauri/icons/` are generated from `docs/brand/logo/icon-light.svg`; sizes of 32 px and
 below come from `icon-light-small.svg`. After changing the logo, run `npm run icons` and commit the results.
+
+The script also writes `app-light.png` and `app-dark.png`, which the app embeds and swaps in while it runs so its
+icon follows the OS light or dark mode: the Dock icon on macOS, the window and taskbar icon on Windows and Linux. On
+macOS the Settings dialogue's Dock icon choice can pin it to the light or the dark icon instead. The installed bundle
+keeps the light icon, so that is what the Dock shows while tiili is not running.
+
 `scripts/icons.test.ts` checks that every icon each platform needs is present at the right size.
 
 ## Signing and notarisation
