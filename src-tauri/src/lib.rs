@@ -7,15 +7,19 @@ pub mod pty;
 pub mod repo;
 pub mod settings;
 pub mod shell_integration;
+pub mod tints;
 pub mod window_state;
+pub mod windows;
 
 use std::path::Path;
 
 use serde::Serialize;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use pty::{SessionId, SessionRegistry};
+use tints::Tints;
+use windows::WindowSessions;
 
 /// Event sent when a shell exits; its payload names the session.
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
@@ -52,6 +56,8 @@ struct PaneCwdEvent {
     repo: Option<RepoInfo>,
     /// The host a remote pane is on; `None` for this machine.
     host: Option<String>,
+    /// The pane's project tint, the same in every window; `None` outside a repository.
+    tint: Option<u8>,
 }
 
 /// What session `pane_id`'s pane runs now: the title its foreground program set, else the
@@ -64,8 +70,11 @@ struct PaneCommandEvent {
 }
 
 impl PaneCwdEvent {
-    fn new(pane_id: SessionId, at: &cwd::PaneCwd) -> Self {
+    fn new(pane_id: SessionId, at: &cwd::PaneCwd, tints: &Tints) -> Self {
+        let root = at.repo.as_ref().map(|r| r.root.to_string_lossy());
+        let key = tints::tint_key(root.as_deref(), at.host.as_deref());
         Self {
+            tint: tints.tint_for(pane_id, key.as_deref()),
             pane_id,
             cwd: at.cwd.to_string_lossy().into_owned(),
             repo: at.repo.as_ref().map(|r| RepoInfo {
@@ -81,13 +90,21 @@ fn text(err: std::io::Error) -> String {
     err.to_string()
 }
 
+/// Session `id` has ended: it leaves its window and the tint counts.
+fn forget_session(app: &AppHandle, id: SessionId) {
+    app.state::<WindowSessions>().remove(id);
+    app.state::<Tints>().forget(id);
+}
+
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
 /// in Settings (`off` when absent) and returns its session id; its output streams over `on_output`, a
 /// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
-/// `pane-command` events.
+/// `pane-command` events, sent only to the window that started it.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn pty_spawn(
     app: AppHandle,
+    window: WebviewWindow,
     sessions: State<'_, SessionRegistry>,
     rows: u16,
     cols: u16,
@@ -95,9 +112,11 @@ fn pty_spawn(
     prompt: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
-    let cwd_app = app.clone();
-    let command_app = app.clone();
-    sessions
+    let label = window.label().to_string();
+    let (cwd_app, cwd_label) = (app.clone(), label.clone());
+    let (command_app, command_label) = (app.clone(), label.clone());
+    let exit_label = label.clone();
+    let id = sessions
         .spawn_tracked(
             cwd.as_deref().map(Path::new),
             prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
@@ -107,10 +126,12 @@ fn pty_spawn(
                 let _ = on_output.send(data.to_vec());
             }),
             Some(Box::new(move |id, at| {
-                let _ = cwd_app.emit(PANE_CWD_EVENT, PaneCwdEvent::new(id, at));
+                let event = PaneCwdEvent::new(id, at, &cwd_app.state::<Tints>());
+                let _ = cwd_app.emit_to(cwd_label.as_str(), PANE_CWD_EVENT, event);
             })),
             Some(Box::new(move |id, command| {
-                let _ = command_app.emit(
+                let _ = command_app.emit_to(
+                    command_label.as_str(),
                     PANE_COMMAND_EVENT,
                     PaneCommandEvent {
                         pane_id: id,
@@ -119,10 +140,13 @@ fn pty_spawn(
                 );
             })),
             Box::new(move |id, code| {
-                let _ = app.emit(PTY_EXIT_EVENT, PtyExit { id, code });
+                forget_session(&app, id);
+                let _ = app.emit_to(exit_label.as_str(), PTY_EXIT_EVENT, PtyExit { id, code });
             }),
         )
-        .map_err(|e| format!("Could not start the shell: {e}"))
+        .map_err(|e| format!("Could not start the shell: {e}"))?;
+    window.state::<WindowSessions>().add(&label, id);
+    Ok(id)
 }
 
 #[tauri::command]
@@ -146,8 +170,24 @@ fn pty_resize(
 
 /// Ends session `id`, killing its shell if it still runs.
 #[tauri::command]
-fn pty_close(sessions: State<'_, SessionRegistry>, id: SessionId) -> Result<(), String> {
+fn pty_close(
+    app: AppHandle,
+    sessions: State<'_, SessionRegistry>,
+    id: SessionId,
+) -> Result<(), String> {
+    forget_session(&app, id);
     sessions.close(id).map_err(text)
+}
+
+/// Window `label` was closed: its shells end and it no longer holds Heynote or the focus.
+fn window_destroyed(app: &AppHandle, label: &str) {
+    let registry = app.state::<SessionRegistry>();
+    for id in app.state::<WindowSessions>().take(label) {
+        app.state::<Tints>().forget(id);
+        let _ = registry.close(id);
+    }
+    app.state::<notes::HeynoteOwner>().release(label);
+    app.state::<windows::LastFocused>().forget(label);
 }
 
 /// The working directory of session `id`'s shell, or `None` where it cannot be read (Windows).
@@ -181,6 +221,12 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         .item(&PredefinedMenuItem::quit(app, None)?)
         .build()?;
     let shell_menu = SubmenuBuilder::new(app, "Shell")
+        .item(
+            &MenuItemBuilder::with_id(windows::NEW_WINDOW_EVENT, "New Window")
+                .accelerator("Cmd+N")
+                .build(app)?,
+        )
+        .separator()
         .item(
             &MenuItemBuilder::with_id("new", "New Terminal")
                 .accelerator("Cmd+T")
@@ -259,6 +305,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
+                .with_filter(windows::is_remembered)
                 .with_state_flags(
                     StateFlags::SIZE
                         | StateFlags::POSITION
@@ -269,10 +316,19 @@ pub fn run() {
         )
         .manage(SessionRegistry::new())
         .manage(app_icon::IconState::default())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::ThemeChanged(_) = event {
-                app_icon::apply(window.app_handle());
+        .manage(Tints::default())
+        .manage(WindowSessions::default())
+        .manage(windows::WindowLabels::default())
+        .manage(windows::LastFocused::default())
+        .manage(notes::HeynoteOwner::default())
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
+            tauri::WindowEvent::Focused(true) => {
+                window.state::<windows::LastFocused>().set(window.label())
             }
+            // Tauri quits once the last window is gone, on macOS too.
+            tauri::WindowEvent::Destroyed => window_destroyed(window.app_handle(), window.label()),
+            _ => {}
         })
         .setup(|app| {
             app_icon::apply(app.handle());
@@ -281,14 +337,21 @@ pub fn run() {
             {
                 let menu = macos_menu(app.handle())?;
                 app.set_menu(menu)?;
+                // Menu items act on the focused window only.
                 app.on_menu_event(|app, event| {
+                    let Some(label) = windows::focused_label(app) else {
+                        return;
+                    };
+                    let label = label.as_str();
                     let id = event.id().as_ref();
                     if matches!(id, "copy" | "paste" | "selectAll") {
-                        let _ = app.emit(CLIPBOARD_EVENT, id);
+                        let _ = app.emit_to(label, CLIPBOARD_EVENT, id);
                     } else if matches!(id, "new" | "close") {
-                        let _ = app.emit(PANE_EVENT, id);
+                        let _ = app.emit_to(label, PANE_EVENT, id);
                     } else if id == "settings" {
-                        let _ = app.emit(OPEN_SETTINGS_EVENT, ());
+                        let _ = app.emit_to(label, OPEN_SETTINGS_EVENT, ());
+                    } else if id == windows::NEW_WINDOW_EVENT {
+                        let _ = app.emit_to(label, windows::NEW_WINDOW_EVENT, ());
                     }
                 });
             }
@@ -309,7 +372,11 @@ pub fn run() {
             notes::heynote_move,
             notes::heynote_mkdir,
             notes::heynote_rmdir,
-            notes::heynote_save_state
+            notes::heynote_save_state,
+            notes::heynote_claim,
+            notes::heynote_release,
+            notes::heynote_focus,
+            windows::window_new
         ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");
