@@ -1,13 +1,13 @@
 ## 1. Window
 
-- [ ] 1.1 Set the main window to `titleBarStyle: "Overlay"` and `hiddenTitle: true` in `src-tauri/tauri.conf.json`, and add `core:window:allow-start-dragging` to `src-tauri/capabilities/default.json`
+- [x] 1.1 Set the main window to `titleBarStyle: "Overlay"` and `hiddenTitle: true` in `src-tauri/tauri.conf.json`, and add `core:window:allow-start-dragging` to `src-tauri/capabilities/default.json`
   - proof: `node -e "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8'));JSON.parse(require('fs').readFileSync('src-tauri/capabilities/default.json','utf8'))"`
 
 ## 2. Top bar
 
-- [ ] 2.1 Add `src/topBar.ts` rendering the drag-region header with New pane, Close pane, Reset layout and Settings icon buttons, tooltips naming each with the platform's shortcut, and a macOS inset for the traffic lights
+- [x] 2.1 Add `src/topBar.ts` rendering the drag-region header with New pane, Close pane, Reset layout and Settings icon buttons, tooltips naming each with the platform's shortcut, and a macOS inset for the traffic lights
   - proof: `npx eslint src/topBar.ts`
-- [ ] 2.2 Mount the bar in `index.html`/`src/main.ts`, wiring buttons to `Panes.act`, `Panes.actLayout("reset")` and the settings dialogue and refocusing the current pane; lay out `src/styles.css` so the panes root fills the space below the bar
+- [x] 2.2 Mount the bar in `index.html`/`src/main.ts`, wiring buttons to `Panes.act`, `Panes.actLayout("reset")` and the settings dialogue and refocusing the current pane; lay out `src/styles.css` so the panes root fills the space below the bar
   - proof: `npx eslint src/main.ts src/topBar.ts`
   - proof: `npm run typecheck`
   - proof: `openspec validate settings-icon-in-the-window-top-bar-righ --strict`

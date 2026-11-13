@@ -41,14 +41,76 @@ body {
   background: var(--term-bg);
 }
 
+/* The window is a column: the top bar, then the panes filling the rest. */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top bar: a slim strip above the panes, with the pane actions and settings at its right. */
+.top-bar {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 var(--space-1);
+  background: var(--term-gap);
+  color: var(--muted);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* macOS overlay title bar: the native title bar's height, with room on the left for the window buttons. */
+.top-bar[data-overlay] {
+  height: 28px;
+  padding-left: 76px;
+}
+
+.top-bar-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 500 13px/28px var(--font-sans);
+  color: var(--fg);
+}
+
+.top-bar-actions {
+  position: relative;
+  display: flex;
+  gap: 2px;
+}
+
+.top-bar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.top-bar-button:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
   --pane-gap: 3px;
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1 1 0;
   gap: var(--pane-gap);
-  height: 100%;
+  min-height: 0;
   background: var(--term-gap);
 }
 
