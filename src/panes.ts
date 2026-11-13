@@ -14,6 +14,7 @@ import {
   type PaneId,
 } from "./layout/model";
 import { TileView } from "./layout/view";
+import { openHeynote, type HeynoteFrame } from "./heynotePane";
 import { createPaneChip, folderName, PANE_CWD_EVENT, showPaneChip, type PaneCwd } from "./paneChip";
 import type { Settings } from "./settings";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
@@ -37,6 +38,8 @@ interface Pane {
   session?: number;
   /** The pane's project tint; `undefined` outside a repository. */
   tint?: number;
+  /** Set for a Heynote pane, which holds Heynote instead of a terminal. */
+  note?: HeynoteFrame;
 }
 
 /**
@@ -103,6 +106,11 @@ export class Panes {
       () => panes.current()?.terminal?.term,
       platform,
       openSettings,
+      (action) => {
+        const note = panes.current()?.note;
+        note?.clipboard(action).catch((error: unknown) => console.error(error));
+        return note !== undefined;
+      },
     );
     if (panes.viaMenu()) {
       // ⌘T and ⌘W are Shell menu items on macOS, so the webview may never see those keys.
@@ -143,7 +151,7 @@ export class Panes {
     if (focused) {
       this.markFocused(this.panes.indexOf(focused));
       // Moving the pane's element in the DOM takes the keyboard from its terminal.
-      if (hadKeyboard) focused.terminal?.term.focus();
+      if (hadKeyboard) this.give(focused);
     }
   }
 
@@ -163,15 +171,44 @@ export class Panes {
   act(action: PaneAction): void {
     const report = (error: unknown) => this.report(error);
     if (action.type === "new") this.open().catch(report);
+    else if (action.type === "heynote") this.openHeynote();
     else if (action.type === "close") this.close(this.focused).catch(report);
     else this.focus(action.index);
   }
 
-  /** Opens a pane after the others, in the focused pane's working directory, and focuses it. */
-  async open(): Promise<void> {
-    const from = this.current();
-    const cwd = await from?.ready.then((t) => t?.cwd()).catch(() => undefined);
+  /**
+   * Opens the Heynote pane after the others and focuses it. There is one at most, since every Heynote page keeps
+   * its own copy of the notes: when it is already open, it only takes the focus.
+   */
+  openHeynote(): void {
+    const open = this.panes.findIndex((pane) => pane.note !== undefined);
+    if (open >= 0) {
+      this.focus(open);
+      return;
+    }
+    const { element, chip, host } = this.paneElement();
+    const pane: Pane = { id: this.nextId++, element, chip, ready: Promise.resolve(undefined) };
+    element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
+    element.addEventListener("mousedown", () => this.focus(this.panes.indexOf(pane)));
+    showPaneChip(element, chip, "Heynote");
+    pane.note = openHeynote(
+      this.backend,
+      host,
+      this.platform,
+      (event) => this.shortcut(event),
+      () => this.markFocused(this.panes.indexOf(pane)),
+    );
+    pane.note.frame.addEventListener("load", () => {
+      if (this.current() === pane) pane.note?.focus();
+    });
+    this.panes.push(pane);
+    this.layout = addPane(this.layout, pane.id);
+    this.render();
+    this.markFocused(this.panes.length - 1);
+  }
 
+  /** A pane's element: its title row with the chip, the host its content goes in and the grab strip. */
+  private paneElement(): { element: HTMLElement; chip: HTMLElement; host: HTMLElement } {
     const element = document.createElement("div");
     element.className = "pane";
     const title = document.createElement("div");
@@ -184,6 +221,21 @@ export class Panes {
     const host = document.createElement("div");
     host.className = "pane-terminal";
     element.append(title, host, grab);
+    return { element, chip, host };
+  }
+
+  /** Gives pane `pane`'s terminal or Heynote the keyboard. */
+  private give(pane: Pane): void {
+    if (pane.note) pane.note.focus();
+    else pane.terminal?.term.focus();
+  }
+
+  /** Opens a pane after the others, in the focused pane's working directory, and focuses it. */
+  async open(): Promise<void> {
+    const from = this.current();
+    const cwd = await from?.ready.then((t) => t?.cwd()).catch(() => undefined);
+
+    const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
     element.addEventListener("mousedown", () => this.focus(this.panes.indexOf(pane)));
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
@@ -208,13 +260,14 @@ export class Panes {
       this.remove(pane);
       throw error;
     }
-    if (this.current() === pane) pane.terminal?.term.focus();
+    if (this.current() === pane) this.give(pane);
   }
 
   /** Closes pane `index` without asking. Focus moves to the pane that takes its place, else the one before. */
   async close(index: number): Promise<void> {
     const pane = this.panes[index];
     if (!pane) return;
+    pane.note?.flush();
     this.remove(pane);
     if (this.panes.length === 0) {
       await this.backend.closeWindow();
@@ -228,12 +281,13 @@ export class Panes {
     const pane = this.panes[index];
     if (!pane) return;
     this.markFocused(index);
-    pane.terminal?.term.focus();
+    this.give(pane);
   }
 
   /** Gives the focused pane's terminal the keyboard again, e.g. after the settings dialogue closes. */
   focusCurrent(): void {
-    this.current()?.terminal?.term.focus();
+    const pane = this.current();
+    if (pane) this.give(pane);
   }
 
   /** Restyles every open pane after the settings changed; `themeChanged` re-reads the theme colours too. */
@@ -312,13 +366,22 @@ export class Panes {
 
   /** xterm's key hook: layout, pane, settings and clipboard shortcuts are kept from the shell. */
   private onKey(terminal: PaneTerminal, event: KeyboardEvent): boolean {
+    if (this.shortcut(event)) return false;
+    return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
+  }
+
+  /**
+   * Carries out a layout, pane or settings shortcut on keydown. Returns true when `event` is one of those keys,
+   * which then must not reach the pane's shell or Heynote.
+   */
+  private shortcut(event: KeyboardEvent): boolean {
     const layout = layoutAction(event, this.platform);
     if (layout) {
       if (event.type === "keydown") {
         event.preventDefault();
         this.actLayout(layout);
       }
-      return false;
+      return true;
     }
     if (settingsShortcut(event, this.platform)) {
       // In the macOS app the app menu's ⌘, opens the settings; here the key is only kept from the shell.
@@ -326,7 +389,7 @@ export class Panes {
         event.preventDefault();
         this.openSettings();
       }
-      return false;
+      return true;
     }
     const action = paneAction(event, this.platform);
     if (action) {
@@ -336,9 +399,9 @@ export class Panes {
         event.preventDefault();
         if (!viaMenu) this.act(action);
       }
-      return false;
+      return true;
     }
-    return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
+    return false;
   }
 
   private report(error: unknown): void {
