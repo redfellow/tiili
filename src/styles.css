@@ -834,3 +834,59 @@ dialog.settings::backdrop {
   margin: var(--space-1) 0;
   background: var(--line);
 }
+
+/* Startup splash (src/splash.ts): a canvas over the whole window, and the dimmed "tiili no-splash" hint. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: var(--splash-bg);
+  cursor: default;
+}
+
+.splash canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.splash-hint {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  /* The wall is laid behind it, so it sits on a soft patch of the ground to stay legible. */
+  background: color-mix(in srgb, var(--splash-bg) 78%, transparent);
+  box-shadow: 0 0 18px 10px color-mix(in srgb, var(--splash-bg) 70%, transparent);
+  color: var(--splash-muted);
+  font: 12px/1.4 var(--font-mono);
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease, color 0.15s ease;
+}
+
+.splash-hint:not(:disabled)::before {
+  content: "$ ";
+  opacity: 0.6;
+}
+
+.splash-hinted .splash-hint,
+.splash-hint:disabled {
+  opacity: 0.55;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.splash-hinted .splash-hint:hover,
+.splash-hinted .splash-hint:focus-visible {
+  opacity: 1;
+  color: var(--splash-fg);
+}
+
+.splash-hint:disabled {
+  cursor: default;
+}

@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tiili splash preview</title>
+<style>
+  @font-face {
+    font-family: "Geist Mono";
+    src: url("../../../src/assets/fonts/GeistMono-Variable.woff2") format("woff2");
+    font-weight: 100 900;
+  }
+  :root { --page: #0a0c0d; --ui: #9a948c; --ui-fg: #e9e2d8; --ui-line: #262c2e; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--ui-fg);
+    font: 13px/1.4 "Geist Mono", ui-monospace, monospace; }
+  body { display: flex; flex-direction: column; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 16px;
+    border-bottom: 1px solid var(--ui-line); }
+  .bar label { color: var(--ui); display: inline-flex; gap: 6px; align-items: center; }
+  .bar select, .bar button { font: inherit; color: var(--ui-fg); background: #15191a; border: 1px solid var(--ui-line);
+    border-radius: 6px; padding: 4px 8px; }
+  .bar button { cursor: pointer; }
+  .bar button.primary { background: #A4472B; border-color: #A4472B; color: #fff; }
+  .bar input[type=range] { width: 220px; accent-color: #C9764F; }
+  .time { color: var(--ui); min-width: 9ch; font-variant-numeric: tabular-nums; }
+  .hint { color: #6e6862; margin-left: auto; }
+  .stage { flex: 1; display: grid; place-items: center; padding: 16px; min-height: 0; }
+  .window { position: relative; width: 100%; height: 100%; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06); background: var(--bg); }
+  .window[data-size="1280"] { width: 1280px; height: 800px; max-width: 100%; max-height: 100%; }
+  .window[data-size="900"] { width: 900px; height: 560px; max-width: 100%; max-height: 100%; }
+  .window[data-size="520"] { width: 520px; height: 340px; }
+  .term { position: absolute; inset: 0; background: var(--term-bg); color: var(--term-fg); padding: 14px 16px;
+    font: 13px/1.5 "Geist Mono", ui-monospace, monospace; white-space: pre; }
+  .term .dim { color: var(--muted); }
+  .term .acc { color: var(--accent); }
+  .term .cur { display: inline-block; width: 0.62em; height: 1.2em; vertical-align: -0.22em; background: var(--accent);
+    border-radius: 1.5px; animation: blink 1.06s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  canvas.gone { display: none; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <button class="primary" id="replay">↻ Replay <span style="opacity:.6">R</span></button>
+  <label>Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option><option value="0.1">0.1×</option></select></label>
+  <label>Theme <select id="theme"></select></label>
+  <label>Window <select id="size"><option value="fit">Fit</option><option value="1280">1280×800</option><option value="900">900×560</option><option value="520">520×340</option></select></label>
+  <label><input type="checkbox" id="enabled" checked> Show splash on startup</label>
+  <label><input type="checkbox" id="reduced"> Reduce motion</label>
+  <label>Scrub <input type="range" id="scrub" min="0" max="3520" value="0"></label>
+  <span class="time" id="time">0.00 s</span>
+  <span class="hint">Any key or click on the window skips</span>
+</div>
+<div class="stage">
+  <div class="window" id="win" data-size="fit">
+    <div class="term" id="term"><span class="dim">Last login: Fri Nov 13 09:41:07 on ttys004</span>
+<span class="acc">~/Koodit/tiili</span> <span class="dim">main</span>
+<span id="prompt" class="acc">&gt;</span> <span id="cursor" class="cur"></span></div>
+    <canvas id="splash"></canvas>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------------------------------------
+   tiili startup splash: a self-contained canvas module. Everything but the mortar dust is a pure
+   function of time, so the timeline can be scrubbed, skipped and replayed. Port target: src/splash.ts.
+   --------------------------------------------------------------------------------------------- */
+
+// Brand bricks (docs/brand/tiili.css) and the themes' grounds (src/themes.ts).
+const B = { tiili: "#A4472B", klinkkeri: "#6B2A1E", savi: "#C9764F", laasti: "#E8DECD", kalkki: "#F6F1E9",
+  graniitti: "#8D877D", koski: "#111617" };
+const THEMES = {
+  koski: { name: "Koski", bg: "#0F1516", fg: "#C9CFCD", muted: "#8A9492", termBg: "#182023", termFg: "#C9CFCD", accent: "#C9764F" },
+  "tiili-dark": { name: "tiili Dark", bg: "#111617", fg: "#EFE7DE", muted: "#A0978F", termBg: "#182023", termFg: "#D9D3CA", accent: "#A4472B" },
+  muratti: { name: "Muratti", bg: "#151112", fg: "#EFE7DE", muted: "#A0948C", termBg: "#1E1919", termFg: "#F3E7DC", accent: "#C0444B" },
+  "tiili-light": { name: "tiili Light", bg: "#F6F1E9", fg: "#2A2321", muted: "#6B625C", termBg: "#F6F1E9", termFg: "#2A2321", accent: "#A4472B", light: true },
+  laasti: { name: "Laasti", bg: "#E8DECD", fg: "#2A2321", muted: "#5E5650", termBg: "#E8DECD", termFg: "#2A2321", accent: "#A4472B", light: true },
+};
+
+// The wordmark from docs/brand/logo/lockup-dark.svg, split into its letters: t i i l i.
+const WORD_D = "M155.46 94.72L147.14 94.72Q141.82 94.72 139.33 92.26Q136.83 89.79 136.83 84.42L136.83 67.58L131.33 67.58L131.33 60.42L136.83 60.42L136.83 52.35L146.43 52.35L146.43 60.42L155.46 60.42L155.46 67.58L146.43 67.58L146.43 83.26Q146.43 85.76 147.49 86.66Q148.54 87.55 150.66 87.55L155.46 87.55M168.77 94.72L159.17 94.72L159.17 60.42L168.77 60.42M184.51 94.72L174.91 94.72L174.91 60.42L184.51 60.42M205.31 94.72L199.62 94.72Q195.39 94.72 193.02 92.64Q190.66 90.56 190.66 85.76L190.66 49.28L200.26 49.28L200.26 84.74Q200.26 86.27 200.96 86.91Q201.66 87.55 203.01 87.55L205.31 87.55M218.05 94.72L208.45 94.72L208.45 60.42L218.05 60.42";
+const LETTERS = WORD_D.split(/(?=M)/).map((d, i) => ({
+  path: new Path2D(d + (i ? "Z" : "")),
+  x0: [131.33, 159.17, 174.91, 190.66, 208.45][i], x1: [155.46, 168.77, 184.51, 205.31, 218.05][i],
+  top: [52.35, 60.42, 60.42, 49.28, 60.42][i],
+}));
+const DOTS = [157.22, 172.96, 206.50].map((x) => ({ x, y: 46.40, w: 11.20, h: 6.08 }));
+const WORD = { x0: 131.33, x1: 218.05, y0: 46.40, y1: 94.72, base: 94.72, xh: 60.42 };
+
+// Timeline, seconds.
+const TL = {
+  cursorIn: 0.10,
+  scramble: (i) => 0.22 + i * 0.06,
+  lock: (i) => 0.48 + i * 0.085,
+  dot: (k) => 0.90 + k * 0.07, dotFall: 0.14,
+  sweepA: [1.00, 1.40],
+  focus: 1.12, fall: 0.16, settle: 0.14,
+  wall: 1.22, wallSpread: 0.85,
+  chevron: 1.55, underscore: 1.66,
+  sweepB: [2.05, 2.60],
+  dive: 2.75, diveDur: 0.55, fade: 0.22,
+};
+TL.end = TL.dive + TL.diveDur + TL.fade;
+const GLITCH = "░▒▓█▀▄▌▐<>/\\|_=+*#01tiliTIL{}[]";
+
+// ---- small helpers ----
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const easeOutCubic = (k) => 1 - (1 - k) ** 3;
+const easeInCubic = (k) => k * k * k;
+const easeInOutCubic = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+const easeOutBack = (k) => { const c = 1.9; return 1 + (c + 1) * (k - 1) ** 3 + c * (k - 1) ** 2; };
+const smooth = (a, b, v) => { const k = clamp((v - a) / (b - a)); return k * k * (3 - 2 * k); };
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, k) => { const x = hex(a), y = hex(b); return "#" + x.map((v, i) => Math.round(lerp(v, y[i], k)).toString(16).padStart(2, "0")).join(""); };
+const rgba = (h, a) => { const [r, g, b] = hex(h); return `rgba(${r},${g},${b},${a})`; };
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const SWEEP_DIR = [0.944, 0.330];
+const proj = (x, y) => x * SWEEP_DIR[0] + y * SWEEP_DIR[1];
+
+// ---- the splash ----
+const win = document.getElementById("win");
+const canvas = document.getElementById("splash");
+const ctx = canvas.getContext("2d");
+let theme = THEMES.koski;
+let W = 0, H = 0, dpr = 1, L = null;
+
+function layout() {
+  const r = win.getBoundingClientRect();
+  W = r.width; H = r.height; dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+
+  let s = clamp(W * 0.30, 120, 400) / 86.72;
+  if (48.32 * s > H * 0.22) s = (H * 0.22) / 48.32;
+  const bw = s * 21, bh = (bw * 12) / 25, g = (bw * 2) / 25;
+  const px = g + bw * 0.3, py = g + bh * 0.45;
+  const wordH = (WORD.y1 - WORD.y0) * s;
+  const top = H / 2 - (wordH + py + bh) / 2;
+  const ox = W / 2 - ((WORD.x0 + WORD.x1) / 2) * s, oy = top - WORD.y0 * s;
+  const x0 = ox + WORD.x0 * s, x1 = ox + WORD.x1 * s, y0 = top, y1 = top + wordH;
+  const clear = [x0 - px, y0 - py, x1 + px, y1 + py];
+  const baseY = y1 + py, cx = W / 2, cy = (y0 + y1) / 2;
+  const pX = bw + g, pY = bh + g;
+
+  const bricks = [];
+  const rMin = -Math.ceil((baseY + bh) / pY) - 1, rMax = Math.ceil((H - baseY) / pY) + 1;
+  const n = Math.ceil(W / 2 / pX) + 2;
+  let dMax = 0;
+  for (let row = rMin; row <= rMax; row++) {
+    const off = ((row % 2) + 2) % 2 ? pX / 2 : 0;
+    const y = baseY + row * pY;
+    for (let c = -n; c <= n; c++) {
+      const x = cx - bw / 2 + c * pX + off;
+      if (x + bw < -2 || x > W + 2 || y + bh < -2 || y > H + 2) continue;
+      if (x < clear[2] && x + bw > clear[0] && y < clear[3] - 0.5 && y + bh > clear[1]) continue;
+      const rand = rng((row + 1000) * 7919 + (c + 1000) * 104729);
+      const focus = row === 0 && c === 0;
+      const dx = (x + bw / 2 - cx) / W, dy = ((y + bh / 2 - cy) / H) * 1.25;
+      const d = Math.hypot(dx, dy);
+      dMax = Math.max(dMax, d);
+      const base = rand() < 0.22 ? B.klinkkeri : B.tiili;
+      let color = mix(base, B.savi, rand() * (theme.light ? 0.28 : 0.16));
+      if (!theme.light) color = mix(color, theme.bg, 0.12 + rand() * 0.16);
+      bricks.push({ x, y, d, focus, color, jitter: rand() - 0.5, dir: row % 2 ? 1 : -1, row });
+    }
+  }
+  const vignette = Math.hypot(0.5, 0.5 * 1.25);
+  for (const b of bricks) {
+    const dn = b.d / dMax;
+    const side = Math.sign(b.x + bw / 2 - cx) === b.dir ? 0.035 : 0; // alternate courses lay leftward / rightward
+    b.delay = b.focus ? TL.focus : TL.wall + dn * TL.wallSpread + side + b.jitter * 0.05;
+    b.alpha = b.focus ? 1 : 1 - 0.82 * smooth(0.18, 1.0, b.d / vignette);
+  }
+  const focus = bricks.find((b) => b.focus);
+  L = { s, ox, oy, bw, bh, g, bricks, focus, x0, x1, y0, y1, cx, cy,
+    fx: focus.x + bw / 2, fy: focus.y + bh / 2, zEnd: Math.max(W / bw, H / bh) * 1.12 };
+}
+
+// Mortar dust and squeeze-out: the only simulated (non-pure) part.
+let dust = [];
+function puff(x, y, w, count, power) {
+  const k = L.bw / 80;
+  for (let i = 0; i < count; i++) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    dust.push({ x: x + w / 2 + side * Math.random() * w * 0.55, y,
+      vx: side * (30 + Math.random() * 120) * power * k, vy: -(15 + Math.random() * 70) * power * k,
+      life: 0, max: 0.35 + Math.random() * 0.4, size: (1.2 + Math.random() * 1.8) * Math.max(1, k) });
+  }
+}
+function spawnBetween(a, b) {
+  if (b <= a) return;
+  const hit = (ti) => ti > a && ti <= b;
+  for (const br of L.bricks) {
+    if (hit(br.delay + TL.fall)) puff(br.x, br.y + L.bh, L.bw, br.focus ? 18 : Math.round(1 + 4 * br.alpha), br.focus ? 1.5 : 1);
+  }
+  DOTS.forEach((d, k) => {
+    if (hit(TL.dot(k) + TL.dotFall)) puff(L.ox + d.x * L.s, L.oy + (d.y + d.h) * L.s, d.w * L.s, 6, 0.6);
+  });
+}
+function stepDust(dt) {
+  for (const p of dust) { p.life += dt; p.vy += 260 * dt; p.vx *= 1 - 3 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+  dust = dust.filter((p) => p.life < p.max);
+}
+
+function shake(t) {
+  let x = 0, y = 0;
+  const impacts = [[TL.focus + TL.fall, 3.2], ...DOTS.map((_, k) => [TL.dot(k) + TL.dotFall, 1.1])];
+  for (const [ti, amp] of impacts) {
+    const e = t - ti;
+    if (e <= 0 || e > 0.35) continue;
+    const a = amp * (L.s / 4) * Math.exp(-e * 20);
+    x += a * Math.sin(e * 83); y += a * Math.cos(e * 61);
+  }
+  return [x, y];
+}
+
+function sweepAt(t) {
+  const out = [];
+  const [a0, a1] = TL.sweepA, [b0, b1] = TL.sweepB;
+  const wA = L.s * 22, wB = Math.max(W, H) * 0.14;
+  if (t > a0 && t < a1) {
+    const k = easeInOutCubic((t - a0) / (a1 - a0));
+    out.push({ p: lerp(proj(L.x0, L.y0) - wA, proj(L.x1, L.y1) + wA, k), w: wA, strength: 1 });
+  }
+  if (t > b0 && t < b1) {
+    const k = easeInOutCubic((t - b0) / (b1 - b0));
+    out.push({ p: lerp(-wB, proj(W, H) + wB, k), w: wB, strength: 0.8 });
+  }
+  return out;
+}
+const highlight = () => (theme.light ? "#FFFFFF" : "#FFE6D2");
+
+function brickPose(b, t) {
+  const e = t - b.delay;
+  if (e < 0) return null;
+  let dy = 0, sx = 1, sy = 1, a = 1;
+  if (e < TL.fall) {
+    const k = e / TL.fall;
+    dy = -(1 - k * k) * L.bh * (b.focus ? 1.6 : 0.9);
+    sx = sy = lerp(b.focus ? 1.35 : 1.12, 1, k * k);
+    a = clamp(e / 0.07);
+  } else if (e < TL.fall + TL.settle) {
+    const v = (e - TL.fall) / TL.settle, sq = Math.sin(Math.PI * v) * (1 - v * 0.4) * (b.focus ? 1.6 : 1);
+    sy = 1 - 0.11 * sq; sx = 1 + 0.06 * sq;
+  }
+  return { dy, sx, sy, a };
+}
+
+function drawBrick(x, y, w, h, color, pose, alpha) {
+  const cx = x + w / 2, by = y + h;
+  const ww = w * pose.sx, hh = h * pose.sy;
+  ctx.globalAlpha = alpha * pose.a;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(cx - ww / 2, by - hh + pose.dy, ww, hh, Math.max(1, (1.5 / 25) * w));
+  ctx.fill();
+  return [cx - ww / 2, by - hh + pose.dy, ww, hh];
+}
+
+function drawWall(t, sweeps, sceneAlpha) {
+  const hi = highlight();
+  for (const b of L.bricks) {
+    if (b.focus) continue;
+    const pose = brickPose(b, t);
+    if (!pose) continue;
+    const r = drawBrick(b.x, b.y, L.bw, L.bh, b.color, pose, b.alpha * sceneAlpha);
+    let glow = 0;
+    const pc = proj(b.x + L.bw / 2, b.y + L.bh / 2);
+    for (const s of sweeps) glow += s.strength * Math.exp(-(((pc - s.p) / s.w) ** 2) * 2.5);
+    // A fresh brick flashes as it lands: the "snap".
+    const e = t - b.delay - TL.fall;
+    if (e > 0 && e < 0.18) glow += 0.35 * (1 - e / 0.18);
+    if (glow > 0.01) {
+      ctx.globalAlpha = clamp(glow * 0.42) * b.alpha * sceneAlpha * pose.a;
+      ctx.fillStyle = hi;
+      ctx.beginPath(); ctx.roundRect(r[0], r[1], r[2], r[3], Math.max(1, (1.5 / 25) * L.bw)); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function focusColors() {
+  return theme.light ? { brick: B.klinkkeri, glyph: "#FFFFFF" } : { brick: B.savi, glyph: B.koski };
+}
+
+function drawGlyph(t, ox, oy, unit, us, chevColor, usColor, diving) {
+  if (t < TL.chevron) return;
+  const pop = diving ? 1 : lerp(1.45, 1, easeOutBack(clamp((t - TL.chevron) / 0.16)));
+  const ccx = ox + 9.9 * unit, ccy = oy + 6 * unit, u = unit * pop;
+  ctx.strokeStyle = chevColor; ctx.lineWidth = 1.5 * u; ctx.lineCap = "square"; ctx.lineJoin = "miter";
+  ctx.beginPath();
+  ctx.moveTo(ccx - 1.8 * u, ccy - 2.7 * u); ctx.lineTo(ccx + 1.8 * u, ccy); ctx.lineTo(ccx - 1.8 * u, ccy + 2.7 * u);
+  ctx.stroke();
+  if (t < TL.underscore) return;
+  const on = diving || t < TL.underscore + 0.12 || Math.floor((t - TL.underscore) / 0.26) % 2 === 0;
+  if (!on) return;
+  ctx.fillStyle = usColor;
+  ctx.beginPath(); ctx.roundRect(us[0], us[1], us[2], us[3], Math.min(1.5, us[3] / 3)); ctx.fill();
+}
+
+function drawWord(t, sweeps, sceneAlpha) {
+  const { s, ox, oy } = L;
+  const fpx = ((WORD.base - 52.35) * s) / 0.72;
+  const cellW = fpx * 0.6;
+  const slotX = (i) => (i < 5 ? ox + ((LETTERS[i].x0 + LETTERS[i].x1) / 2) * s : ox + 226 * s);
+  const baseY = oy + WORD.base * s;
+  const hi = highlight();
+  ctx.globalAlpha = sceneAlpha;
+
+  // Letters: scramble, then lock with a snap.
+  ctx.font = `700 ${fpx}px "Geist Mono", ui-monospace, monospace`;
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  const locked = LETTERS.filter((_, i) => t >= TL.lock(i)).length;
+  const head = clamp((t - 0.40) / 0.085, 0, 5);
+  const hi0 = Math.floor(head), hf = easeOutCubic(clamp((head - hi0) * 3));
+  const curX = lerp(slotX(hi0), slotX(Math.min(5, hi0 + 1)), hi0 >= 5 ? 0 : hf);
+  const curW = cellW * 0.92, curH = (WORD.base - WORD.xh) * s;
+  const curOut = clamp((t - 0.88) / 0.1);
+  const curVisible = t >= TL.cursorIn && curOut < 1 && (t > 0.34 || Math.floor((t - TL.cursorIn) / 0.09) % 2 === 0);
+
+  if (curVisible) {
+    ctx.fillStyle = theme.light ? B.tiili : B.savi;
+    const h = curH * (1 - easeInCubic(curOut));
+    ctx.beginPath(); ctx.roundRect(curX - curW / 2, baseY - h, curW, h, 1.5 * s * 0.6); ctx.fill();
+  }
+
+  LETTERS.forEach((Lt, i) => {
+    const tl = TL.lock(i);
+    if (t < tl) {
+      if (t < TL.scramble(i)) return;
+      const frame = Math.floor(t / 0.045);
+      const r = rng(frame * 31 + i * 977)();
+      const ch = GLITCH[Math.floor(r * GLITCH.length)];
+      const underCursor = curVisible && Math.abs(slotX(i) - curX) < curW * 0.5;
+      ctx.fillStyle = underCursor ? theme.bg : r < 0.25 ? (theme.light ? B.tiili : B.savi) : theme.muted;
+      ctx.fillText(ch, slotX(i), baseY);
+      return;
+    }
+    const k = clamp((t - tl) / 0.2);
+    const sc = lerp(1.22, 1, easeOutBack(k));
+    const cx = ox + ((Lt.x0 + Lt.x1) / 2) * s;
+    ctx.save();
+    ctx.translate(cx, baseY); ctx.scale(sc, sc); ctx.translate(-cx, -baseY);
+    ctx.translate(ox, oy); ctx.scale(s, s);
+    if (k < 1) {
+      ctx.fillStyle = mix(hi, theme.fg, easeOutCubic(clamp((t - tl) / 0.32)));
+    } else if (sweeps.length) {
+      const sw = sweeps[0];
+      const pl = (sw.p - proj(ox, oy)) / s, wl = sw.w / s;
+      const gr = ctx.createLinearGradient(SWEEP_DIR[0] * (pl - wl), SWEEP_DIR[1] * (pl - wl), SWEEP_DIR[0] * (pl + wl), SWEEP_DIR[1] * (pl + wl));
+      gr.addColorStop(0, theme.fg); gr.addColorStop(0.5, mix(theme.fg, hi, sw.strength)); gr.addColorStop(1, theme.fg);
+      ctx.fillStyle = gr;
+    } else {
+      ctx.fillStyle = theme.fg;
+    }
+    ctx.fill(Lt.path);
+    ctx.restore();
+  });
+  void locked;
+
+  // Dots: three little bricks slapped onto the i's.
+  DOTS.forEach((d, k) => {
+    const td = TL.dot(k), e = t - td;
+    if (e < 0) return;
+    const pose = { dy: 0, sx: 1, sy: 1, a: 1 };
+    if (e < TL.dotFall) { const q = e / TL.dotFall; pose.dy = -(1 - q * q) * 26 * s; pose.a = clamp(e / 0.05); }
+    else if (e < TL.dotFall + 0.12) { const v = (e - TL.dotFall) / 0.12, sq = Math.sin(Math.PI * v); pose.sy = 1 - 0.22 * sq; pose.sx = 1 + 0.12 * sq; }
+    drawBrick(ox + d.x * s, oy + d.y * s, d.w * s, d.h * s, theme.light ? B.tiili : B.savi, pose, sceneAlpha);
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawDust(alpha) {
+  const c = theme.light ? B.graniitti : B.laasti;
+  for (const p of dust) {
+    ctx.fillStyle = rgba(c, (1 - p.life / p.max) * 0.55 * alpha);
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+}
+
+function render(t) {
+  const fc = focusColors();
+  const sweeps = sweepAt(t);
+  const u = clamp((t - TL.dive) / TL.diveDur);
+  const diving = t > TL.dive;
+  const zu = clamp(u / 0.8);
+  const z = diving ? Math.exp(Math.log(L.zEnd) * (zu < 0.5 ? 2 * zu * zu : 1 - (-2 * zu + 2) ** 2 / 2) ** 1.3) : 1;
+  const m = easeInOutCubic(zu);
+  const mx = lerp(L.fx, W / 2, m), my = lerp(L.fy, H / 2, m);
+  const [shx, shy] = shake(t);
+  const camX = mx - L.fx * z + shx, camY = my - L.fy * z + shy;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, W, H);
+
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, camX * dpr, camY * dpr);
+  const sceneAlpha = 1 - easeInCubic(zu);
+  drawWall(t, sweeps, sceneAlpha);
+  drawDust(sceneAlpha);
+  drawWord(t, sweeps, sceneAlpha);
+
+  // The focus brick, and its >_ (typed in, then carried into the first terminal's prompt).
+  const f = L.focus, pose = brickPose(f, t);
+  if (!pose) return;
+  let unit = L.bw / 25;
+  if (!diving) {
+    const r = drawBrick(f.x, f.y, L.bw, L.bh, fc.brick, pose, 1);
+    const e = t - f.delay - TL.fall;
+    if (e > 0 && e < 0.22) {
+      ctx.globalAlpha = 0.55 * (1 - e / 0.22); ctx.fillStyle = highlight();
+      ctx.beginPath(); ctx.roundRect(r[0], r[1], r[2], r[3], 1.5 * unit); ctx.fill();
+    }
+    let glow = 0; const pc = proj(L.fx, L.fy);
+    for (const s of sweeps) glow += s.strength * Math.exp(-(((pc - s.p) / s.w) ** 2) * 2.5);
+    if (glow > 0.01) { ctx.globalAlpha = clamp(glow * 0.35); ctx.fillStyle = highlight(); ctx.beginPath(); ctx.roundRect(r[0], r[1], r[2], r[3], 1.5 * unit); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    drawGlyph(t, f.x, f.y, unit, [f.x + 13.1 * unit, f.y + 8 * unit, 4.8 * unit, 1.5 * unit], fc.glyph, fc.glyph, false);
+    return;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const sx = camX + f.x * z, sy = camY + f.y * z, sw = L.bw * z, sh = L.bh * z;
+  ctx.fillStyle = mix(fc.brick, theme.termBg, smooth(0.45, 0.85, u));
+  ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, Math.min(1.5 * unit * z, 28) * (1 - u)); ctx.fill();
+
+  const wr = win.getBoundingClientRect();
+  const pr = document.getElementById("prompt").getBoundingClientRect();
+  const cr = document.getElementById("cursor").getBoundingClientRect();
+  // The >_ rides the growing brick (capped in size), then flies into the prompt once the brick fills the window.
+  const k = easeInOutCubic(smooth(0.62, 1, u));
+  const unitE = (pr.height * 0.42) / 5.4;
+  const oxE = pr.left - wr.left + pr.width * 0.5 - 9.9 * unitE, oyE = pr.top - wr.top + pr.height * 0.55 - 6 * unitE;
+  const uS = unit * Math.min(z, 2.4);
+  const gcx = sx + 13 * unit * z, gcy = sy + 6 * unit * z;
+  const startX = gcx - 13 * uS, startY = gcy - 6 * uS;
+  unit = uS;
+  const us0 = [startX + 13.1 * uS, startY + 8 * uS, 4.8 * uS, 1.5 * uS];
+  const us1 = [cr.left - wr.left, cr.top - wr.top, cr.width, cr.height];
+  const us = us0.map((v, i) => lerp(v, us1[i], k));
+  const col = mix(fc.glyph, theme.accent, smooth(0.2, 0.8, u));
+  drawGlyph(t, lerp(startX, oxE, k), lerp(startY, oyE, k), lerp(unit, unitE, k), us, col, col, true);
+}
+
+// ---- clock, skip, controls ----
+const ui = {
+  speed: document.getElementById("speed"), theme: document.getElementById("theme"), size: document.getElementById("size"),
+  enabled: document.getElementById("enabled"), reduced: document.getElementById("reduced"),
+  scrub: document.getElementById("scrub"), time: document.getElementById("time"),
+};
+let clock = { start: 0, offset: 0, speed: 1, running: false, scrubbing: false }, lastT = 0, raf = 0;
+
+function now() { return clock.offset + ((performance.now() - clock.start) / 1000) * clock.speed; }
+function setT(t) { clock.offset = t; clock.start = performance.now(); }
+
+function applyTheme() {
+  const st = win.style;
+  st.setProperty("--bg", theme.bg); st.setProperty("--term-bg", theme.termBg); st.setProperty("--term-fg", theme.termFg);
+  st.setProperty("--muted", theme.muted); st.setProperty("--accent", theme.accent);
+}
+
+function play() {
+  cancelAnimationFrame(raf);
+  dust = []; lastT = 0;
+  layout();
+  if (!ui.enabled.checked) { canvas.classList.add("gone"); return; }
+  canvas.classList.remove("gone"); canvas.style.opacity = 1;
+  clock.speed = +ui.speed.value; clock.running = true; setT(0);
+  raf = requestAnimationFrame(frame);
+}
+
+function finishOpacity(t) {
+  if (ui.reduced.checked) return 1 - clamp((t - 0.9) / 0.3);
+  return 1 - clamp((t - TL.dive - TL.diveDur) / TL.fade);
+}
+
+function frame() {
+  let t = now();
+  if (ui.reduced.checked) {
+    // Reduced motion: the finished lockup, held, then faded. No drop, no zoom, no dust.
+    render(TL.dive - 0.01 + 0 * t);
+    canvas.style.opacity = finishOpacity(t);
+    ui.time.textContent = t.toFixed(2) + " s";
+    if (t < 1.2) raf = requestAnimationFrame(frame); else { canvas.classList.add("gone"); clock.running = false; }
+    return;
+  }
+  const dt = Math.min(0.05, Math.max(0, t - lastT));
+  spawnBetween(lastT, t);
+  stepDust(dt);
+  lastT = t;
+  render(Math.min(t, TL.dive + TL.diveDur));
+  canvas.style.opacity = finishOpacity(t);
+  ui.time.textContent = t.toFixed(2) + " s";
+  ui.scrub.value = Math.round(Math.min(t, TL.end) * 1000);
+  if (t < TL.end) raf = requestAnimationFrame(frame);
+  else { canvas.classList.add("gone"); clock.running = false; }
+}
+
+function skip() {
+  if (!clock.running || ui.reduced.checked) return;
+  const t = now();
+  if (t >= TL.dive) return;
+  dust = []; lastT = TL.dive;
+  clock.speed = Math.max(clock.speed, 1) * 1.6; // a skipped splash dives in quicker
+  setT(TL.dive);
+}
+
+for (const [id, th] of Object.entries(THEMES)) ui.theme.add(new Option(th.name, id));
+ui.theme.onchange = () => { theme = THEMES[ui.theme.value]; applyTheme(); play(); };
+ui.size.onchange = () => { win.dataset.size = ui.size.value; requestAnimationFrame(play); };
+ui.speed.onchange = () => { if (clock.running) { const t = now(); clock.speed = +ui.speed.value; setT(t); } };
+ui.enabled.onchange = play;
+ui.reduced.onchange = play;
+document.getElementById("replay").onclick = (e) => { e.currentTarget.blur(); play(); };
+ui.scrub.max = Math.round(TL.end * 1000);
+ui.scrub.oninput = () => {
+  cancelAnimationFrame(raf); clock.running = false; dust = [];
+  canvas.classList.remove("gone");
+  const t = ui.scrub.value / 1000;
+  render(Math.min(t, TL.dive + TL.diveDur)); canvas.style.opacity = finishOpacity(t);
+  ui.time.textContent = t.toFixed(2) + " s (scrub)";
+};
+win.addEventListener("pointerdown", skip);
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return;
+  if (e.key === "r" || e.key === "R") { if (!clock.running) return play(); }
+  skip();
+});
+new ResizeObserver(() => { if (!clock.running) { layout(); if (!canvas.classList.contains("gone")) ui.scrub.oninput(); } else layout(); }).observe(win);
+
+applyTheme();
+document.fonts.load('700 40px "Geist Mono"').finally(() => setTimeout(play, 250));
+</script>
+</body>
+</html>

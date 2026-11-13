@@ -52,6 +52,8 @@ export interface TilingSettings {
 export interface BehaviourSettings {
   /** The pane under the pointer shows at full strength with a faint accent line. */
   hoverHighlight: boolean;
+  /** The brick-laying tiili splash plays when tiili opens. */
+  startupSplash: boolean;
 }
 
 export interface InactiveSettings {
@@ -106,7 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true },
+  behaviour: { hoverHighlight: true, startupSplash: true },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
 };
@@ -185,6 +187,10 @@ export function normalize(value: unknown): Settings {
         typeof behaviour.hoverHighlight === "boolean"
           ? behaviour.hoverHighlight
           : DEFAULT_SETTINGS.behaviour.hoverHighlight,
+      startupSplash:
+        typeof behaviour.startupSplash === "boolean"
+          ? behaviour.startupSplash
+          : DEFAULT_SETTINGS.behaviour.startupSplash,
     },
     inactive: {
       opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
