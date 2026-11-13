@@ -97,13 +97,14 @@ describe("re-flow", () => {
 
   // [name, panes, mode, expected cols, rows, column sizes, row sizes] after resizing in Grid mode
   const modeCases: [string, number, Parameters<typeof setMode>[1], number, number, number[], number[]][] = [
-    ["Tiling mode sizes: 5 panes stacked are 1×5", 5, "rows", 1, 5, [1], [0.2, 0.2, 0.2, 0.2, 0.2]],
+    ["Tiling mode change re-flows: 5 panes go from 3×2 in Grid mode to 1×5 stacked", 5, "rows", 1, 5, [1], [0.2, 0.2, 0.2, 0.2, 0.2]],
     ["Tiling mode sizes: 5 panes side by side are 5×1", 5, "columns", 5, 1, [0.2, 0.2, 0.2, 0.2, 0.2], [1]],
     ["Tiling mode sizes: 5 panes in a tall grid are 2×3", 5, "tall", 2, 3, [0.5, 0.5], [1 / 3, 1 / 3, 1 / 3]],
     ["Tiling mode sizes: 5 panes in a wide grid keep the 3×2 sizes", 5, "wide", 3, 2, [1 / 3 + 0.2, 1 / 3 - 0.2, 1 / 3], [0.6, 0.4]],
   ];
   it.each(modeCases)("%s", (_name, n, mode, cols, rows, colSizes, rowSizes) => {
     const before = resized(n);
+    expect([before.cols, before.rows]).toEqual([3, 2]);
     const next = setMode(before, mode);
     expect(next.mode).toBe(mode);
     expect(next.order).toEqual(before.order);

@@ -20,7 +20,7 @@ Panes SHALL be laid out in a grid whose column count depends on the tiling mode 
 - Side by side: n columns.
 - Stacked: 1 column.
 
-In every mode rows SHALL be ceil(n / columns), filled left-to-right, top-to-bottom, and an unfilled last row SHALL stretch its panes to share the full width. Opening or closing a pane, or changing the tiling mode, SHALL re-flow the layout.
+In every mode rows SHALL be ceil(n / columns), filled left-to-right, top-to-bottom, and an unfilled last row SHALL stretch its panes to share the full width.
 
 #### Scenario: Grid sizes
 - **WHEN** 1, 2, 3, 4, 5 or 9 panes are open in Grid mode
@@ -96,3 +96,10 @@ In panes without focus only the content (title chip and terminal text) SHALL be 
 #### Scenario: Hovered pane shows faint accent line
 - **WHEN** mouseover highlight is on and the pointer is over a pane without focus
 - **THEN** that pane shows a faint accent line on its top edge
+
+### Requirement: Grid re-flow
+Opening or closing a pane, or changing the tiling mode, SHALL re-flow the grid layout at once.
+
+#### Scenario: Tiling mode change re-flows
+- **WHEN** 5 panes are open in Grid mode and the tiling mode is changed to Stacked
+- **THEN** the panes re-flow from 3×2 to 1×5
