@@ -1,5 +1,6 @@
 import type { Backend, SessionId } from "./backend";
 import { showContextMenu } from "./context-menu";
+import { localNoteStore } from "./heynoteStore";
 
 /** A message the page sends the dev bridge: typed input, or the terminal's new size. */
 export type ClientMessage = { type: "input"; data: string } | { type: "resize"; rows: number; cols: number };
@@ -154,6 +155,8 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     loadSettings: async () => null,
     saveSettings: async () => undefined,
     setAppIcon: async () => undefined,
+    // The dev server has no files of its own for notes: the browser keeps them.
+    notes: localNoteStore(localStorage),
     closeWindow: async () => undefined,
   };
 }

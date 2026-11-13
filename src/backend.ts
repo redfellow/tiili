@@ -1,4 +1,5 @@
-import type { PaneCwd } from "./paneChip";
+import type { NoteStore } from "./heynoteStore";
+import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon } from "./settings";
 
 /** Identifies one shell session of a backend. */
@@ -7,12 +8,13 @@ export type SessionId = number;
 /** An item of the right-click menu: a labelled action, or a separator line. */
 export type MenuItem = { label: string; action: () => void } | { separator: true };
 
-/** Events the app sends: native menu items, the app menu's Settings… and a shell's working directory report. */
+/** Events the app sends: native menu items, the app menu's Settings…, a shell's working directory report and what runs in a pane. */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
   pane: "new" | "close";
   "open-settings": undefined;
   "pane-cwd": PaneCwd;
+  "pane-command": PaneCommand;
 }
 
 /**
@@ -45,6 +47,8 @@ export interface Backend {
   saveSettings(value: unknown): Promise<void>;
   /** Shows the light or dark app icon (Dock on macOS, window and taskbar elsewhere) for the user's choice. */
   setAppIcon(choice: AppIcon): Promise<void>;
+  /** Where the Heynote pane keeps its notes. */
+  readonly notes: NoteStore;
   /** Closes the window, after its last pane closed. */
   closeWindow(): Promise<void>;
 }

@@ -1,0 +1,17 @@
+format: 1
+slug: i-would-like-that-instead-of-red-the-tit
+title: I would like that instead of "red" the title would tell the name of the
+  command. bash, heynote, top. keep the git rep...
+x-harvaaja-card: 47c4e0de-cf83-4c20-8689-958272139ce9
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes the observable Title chip contract in repository-colours
+    (adds command name to the chip); no active change covers it.
+  citations:
+    - "openspec/specs/repository-colours/spec.md: Requirement Title chip"
+    - src/paneChip.ts
+    - src-tauri/src/cwd.rs
+  revision: 7ac93149-8a1f-4250-aa5e-6a78ea0ce46a
