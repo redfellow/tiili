@@ -9,6 +9,11 @@ const withCursor = (patch: Partial<Settings["cursor"]>): Settings => ({
   cursor: { ...DEFAULT_SETTINGS.cursor, ...patch },
 });
 
+const withInactive = (patch: Partial<Settings["inactive"]>): Settings => ({
+  ...DEFAULT_SETTINGS,
+  inactive: { ...DEFAULT_SETTINGS.inactive, ...patch },
+});
+
 const cases: [string, unknown, Settings][] = [
   ["missing file gives the defaults", null, DEFAULT_SETTINGS],
   ["not an object gives the defaults", "settings", DEFAULT_SETTINGS],
@@ -17,10 +22,14 @@ const cases: [string, unknown, Settings][] = [
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
     cursor: { style: "bar", blink: false },
+    behaviour: { hoverHighlight: false },
+    inactive: { opacity: 0.5, desaturate: true },
   }, {
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
     cursor: { style: "bar", blink: false },
+    behaviour: { hoverHighlight: false },
+    inactive: { opacity: 0.5, desaturate: true },
   }],
   ["Koski by default: unknown theme id becomes Koski", { theme: "neon" }, DEFAULT_SETTINGS],
   ["Koski by default: theme of the wrong type becomes Koski", { theme: 3 }, DEFAULT_SETTINGS],
@@ -51,6 +60,15 @@ const cases: [string, unknown, Settings][] = [
   ["empty family is Geist Mono", { font: { family: "   " } }, DEFAULT_SETTINGS],
   ["family of the wrong type is Geist Mono", { font: { family: 12 } }, DEFAULT_SETTINGS],
   ["family loses quotes and backslashes", { font: { family: "Fira\" Code\\" } }, withFont({ family: "Fira Code" })],
+  ["Invalid saved inactive settings: opacity \"dim\" is 0.82, highlight 3 is on, the rest loads",
+    { theme: "nord", inactive: { opacity: "dim", desaturate: true }, behaviour: { hoverHighlight: 3 } },
+    { ...DEFAULT_SETTINGS, theme: "nord", inactive: { opacity: 0.82, desaturate: true } }],
+  ["missing inactive and behaviour give their defaults", { theme: "koski" }, DEFAULT_SETTINGS],
+  ["inactive and behaviour of the wrong type give their defaults", { inactive: [], behaviour: "on" }, DEFAULT_SETTINGS],
+  ["inactive opacity below range clamps to 0.3", { inactive: { opacity: 0.1 } }, withInactive({ opacity: 0.3 })],
+  ["inactive opacity above range clamps to 1", { inactive: { opacity: 1.5 } }, withInactive({ opacity: 1 })],
+  ["inactive opacity snaps to steps of 0.01", { inactive: { opacity: 0.456 } }, withInactive({ opacity: 0.46 })],
+  ["desaturate of the wrong type is the default", { inactive: { desaturate: "yes" } }, DEFAULT_SETTINGS],
   ["font of the wrong type gives the default font", { theme: "dracula", font: [] }, { ...DEFAULT_SETTINGS, theme: "dracula" }],
 ];
 

@@ -234,10 +234,19 @@ body {
   min-width: 0;
   padding: var(--space-2);
   background: var(--term-bg);
-  opacity: 0.82;
 }
 
-.pane[data-focused] {
+/* Panes without focus fade their content (title chip and terminal), never the pane's own background, and can also
+   lose most of their colour (a setting). */
+.pane > :is(.pane-title, .pane-terminal) {
+  opacity: var(--inactive-opacity, 0.82);
+}
+
+#panes[data-desaturate] .pane:not([data-focused]) > :is(.pane-title, .pane-terminal) {
+  filter: grayscale(0.8);
+}
+
+.pane[data-focused] > :is(.pane-title, .pane-terminal) {
   opacity: 1;
 }
 
@@ -250,6 +259,22 @@ body {
   left: 0;
   height: 2px;
   background: var(--accent);
+}
+
+/* Highlight on mouseover (a setting): the pane under the pointer undims and gets a faint accent line on its top edge. */
+#panes[data-hover-highlight] .pane:hover > :is(.pane-title, .pane-terminal) {
+  opacity: 1;
+  filter: none;
+}
+
+#panes[data-hover-highlight] .pane:hover:not([data-focused])::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .pane-terminal {

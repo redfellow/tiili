@@ -41,10 +41,27 @@ export interface CursorSettings {
   blink: boolean;
 }
 
+export interface BehaviourSettings {
+  /** The pane under the pointer shows at full strength with a faint accent line. */
+  hoverHighlight: boolean;
+}
+
+export interface InactiveSettings {
+  /** Opacity of a pane's content (title chip and text) while it has no focus, 0.3–1. */
+  opacity: number;
+  /** Inactive content loses most of its colour. */
+  desaturate: boolean;
+}
+
+/** Allowed range of the inactive opacity. */
+export const INACTIVE_OPACITY = { min: 0.3, max: 1, step: 0.01 } as const;
+
 export interface Settings {
   theme: ThemeId;
   font: FontSettings;
   cursor: CursorSettings;
+  behaviour: BehaviourSettings;
+  inactive: InactiveSettings;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -68,6 +85,8 @@ export const DEFAULT_SETTINGS: Settings = {
     letterSpacing: 0,
   },
   cursor: { style: "block", blink: true },
+  behaviour: { hoverHighlight: true },
+  inactive: { opacity: 0.82, desaturate: false },
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
@@ -109,6 +128,8 @@ export function normalize(value: unknown): Settings {
   const font = isRecord(raw.font) ? raw.font : {};
   const defaults = DEFAULT_SETTINGS.font;
   const cursor = isRecord(raw.cursor) ? raw.cursor : {};
+  const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
+  const inactive = isRecord(raw.inactive) ? raw.inactive : {};
   return {
     theme: THEME_IDS.includes(raw.theme as ThemeId) ? (raw.theme as ThemeId) : DEFAULT_SETTINGS.theme,
     font: {
@@ -125,6 +146,17 @@ export function normalize(value: unknown): Settings {
         ? (cursor.style as CursorStyle)
         : DEFAULT_SETTINGS.cursor.style,
       blink: typeof cursor.blink === "boolean" ? cursor.blink : DEFAULT_SETTINGS.cursor.blink,
+    },
+    behaviour: {
+      hoverHighlight:
+        typeof behaviour.hoverHighlight === "boolean"
+          ? behaviour.hoverHighlight
+          : DEFAULT_SETTINGS.behaviour.hoverHighlight,
+    },
+    inactive: {
+      opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
+      desaturate:
+        typeof inactive.desaturate === "boolean" ? inactive.desaturate : DEFAULT_SETTINGS.inactive.desaturate,
     },
   };
 }
