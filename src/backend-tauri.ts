@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { Menu } from "@tauri-apps/api/menu";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Backend } from "./backend";
@@ -8,6 +8,9 @@ import { currentPlatform } from "./keymap";
 
 /** The Tauri app's backend: PTY commands, the clipboard plugin, native menus and the settings file. */
 export function tauriBackend(): Backend {
+  // Listening on this window, not app-wide: events the core sends another window must not reach this one.
+  const listen = <T>(name: string, handler: (event: { payload: T }) => void) =>
+    getCurrentWebviewWindow().listen<T>(name, handler);
   return {
     nativeMenus: currentPlatform() === "macos",
     spawn: (rows, cols, cwd, prompt, onOutput) => {
@@ -52,5 +55,9 @@ export function tauriBackend(): Backend {
       saveState: (state) => invoke("heynote_save_state", { state }),
     },
     closeWindow: () => getCurrentWindow().close(),
+    newWindow: (cwd) => invoke("window_new", { cwd }),
+    claimHeynote: () => invoke<string | null>("heynote_claim"),
+    releaseHeynote: () => invoke("heynote_release"),
+    focusHeynote: (label) => invoke("heynote_focus", { label }),
   };
 }

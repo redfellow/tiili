@@ -165,5 +165,10 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     // The dev server has no files of its own for notes: the browser keeps them.
     notes: localNoteStore(localStorage),
     closeWindow: async () => undefined,
+    // The dev server is one browser page: no other windows, and its Heynote is always its own.
+    newWindow: async () => undefined,
+    claimHeynote: async () => null,
+    releaseHeynote: async () => undefined,
+    focusHeynote: async () => undefined,
   };
 }
