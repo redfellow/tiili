@@ -1,3 +1,4 @@
+// @harvaaja-test-tier: fast
 import { describe, expect, it, vi } from "vitest";
 import { applyNoteChange, localNoteStore, type NoteChange, type NotesChanged } from "./heynoteStore";
 

@@ -201,15 +201,10 @@ export class Panes {
   }
 
   /**
-   * Opens the Heynote pane after the others and focuses it. There is one at most, since every Heynote page keeps
-   * its own copy of the notes: when it is already open, it only takes the focus.
+   * Opens a new Heynote pane after the others and focuses it, however many are open already. The Heynote pages
+   * keep each other in sync through the note store (see `heynote/bridge.js`).
    */
   openHeynote(): void {
-    const open = this.panes.findIndex((pane) => pane.note !== undefined);
-    if (open >= 0) {
-      this.focus(open);
-      return;
-    }
     const { element, chip, host } = this.paneElement();
     const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));

@@ -42,9 +42,13 @@ pub struct NotesChanged {
     pub change: NoteChange,
 }
 
-/// The payload telling every pane that `origin` made `change`.
-pub fn notes_changed(origin: String, change: NoteChange) -> NotesChanged {
-    NotesChanged { origin, change }
+/// The payload telling every pane that `origin` made `change`. A page built before origins were sent passes none;
+/// its change goes out with an empty origin, which every other page takes as someone else's.
+pub fn notes_changed(origin: Option<String>, change: NoteChange) -> NotesChanged {
+    NotesChanged {
+        origin: origin.unwrap_or_default(),
+        change,
+    }
 }
 
 /// Everything the pane needs to start: each note's text by its library path, the library's folders and the
@@ -194,7 +198,7 @@ pub fn heynote_load(app: AppHandle) -> Result<Library, String> {
 /// Tells every window that `origin` made `change`, once `result` shows it succeeded.
 fn broadcast(
     app: &AppHandle,
-    origin: String,
+    origin: Option<String>,
     change: NoteChange,
     result: Result<(), String>,
 ) -> Result<(), String> {
@@ -209,14 +213,14 @@ pub fn heynote_write(
     app: AppHandle,
     path: String,
     content: String,
-    origin: String,
+    origin: Option<String>,
 ) -> Result<(), String> {
     let result = write_in(&heynote_dir(&app)?, &path, &content);
     broadcast(&app, origin, NoteChange::Write { path, content }, result)
 }
 
 #[tauri::command]
-pub fn heynote_remove(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+pub fn heynote_remove(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
     let result = remove_in(&heynote_dir(&app)?, &path);
     broadcast(&app, origin, NoteChange::Remove { path }, result)
 }
@@ -226,20 +230,20 @@ pub fn heynote_move(
     app: AppHandle,
     from: String,
     to: String,
-    origin: String,
+    origin: Option<String>,
 ) -> Result<(), String> {
     let result = move_in(&heynote_dir(&app)?, &from, &to);
     broadcast(&app, origin, NoteChange::Move { from, to }, result)
 }
 
 #[tauri::command]
-pub fn heynote_mkdir(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+pub fn heynote_mkdir(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
     let result = mkdir_in(&heynote_dir(&app)?, &path);
     broadcast(&app, origin, NoteChange::Mkdir { path }, result)
 }
 
 #[tauri::command]
-pub fn heynote_rmdir(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+pub fn heynote_rmdir(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
     let result = rmdir_in(&heynote_dir(&app)?, &path);
     broadcast(&app, origin, NoteChange::Rmdir { path }, result)
 }
@@ -355,9 +359,21 @@ mod tests {
             ),
         ];
         for (change, expected) in cases {
-            let payload = serde_json::to_value(notes_changed(s("pane-1"), change)).unwrap();
+            let payload = serde_json::to_value(notes_changed(Some(s("pane-1")), change)).unwrap();
             assert_eq!(payload, expected);
         }
+    }
+
+    #[test]
+    fn a_change_without_an_origin_goes_out_with_an_empty_one() {
+        let change = NoteChange::Remove {
+            path: String::from("a.txt"),
+        };
+        let payload = serde_json::to_value(notes_changed(None, change)).unwrap();
+        assert_eq!(
+            payload,
+            json!({ "origin": "", "kind": "remove", "path": "a.txt" })
+        );
     }
 
     #[test]

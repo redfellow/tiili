@@ -3,7 +3,8 @@
 ## Approach
 
 - **Rust (`src-tauri/src/notes.rs`)**: each mutating command (`heynote_write`, `_remove`, `_move`, `_mkdir`,
-  `_rmdir`) takes an extra `origin: String` and, after it succeeds, emits `heynote-notes-changed` to the whole app
+  `_rmdir`) takes an extra `origin: Option<String>` (missing from a page built before this change, which then still
+  saves; its changes go out with an empty origin, which every page takes as someone else's) and, after it succeeds, emits `heynote-notes-changed` to the whole app
   (`AppHandle::emit`) with a serde-tagged `NoteChange` payload: `{ kind: "write", path, content }`,
   `{ kind: "remove", path }`, `{ kind: "move", from, to }`, `{ kind: "mkdir" | "rmdir", path }`, plus `origin`.
   Building the payload is a plain function, unit-tested beside the existing `notes.rs` tests.
