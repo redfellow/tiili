@@ -1,3 +1,4 @@
+import type { NoteStore } from "./heynoteStore";
 import type { PaneCwd } from "./paneChip";
 import type { AppIcon } from "./settings";
 
@@ -45,6 +46,8 @@ export interface Backend {
   saveSettings(value: unknown): Promise<void>;
   /** Shows the light or dark app icon (Dock on macOS, window and taskbar elsewhere) for the user's choice. */
   setAppIcon(choice: AppIcon): Promise<void>;
+  /** Where the Heynote pane keeps its notes. */
+  readonly notes: NoteStore;
   /** Closes the window, after its last pane closed. */
   closeWindow(): Promise<void>;
 }

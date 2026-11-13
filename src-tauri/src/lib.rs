@@ -1,6 +1,7 @@
 pub mod app_icon;
 pub mod bridge;
 pub mod cwd;
+pub mod notes;
 pub mod pty;
 pub mod repo;
 pub mod settings;
@@ -225,7 +226,14 @@ pub fn run() {
             pty_cwd,
             settings::settings_load,
             settings::settings_save,
-            app_icon::app_icon_set
+            app_icon::app_icon_set,
+            notes::heynote_load,
+            notes::heynote_write,
+            notes::heynote_remove,
+            notes::heynote_move,
+            notes::heynote_mkdir,
+            notes::heynote_rmdir,
+            notes::heynote_save_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");

@@ -45,6 +45,7 @@ export function handleClipboardKey(
 /**
  * Wires the native Edit menu (where the backend has one) and a right-click menu on every platform to
  * `target`, the focused pane's terminal. The right-click menu's Settings… item calls `openSettings`.
+ * `elsewhere` gets each action first and returns true when it carried it out in a pane without a terminal.
  * Returns the handler for a pane's `contextmenu` event.
  */
 export async function attachClipboardMenus(
@@ -52,8 +53,10 @@ export async function attachClipboardMenus(
   target: () => Terminal | undefined,
   platform: Platform,
   openSettings: () => void,
+  elsewhere: (action: ClipboardAction) => boolean = () => false,
 ): Promise<(event: MouseEvent) => void> {
   const act = (action: ClipboardAction) => {
+    if (elsewhere(action)) return;
     const term = target();
     if (term) runReporting(backend, term, action);
   };
