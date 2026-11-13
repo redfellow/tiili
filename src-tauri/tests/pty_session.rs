@@ -88,7 +88,6 @@ fn typing_reaches_the_shell_and_output_is_shown_then_exit_is_reported() {
 }
 
 /// A fresh folder under the temp folder, for a home or the integration scripts.
-#[cfg(unix)]
 fn temp_dir(name: &str) -> std::path::PathBuf {
     // Tests run in parallel threads of one process, so the process id alone would let them share folders.
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -104,13 +103,12 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 
 /// Starts `shell` with the Classic prompt and a home holding only `rc` (if any) in `rc_name`, and returns what it
 /// printed until `pattern` showed or the timeout passed, and whether it showed. With `then`, once `pattern` showed
-/// it types the command and waits for that pattern too.
-#[cfg(unix)]
+/// it types the command and waits for each of those patterns too.
 fn classic_shell(
     shell: &str,
     rc: Option<(&str, &str)>,
     pattern: &str,
-    then: Option<(&str, &str)>,
+    then: Option<(&str, &[&str])>,
 ) -> (bool, String) {
     let tag = format!(
         "{}-{}",
@@ -144,7 +142,7 @@ fn classic_shell(
         session
             .write(format!("{command}\r").as_bytes())
             .expect("type the command");
-        found = wait_for(&out_rx, &mut seen, next);
+        found = next.iter().all(|p| wait_for(&out_rx, &mut seen, p));
     }
     (found, String::from_utf8_lossy(&seen).into_owned())
 }
@@ -205,8 +203,71 @@ fn classic_zsh_keeps_the_users_history_file() {
         "\x1b[39m@\x1b[32m",
         Some((
             "print -r -- \"hist:${HISTFILE#$HOME/}\"",
-            "\nhist:.zsh_history",
+            &["\nhist:.zsh_history"],
         )),
     );
     assert!(found, "HISTFILE is not the home's .zsh_history: {seen:?}");
+}
+
+/// Folder reported at every prompt: with Classic, zsh and bash, with and without their own prompt, send OSC 7 naming
+/// this machine for `/tmp` before the prompt after `cd /tmp`, and the user's prompt hooks still run.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn folder_reported_at_every_prompt_zsh_and_bash_send_osc7() {
+    const CLASSIC: &str = "\x1b[39m@\x1b[32m";
+    let osc7 = format!("\x1b]7;file://{}/tmp\x07", tiili_lib::cwd::local_hostname());
+    let cases: &[(&str, &str, &str, &str)] = &[
+        (
+            "/bin/zsh",
+            ".zshrc",
+            "PROMPT='mine-zsh> '\nprecmd() { print -n \"hook:$PWD\" }\n",
+            "mine-zsh> ",
+        ),
+        (
+            "/bin/bash",
+            ".bash_profile",
+            "PS1='mine-bash> '\nPROMPT_COMMAND='printf \"hook:%s\" \"$PWD\"'\n",
+            "mine-bash> ",
+        ),
+    ];
+    for &(shell, rc_name, rc, mine) in cases {
+        if !std::path::Path::new(shell).exists() {
+            eprintln!("{shell} is missing; skipped");
+            continue;
+        }
+        let (found, seen) =
+            classic_shell(shell, None, CLASSIC, Some(("cd /tmp", &[osc7.as_str()])));
+        assert!(
+            found,
+            "{shell} with Classic sent no OSC 7 for /tmp: {seen:?}"
+        );
+
+        let (found, seen) = classic_shell(
+            shell,
+            Some((rc_name, rc)),
+            mine,
+            Some(("cd /tmp", &[osc7.as_str(), "hook:/tmp"])),
+        );
+        assert!(
+            found,
+            "{shell} with its own prompt and hook sent no OSC 7 for /tmp or lost its hook: {seen:?}"
+        );
+    }
+}
+
+/// Folder reported at every prompt on Windows: with Classic, PowerShell sends OSC 7 naming this machine and the
+/// drive folder with forward slashes before the prompt after `cd C:\Windows`.
+#[cfg(windows)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn folder_reported_at_every_prompt_powershell_sends_osc7() {
+    let osc7 = format!("]7;file://{}/C:/Windows", tiili_lib::cwd::local_hostname());
+    let (found, seen) = classic_shell(
+        "powershell.exe",
+        None,
+        "]7;file://",
+        Some((r"cd C:\Windows", &[osc7.as_str()])),
+    );
+    assert!(found, "PowerShell sent no OSC 7 for C:\\Windows: {seen:?}");
 }

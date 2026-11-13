@@ -749,6 +749,27 @@ dialog.settings::backdrop {
   font-size: 12px;
 }
 
+/* Remote shells: each snippet read-only in a sunken block, its shell name and Copy button above it. */
+.settings-snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.settings-snippet pre {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: text;
+}
+
 .settings-layout-icon {
   display: flex;
   flex: none;

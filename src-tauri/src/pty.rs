@@ -302,7 +302,9 @@ impl SessionRegistry {
 
     /// Like [`spawn`](Self::spawn), and with `on_cwd` follows the shell's working directory and
     /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
-    /// on macOS and Linux, the shell process's working directory about once a second. With
+    /// on macOS and Linux, the shell process's working directory about once a second. An OSC 7
+    /// naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
+    /// the shell is back in front. With
     /// `on_command` it follows what runs in the pane: titles from OSC 0 and 2 and, on macOS and
     /// Linux, the foreground process about once a second.
     #[allow(clippy::too_many_arguments)]
@@ -343,7 +345,7 @@ impl SessionRegistry {
             cols,
             Box::new(move |data| {
                 if let Some(Ok(mut tracker)) = output_tracker.as_ref().map(|t| t.lock()) {
-                    tracker.feed_output(data);
+                    tracker.feed_output(data, || output_reader.get().and_then(|r| r.read()));
                 }
                 if let Some(Ok(mut commands)) = output_commands.as_ref().map(|t| t.lock()) {
                     commands.feed_output(data, || output_reader.get().and_then(|r| r.read()));
@@ -363,13 +365,25 @@ impl SessionRegistry {
                 .filter(|d| d.is_dir())
                 .map(Path::to_path_buf)
                 .or_else(home_dir);
-            if let (Some(dir), Ok(mut t)) = (start, tracker.lock()) {
-                t.report_polled(dir);
+            let pid = session.pid();
+            if let Ok(mut t) = tracker.lock() {
+                // The shell leads its session, so its process group id is its pid.
+                if let Some(pgid) = pid.and_then(|p| i32::try_from(p).ok()) {
+                    t.set_shell_pgid(pgid);
+                }
+                if let Some(dir) = start {
+                    t.report_polled(dir);
+                }
             }
-            if let Some(pid) = session.pid() {
+            if let Some(pid) = pid {
+                let reader = session.foreground_reader();
                 ticks.push(Box::new(move || {
-                    if let Some(dir) = crate::cwd::process_cwd(pid) {
-                        if let Ok(mut tracker) = tracker.lock() {
+                    // Who is in front first: a remote report ends once the shell is back there.
+                    let foreground = reader.read();
+                    let dir = crate::cwd::process_cwd(pid);
+                    if let Ok(mut tracker) = tracker.lock() {
+                        tracker.report_foreground(foreground.as_ref());
+                        if let Some(dir) = dir {
                             tracker.report_polled(dir);
                         }
                     }

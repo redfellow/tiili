@@ -51,6 +51,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     },
     save: (next) => backend.saveSettings(next),
     onClose: () => panes.focusCurrent(),
+    copy: (text) => backend.writeClipboard(text),
   });
   adoptSettings = (next) => dialog.adopt(next);
 

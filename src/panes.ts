@@ -27,9 +27,9 @@ import { openHeynote, type HeynoteFrame } from "./heynotePane";
 import {
   chipLabel,
   createPaneChip,
-  folderName,
   PANE_COMMAND_EVENT,
   PANE_CWD_EVENT,
+  placeLabel,
   showPaneChip,
   type PaneCommand,
   type PaneCwd,
@@ -37,7 +37,7 @@ import {
 import type { Settings } from "./settings";
 import { zoomedSize } from "./responsive";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
-import { TintAssigner, tintCounts } from "./tints";
+import { TintAssigner, tintCounts, tintKey } from "./tints";
 
 /** A pane can't be resized below this many columns and rows of its terminal. */
 const MIN_COLS = 20;
@@ -368,18 +368,18 @@ export class Panes {
 
   /**
    * Shows the pane's repository in its tint, or its folder in the neutral chip outside a repository, followed by
-   * what runs in the pane.
+   * what runs in the pane. A remote pane shows `host:place`, tinted by its host and repository, else by its host.
    */
   private showPlace(pane: Pane, place: PaneCwd): void {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
-    if (place.repo) {
-      const others = tintCounts(this.panes.filter((p) => p !== pane).map((p) => p.tint));
-      pane.tint = this.tints.assign(place.repo.root, others);
-      showPaneChip(pane.element, pane.chip, chipLabel(place.repo.name, command), pane.tint);
-    } else {
+    const key = tintKey(place);
+    if (key === undefined) {
       pane.tint = undefined;
-      showPaneChip(pane.element, pane.chip, chipLabel(folderName(place.cwd), command));
+    } else {
+      const others = tintCounts(this.panes.filter((p) => p !== pane).map((p) => p.tint));
+      pane.tint = this.tints.assign(key, others);
     }
+    showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
   }
 
   private remove(pane: Pane): void {

@@ -99,3 +99,50 @@ fn change_directory_into_a_repository_tracked_root_follows() {
     registry.close(id).expect("close");
     let _ = std::fs::remove_dir_all(repo_a.parent().expect("parent"));
 }
+
+/// Exit ssh on macOS or Linux: a program the shell runs reports a remote folder and repository, then exits; the
+/// pane is remote while it runs and follows its local folder and repository again once the shell is back in front.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn exit_ssh_on_macos_or_linux_pane_is_local_again() {
+    let repo = temp_dir("local");
+    git_init(&repo);
+
+    let (tx, rx) = mpsc::channel();
+    let registry = SessionRegistry::new();
+    let id = registry
+        .spawn_tracked(
+            Some(&repo),
+            "off",
+            24,
+            80,
+            Box::new(|_, _| {}),
+            Some(Box::new(move |_, report| {
+                let _ = tx.send(report.clone());
+            })),
+            None,
+            Box::new(|_, _| {}),
+        )
+        .expect("shell starts");
+    wait_for(&rx, |r| root_of(r) == Some(&repo) && r.host.is_none());
+
+    // A child in its own process group, standing in for ssh: `tiili_repo` is the base64 of `/srv/api`.
+    registry
+        .write(
+            id,
+            b"sh -c 'printf \"\\033]7;file://build-box/srv/api/src\\007\\033]1337;SetUserVar=tiili_repo=L3Nydi9hcGk=\\007\"; sleep 3'\r",
+        )
+        .expect("write");
+    let remote = wait_for(&rx, |r| {
+        r.host.as_deref() == Some("build-box") && r.repo.is_some()
+    });
+    assert_eq!(remote.cwd, Path::new("/srv/api/src"));
+    assert_eq!(remote.repo.expect("remote repo").name, "api");
+
+    let back = wait_for(&rx, |r| r.host.is_none());
+    assert_eq!(root_of(&back), Some(repo.as_path()));
+
+    registry.close(id).expect("close");
+    let _ = std::fs::remove_dir_all(repo.parent().expect("parent"));
+}

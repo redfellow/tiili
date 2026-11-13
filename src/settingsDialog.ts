@@ -4,6 +4,7 @@ import {
   APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
+import { REMOTE_SNIPPETS } from "./remoteSnippets";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 
@@ -30,6 +31,8 @@ export interface SettingsDialogOptions {
   save: (settings: Settings) => Promise<void>;
   /** Called after the dialogue closes, e.g. to give the terminal its focus back. */
   onClose: () => void;
+  /** Puts text on the clipboard, for the Remote shells snippets' Copy buttons. */
+  copy: (text: string) => Promise<void>;
 }
 
 export interface SettingsDialog {
@@ -293,7 +296,7 @@ function promptList(onSelect: () => void, locked: () => boolean) {
 
 /**
  * Builds the settings dialogue into `document.body`: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab
- * (Font) and a Behaviour tab (Tiling, Responsive text, Panes, Startup), with Reset to defaults, Cancel and Save.
+ * (Font) and a Behaviour tab (Tiling, Responsive text, Panes, Remote shells, Startup), with Reset to defaults, Cancel and Save.
  * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
@@ -394,6 +397,23 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("span", {}, "Highlight the terminal under the mouse")),
   );
 
+  // Nothing here is saved: each snippet is only shown and copied.
+  const remoteFields = element("fieldset", {},
+    element("legend", {}, "Remote shells"),
+    element("p", { className: "settings-hint" },
+      "Add the snippet for your shell to a remote machine's shell startup file, and a pane that connects there shows " +
+      "that machine's folder and repository. tmux and screen on the remote machine hide it."),
+    ...REMOTE_SNIPPETS.map(({ shell, text }) => {
+      const label = `Copy the ${shell} snippet`;
+      const copy = element("button", { type: "button", className: "settings-copy", title: label }, "Copy");
+      copy.setAttribute("aria-label", label);
+      copy.addEventListener("click", () => void options.copy(text).catch(() => {}));
+      return element("div", { className: "settings-snippet" },
+        element("div", { className: "settings-snippet-head" }, element("span", {}, shell), copy),
+        element("pre", { tabIndex: 0 }, text));
+    }),
+  );
+
   const startupFields = element("fieldset", {},
     element("legend", {}, "Startup"),
     element("label", { className: "settings-check" }, startupSplash,
@@ -416,7 +436,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   );
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
-    tilingFields, responsiveFields, paneFields, startupFields);
+    tilingFields, responsiveFields, paneFields, remoteFields, startupFields);
   const panels = [stylePanel, typography, behaviour];
   const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);

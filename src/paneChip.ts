@@ -1,8 +1,12 @@
-/** The `pane-cwd` event's payload: where session `paneId`'s shell is, and its repository (`null` outside any). */
+/**
+ * The `pane-cwd` event's payload: where session `paneId`'s shell is, its repository (`null` outside any) and the
+ * host a remote pane is on (`null` for this machine).
+ */
 export interface PaneCwd {
   paneId: number;
   cwd: string;
   repo: { root: string; name: string } | null;
+  host: string | null;
 }
 
 /** Event sent when a shell's working directory or repository changes. */
@@ -28,6 +32,15 @@ export function folderName(path: string): string {
   // A drive root such as `C:\` names no folder either.
   if (parts.length === 0 || (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0]))) return path;
   return parts[parts.length - 1];
+}
+
+/**
+ * The chip's place: the repository name, else the folder name; a remote pane's is prefixed with its host, as
+ * `host:name`.
+ */
+export function placeLabel(place: Pick<PaneCwd, "cwd" | "repo" | "host">): string {
+  const name = place.repo ? place.repo.name : folderName(place.cwd);
+  return place.host === null ? name : `${place.host}:${name}`;
 }
 
 /** Creates a pane's title chip, empty until the pane's folder is known. */
