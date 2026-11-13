@@ -2,7 +2,9 @@
 //! own settings and tab state in `heynote/state.json`.
 //!
 //! The pane loads the whole library once when it opens and then writes each change through these commands.
-//! Every path comes from the pane, so each one is checked to stay inside the notes folder.
+//! Every path comes from the pane, so each one is checked to stay inside the notes folder. Each change that
+//! succeeds is sent to every window as `heynote-notes-changed`, so the other Heynote panes follow it; the pane
+//! that made it knows it by the `origin` it passed.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,11 +14,38 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const DIR_NAME: &str = "heynote";
 const NOTES_DIR: &str = "notes";
 const STATE_FILE: &str = "state.json";
+
+/// The event every window gets after a Heynote pane changed the notes.
+pub const NOTES_CHANGED_EVENT: &str = "heynote-notes-changed";
+
+/// One change to the notes, as the other Heynote panes apply it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum NoteChange {
+    Write { path: String, content: String },
+    Remove { path: String },
+    Move { from: String, to: String },
+    Mkdir { path: String },
+    Rmdir { path: String },
+}
+
+/// The `heynote-notes-changed` payload: the change and the page that made it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct NotesChanged {
+    pub origin: String,
+    #[serde(flatten)]
+    pub change: NoteChange,
+}
+
+/// The payload telling every pane that `origin` made `change`.
+pub fn notes_changed(origin: String, change: NoteChange) -> NotesChanged {
+    NotesChanged { origin, change }
+}
 
 /// Everything the pane needs to start: each note's text by its library path, the library's folders and the
 /// pane's saved state (settings, open tabs, theme).
@@ -162,29 +191,57 @@ pub fn heynote_load(app: AppHandle) -> Result<Library, String> {
     Ok(load_from(&heynote_dir(&app)?))
 }
 
-#[tauri::command]
-pub fn heynote_write(app: AppHandle, path: String, content: String) -> Result<(), String> {
-    write_in(&heynote_dir(&app)?, &path, &content)
+/// Tells every window that `origin` made `change`, once `result` shows it succeeded.
+fn broadcast(
+    app: &AppHandle,
+    origin: String,
+    change: NoteChange,
+    result: Result<(), String>,
+) -> Result<(), String> {
+    result?;
+    // A window that misses the event still sees the change the next time Heynote opens.
+    let _ = app.emit(NOTES_CHANGED_EVENT, notes_changed(origin, change));
+    Ok(())
 }
 
 #[tauri::command]
-pub fn heynote_remove(app: AppHandle, path: String) -> Result<(), String> {
-    remove_in(&heynote_dir(&app)?, &path)
+pub fn heynote_write(
+    app: AppHandle,
+    path: String,
+    content: String,
+    origin: String,
+) -> Result<(), String> {
+    let result = write_in(&heynote_dir(&app)?, &path, &content);
+    broadcast(&app, origin, NoteChange::Write { path, content }, result)
 }
 
 #[tauri::command]
-pub fn heynote_move(app: AppHandle, from: String, to: String) -> Result<(), String> {
-    move_in(&heynote_dir(&app)?, &from, &to)
+pub fn heynote_remove(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+    let result = remove_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Remove { path }, result)
 }
 
 #[tauri::command]
-pub fn heynote_mkdir(app: AppHandle, path: String) -> Result<(), String> {
-    mkdir_in(&heynote_dir(&app)?, &path)
+pub fn heynote_move(
+    app: AppHandle,
+    from: String,
+    to: String,
+    origin: String,
+) -> Result<(), String> {
+    let result = move_in(&heynote_dir(&app)?, &from, &to);
+    broadcast(&app, origin, NoteChange::Move { from, to }, result)
 }
 
 #[tauri::command]
-pub fn heynote_rmdir(app: AppHandle, path: String) -> Result<(), String> {
-    rmdir_in(&heynote_dir(&app)?, &path)
+pub fn heynote_mkdir(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+    let result = mkdir_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Mkdir { path }, result)
+}
+
+#[tauri::command]
+pub fn heynote_rmdir(app: AppHandle, path: String, origin: String) -> Result<(), String> {
+    let result = rmdir_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Rmdir { path }, result)
 }
 
 #[tauri::command]
@@ -264,6 +321,43 @@ mod tests {
         let library = load_from(&dir.0);
         assert_eq!(library.notes.keys().collect::<Vec<_>>(), vec!["sub/b.txt"]);
         assert_eq!(library.dirs, vec!["sub".to_string()]);
+    }
+
+    #[test]
+    fn the_change_payload_names_its_kind_and_origin() {
+        let s = String::from;
+        let cases = [
+            (
+                NoteChange::Write {
+                    path: s("a.txt"),
+                    content: s("hi"),
+                },
+                json!({ "origin": "pane-1", "kind": "write", "path": "a.txt", "content": "hi" }),
+            ),
+            (
+                NoteChange::Remove { path: s("a.txt") },
+                json!({ "origin": "pane-1", "kind": "remove", "path": "a.txt" }),
+            ),
+            (
+                NoteChange::Move {
+                    from: s("a.txt"),
+                    to: s("work/b.txt"),
+                },
+                json!({ "origin": "pane-1", "kind": "move", "from": "a.txt", "to": "work/b.txt" }),
+            ),
+            (
+                NoteChange::Mkdir { path: s("work") },
+                json!({ "origin": "pane-1", "kind": "mkdir", "path": "work" }),
+            ),
+            (
+                NoteChange::Rmdir { path: s("work") },
+                json!({ "origin": "pane-1", "kind": "rmdir", "path": "work" }),
+            ),
+        ];
+        for (change, expected) in cases {
+            let payload = serde_json::to_value(notes_changed(s("pane-1"), change)).unwrap();
+            assert_eq!(payload, expected);
+        }
     }
 
     #[test]
