@@ -65,9 +65,18 @@ fn same(a: &[u8], b: &[u8]) -> bool {
     a.iter().zip(b).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
 }
 
+/// What an accepted handshake asks for: the terminal's size and the shell prompt chosen in Settings.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Handshake {
+    pub rows: u16,
+    pub cols: u16,
+    /// One of [`PROMPTS`](crate::shell_integration::PROMPTS), else `off`.
+    pub prompt: String,
+}
+
 /// Checks a handshake's `path_and_query` against this run's `token` and returns the terminal's
-/// `(rows, cols)` from the query.
-pub fn check_request(path_and_query: &str, token: &str) -> Result<(u16, u16), Refusal> {
+/// size and prompt from the query; a missing or unknown prompt is `off`.
+pub fn check_request(path_and_query: &str, token: &str) -> Result<Handshake, Refusal> {
     let (path, query) = path_and_query
         .split_once('?')
         .unwrap_or((path_and_query, ""));
@@ -90,8 +99,12 @@ pub fn check_request(path_and_query: &str, token: &str) -> Result<(u16, u16), Re
             .and_then(|v| v.parse::<u16>().ok())
             .filter(|n| *n > 0)
     };
+    let prompt = param("prompt")
+        .filter(|p| crate::shell_integration::PROMPTS.contains(p))
+        .unwrap_or(crate::shell_integration::PROMPT_OFF)
+        .to_string();
     match (size("rows"), size("cols")) {
-        (Some(rows), Some(cols)) => Ok((rows, cols)),
+        (Some(rows), Some(cols)) => Ok(Handshake { rows, cols, prompt }),
         _ => Err(Refusal::BadSize),
     }
 }
@@ -132,12 +145,34 @@ mod tests {
 
     #[test]
     fn wrong_token_and_bad_requests_are_refused() {
-        type Case = (String, Result<(u16, u16), Refusal>);
+        type Case = (String, Result<Handshake, Refusal>);
+        let ok = |rows, cols, prompt: &str| {
+            Ok(Handshake {
+                rows,
+                cols,
+                prompt: prompt.into(),
+            })
+        };
         let cases: &[Case] = &[
-            (format!("/pty?rows=24&cols=80&token={TOKEN}"), Ok((24, 80))),
+            (
+                format!("/pty?rows=24&cols=80&token={TOKEN}"),
+                ok(24, 80, "off"),
+            ),
             (
                 format!("/pty?token={TOKEN}&cols=100&rows=30"),
-                Ok((30, 100)),
+                ok(30, 100, "off"),
+            ),
+            (
+                format!("/pty?rows=24&cols=80&prompt=classic&token={TOKEN}"),
+                ok(24, 80, "classic"),
+            ),
+            (
+                format!("/pty?rows=24&cols=80&prompt=tiili&token={TOKEN}"),
+                ok(24, 80, "tiili"),
+            ),
+            (
+                format!("/pty?rows=24&cols=80&prompt=rm%20-rf&token={TOKEN}"),
+                ok(24, 80, "off"),
             ),
             ("/pty?rows=24&cols=80".into(), Err(Refusal::BadToken)),
             (

@@ -653,6 +653,10 @@ dialog.settings::backdrop {
   background: var(--bg);
 }
 
+.settings-list-whole {
+  max-height: none;
+}
+
 .settings-list-heading {
   padding: var(--space-2) var(--space-2) var(--space-1) 20px;
   color: var(--muted);
@@ -753,6 +757,28 @@ dialog.settings::backdrop {
 
 .settings-option[aria-selected="true"] .settings-layout-icon {
   color: var(--fg);
+}
+
+/* A row whose prompt preview takes two lines. */
+.settings-option-tall {
+  height: auto;
+  min-height: 28px;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+/* A prompt drawn in the selected theme's terminal ground and ANSI colours, one line per block. */
+.settings-prompt-preview {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-brick);
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: pre;
 }
 
 .settings-default {

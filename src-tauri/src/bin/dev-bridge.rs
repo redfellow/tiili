@@ -40,7 +40,7 @@ fn is_timeout(err: &Error) -> bool {
 
 /// Runs one connection: handshake, shell, and the page's messages until either side ends.
 fn serve(stream: TcpStream, token: &str) -> io::Result<()> {
-    let mut size = None;
+    let mut handshake = None;
     // tungstenite's handshake callback fixes the error type.
     #[allow(clippy::result_large_err)]
     let check = |request: &Request, response: Response| {
@@ -50,8 +50,8 @@ fn serve(stream: TcpStream, token: &str) -> io::Result<()> {
             .map(|p| p.as_str())
             .unwrap_or("");
         match bridge::check_request(path, token) {
-            Ok(rows_cols) => {
-                size = Some(rows_cols);
+            Ok(accepted) => {
+                handshake = Some(accepted);
                 Ok(response)
             }
             Err(Refusal::WrongPath) => Err(refuse(StatusCode::NOT_FOUND, "not found")),
@@ -60,7 +60,7 @@ fn serve(stream: TcpStream, token: &str) -> io::Result<()> {
         }
     };
     let ws = tungstenite::accept_hdr(stream, check).map_err(|e| io::Error::other(e.to_string()))?;
-    let Some((rows, cols)) = size else {
+    let Some(bridge::Handshake { rows, cols, prompt }) = handshake else {
         return Ok(());
     };
     ws.get_ref().set_read_timeout(Some(READ_SLICE))?;
@@ -71,6 +71,7 @@ fn serve(stream: TcpStream, token: &str) -> io::Result<()> {
     let on_exit_socket = Arc::clone(&socket);
     let on_exit_flag = Arc::clone(&exited);
     let session = PtySession::spawn(
+        &prompt,
         rows,
         cols,
         Box::new(move |data| {

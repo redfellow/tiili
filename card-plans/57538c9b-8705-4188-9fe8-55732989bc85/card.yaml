@@ -1,0 +1,17 @@
+format: 1
+slug: on-hold-cargo-test-host
+title: "On hold: cargo-test-host"
+x-harvaaja-card: 57538c9b-8705-4188-9fe8-55732989bc85
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: 'Test-only fix: two host tests in pty_session.rs share temp folders
+    (same pid + tag "zsh-false") and race when run in parallel; no behaviour or
+    contract changes.'
+  citations:
+    - src-tauri/tests/pty_session.rs:91-97 temp_dir keyed only by pid and name
+    - src-tauri/tests/pty_session.rs:109-119 classic_shell tag shell-rc.is_some()
+  revision: b4796e8f-49a9-4fef-85de-3ffe49838eb7

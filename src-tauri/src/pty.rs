@@ -67,6 +67,15 @@ fn size(rows: u16, cols: u16) -> PtySize {
     }
 }
 
+/// What every shell tiili starts is told about the terminal: 256 colours in `TERM`, 24-bit colour in
+/// `COLORTERM`, and which terminal this is.
+pub fn set_colour_env(cmd: &mut CommandBuilder) {
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "tiili");
+    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+}
+
 fn to_io(err: impl std::fmt::Display) -> io::Error {
     io::Error::other(err.to_string())
 }
@@ -76,22 +85,37 @@ fn gone() -> io::Error {
 }
 
 impl PtySession {
-    /// Starts the user's default shell (`$SHELL` or `%COMSPEC%`) with `TERM=xterm-256color`.
-    pub fn spawn(rows: u16, cols: u16, on_output: OutputFn, on_exit: ExitFn) -> io::Result<Self> {
-        Self::spawn_in(None, rows, cols, on_output, on_exit)
-    }
-
-    /// Starts the user's default shell in `cwd`. Without `cwd`, or when it is not a folder, the
-    /// shell starts in the home folder.
-    pub fn spawn_in(
-        cwd: Option<&Path>,
+    /// Starts the user's default shell (`$SHELL` or `%COMSPEC%`) with `prompt` (see [`spawn_in`](Self::spawn_in)).
+    pub fn spawn(
+        prompt: &str,
         rows: u16,
         cols: u16,
         on_output: OutputFn,
         on_exit: ExitFn,
     ) -> io::Result<Self> {
-        let mut cmd = CommandBuilder::new_default_prog();
-        cmd.env("TERM", "xterm-256color");
+        Self::spawn_in(None, prompt, rows, cols, on_output, on_exit)
+    }
+
+    /// Starts the user's default shell in `cwd`. Without `cwd`, or when it is not a folder, the
+    /// shell starts in the home folder. With a `prompt` other than `off`, zsh, bash and PowerShell
+    /// start through tiili's shell integration, which sets that prompt where the user's own startup
+    /// files left the default one. Every shell gets `TERM=xterm-256color`, `COLORTERM=truecolor`,
+    /// `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
+    pub fn spawn_in(
+        cwd: Option<&Path>,
+        prompt: &str,
+        rows: u16,
+        cols: u16,
+        on_output: OutputFn,
+        on_exit: ExitFn,
+    ) -> io::Result<Self> {
+        let dir = if prompt == crate::shell_integration::PROMPT_OFF {
+            None
+        } else {
+            crate::shell_integration::default_dir()
+        };
+        let mut cmd = crate::shell_integration::shell_command(prompt, dir.as_deref());
+        set_colour_env(&mut cmd);
         // portable-pty starts the default shell in the home folder when no cwd is set or the
         // given one is not a folder.
         if let Some(dir) = cwd {
@@ -262,16 +286,18 @@ impl SessionRegistry {
         Self::default()
     }
 
-    /// Starts a default shell in `cwd` (home folder when `None` or unreadable) and returns its id.
+    /// Starts a default shell in `cwd` (home folder when `None` or unreadable) with `prompt` (see
+    /// [`PtySession::spawn_in`]) and returns its id.
     pub fn spawn(
         &self,
         cwd: Option<&Path>,
+        prompt: &str,
         rows: u16,
         cols: u16,
         on_output: SessionOutputFn,
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
-        self.spawn_tracked(cwd, rows, cols, on_output, None, None, on_exit)
+        self.spawn_tracked(cwd, prompt, rows, cols, on_output, None, None, on_exit)
     }
 
     /// Like [`spawn`](Self::spawn), and with `on_cwd` follows the shell's working directory and
@@ -283,6 +309,7 @@ impl SessionRegistry {
     pub fn spawn_tracked(
         &self,
         cwd: Option<&Path>,
+        prompt: &str,
         rows: u16,
         cols: u16,
         mut on_output: SessionOutputFn,
@@ -311,6 +338,7 @@ impl SessionRegistry {
         let exit_alive = Arc::clone(&alive);
         let session = PtySession::spawn_in(
             cwd,
+            prompt,
             rows,
             cols,
             Box::new(move |data| {

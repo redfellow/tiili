@@ -1,6 +1,21 @@
 // @harvaaja-test-tier: fast
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { selectBackend, type BackendKind } from "./backend";
+import { tauriBackend } from "./backend-tauri";
+import { PROMPT_IDS } from "./settings";
+
+const invoke = vi.hoisted(() => vi.fn<(command: string, args?: unknown) => Promise<unknown>>(async () => 1));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke,
+  Channel: class {
+    onmessage: ((bytes: number[]) => void) | null = null;
+  },
+}));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
+vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: vi.fn() } }));
+vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
 
 describe("Backend selection: Tauri internals pick the Tauri backend, otherwise the WebSocket one", () => {
   const cases: [string, object, BackendKind][] = [
@@ -11,5 +26,16 @@ describe("Backend selection: Tauri internals pick the Tauri backend, otherwise t
   ];
   it.each(cases)("%s", (_name, win, kind) => {
     expect(selectBackend(win)).toBe(kind);
+  });
+});
+
+describe("Tauri backend", () => {
+  it.each(PROMPT_IDS)("New panes use the choice: pty_spawn gets prompt %s", async (prompt) => {
+    invoke.mockClear();
+    await expect(tauriBackend().spawn(24, 80, "/tmp", prompt, () => undefined)).resolves.toBe(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const [command, args] = invoke.mock.calls[0];
+    expect(command).toBe("pty_spawn");
+    expect(args).toMatchObject({ rows: 24, cols: 80, cwd: "/tmp", prompt });
   });
 });

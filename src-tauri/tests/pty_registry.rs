@@ -45,6 +45,7 @@ fn spawn(
     registry
         .spawn(
             cwd,
+            "off",
             24,
             80,
             Box::new(move |id, data| {

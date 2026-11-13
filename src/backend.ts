@@ -1,6 +1,6 @@
 import type { NoteStore } from "./heynoteStore";
 import type { PaneCommand, PaneCwd } from "./paneChip";
-import type { AppIcon } from "./settings";
+import type { AppIcon, PromptId } from "./settings";
 
 /** Identifies one shell session of a backend. */
 export type SessionId = number;
@@ -24,8 +24,17 @@ export interface AppEvents {
 export interface Backend {
   /** True when native menus (the macOS menu bar) carry out ⌘ shortcuts, so the page must not act on them too. */
   readonly nativeMenus: boolean;
-  /** Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent); its output goes to `onOutput`. */
-  spawn(rows: number, cols: number, cwd: string | undefined, onOutput: (bytes: Uint8Array) => void): Promise<SessionId>;
+  /**
+   * Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own
+   * config leaves the shell's default one; its output goes to `onOutput`.
+   */
+  spawn(
+    rows: number,
+    cols: number,
+    cwd: string | undefined,
+    prompt: PromptId,
+    onOutput: (bytes: Uint8Array) => void,
+  ): Promise<SessionId>;
   /** Sends typed input to session `id`'s shell. */
   write(id: SessionId, data: string): Promise<void>;
   /** Tells session `id`'s shell its terminal now has `rows` x `cols`. */

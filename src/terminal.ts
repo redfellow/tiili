@@ -146,7 +146,7 @@ export async function openTerminal(
   };
 
   const spawn = async (dir?: string) => {
-    session = await backend.spawn(term.rows, term.cols, dir, (bytes) => term.write(bytes));
+    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes));
     running = true;
     onSession(session);
   };
