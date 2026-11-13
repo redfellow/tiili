@@ -90,7 +90,13 @@ fn typing_reaches_the_shell_and_output_is_shown_then_exit_is_reported() {
 /// A fresh folder under the temp folder, for a home or the integration scripts.
 #[cfg(unix)]
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("tiili-prompt-{}-{name}", std::process::id()));
+    // Tests run in parallel threads of one process, so the process id alone would let them share folders.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!(
+        "tiili-prompt-{}-{unique}-{name}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp folder");
     dir
