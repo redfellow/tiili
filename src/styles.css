@@ -277,6 +277,11 @@ body {
   background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
+/* No overview ruler track beside the scrollbar: it only draws a hairline border, as we use no decorations. */
+.xterm-decoration-overview-ruler {
+  display: none;
+}
+
 .pane-terminal {
   flex: 1 1 0;
   min-height: 0;
@@ -331,9 +336,38 @@ body {
 }
 
 .pane[data-drop-target] {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
   opacity: 1;
+}
+
+/* While a pane is dragged: the source dims, a label follows the pointer, and the cursor says "grabbing" everywhere. */
+.pane[data-drag-source] {
+  opacity: 0.45;
+}
+
+html[data-pane-dragging],
+html[data-pane-dragging] * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.pane-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  max-width: 220px;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-brick);
+  background: var(--accent);
+  box-shadow: 0 6px 18px color-mix(in srgb, #000 40%, transparent);
+  color: var(--on-accent);
+  font: 500 12px/24px var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Dividers are the mortar gaps between tracks; dragging one resizes the tracks on both sides. */
@@ -442,6 +476,11 @@ dialog.settings::backdrop {
   gap: var(--space-3);
 }
 
+.settings-field-stacked {
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
 .settings-check {
   display: flex;
   align-items: center;
@@ -532,6 +571,11 @@ dialog.settings::backdrop {
   box-shadow: 0 0 0 1px var(--focus);
 }
 
+.settings-range input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .settings-range output {
   min-width: 4ch;
   text-align: right;
@@ -601,7 +645,7 @@ dialog.settings::backdrop {
 }
 
 .settings-list-heading {
-  padding: var(--space-2) var(--space-2) var(--space-1);
+  padding: var(--space-2) var(--space-2) var(--space-1) 20px;
   color: var(--muted);
   font: 500 11px/16px var(--font-mono);
   text-transform: uppercase;
@@ -614,12 +658,13 @@ dialog.settings::backdrop {
 }
 
 .settings-option {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   box-sizing: border-box;
   height: 28px;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-2) 0 20px;
   border-radius: var(--radius-control);
   white-space: nowrap;
   cursor: pointer;
@@ -629,10 +674,76 @@ dialog.settings::backdrop {
   background: color-mix(in srgb, var(--fg) 7%, transparent);
 }
 
-/* The selected row is marked by a bar in the focus colour and a light tint, not a full-width fill. */
+/* The selected row is marked by a small upright brick in the focus colour, plus a light tint. */
 .settings-option[aria-selected="true"] {
   background: color-mix(in srgb, var(--fg) 11%, transparent);
-  box-shadow: inset 3px 0 0 var(--focus);
+}
+
+.settings-option[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--space-2);
+  width: 7px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--focus);
+  transform: translateY(-50%);
+}
+
+/* Tabs: Appearance and Behaviour, the selected one underlined in the focus colour. */
+.settings-tabs {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: calc(-1 * var(--space-2));
+  border-bottom: 1px solid var(--line);
+}
+
+.settings .settings-tab {
+  height: 34px;
+  margin-bottom: -1px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.settings .settings-tab:hover {
+  background: none;
+  color: var(--fg);
+}
+
+.settings .settings-tab[aria-selected="true"] {
+  border-bottom-color: var(--focus);
+  color: var(--fg);
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-layout-icon {
+  display: flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.settings-option[aria-selected="true"] .settings-layout-icon {
+  color: var(--fg);
 }
 
 .settings-default {
