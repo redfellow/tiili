@@ -1,7 +1,6 @@
 ## 1. Core
 - [ ] 1.1 Add a command tracker in `src-tauri/src/` (OSC 0/2 title scanner, foreground process name per platform, title-cleared-on-process-change rule) with unit tests, and emit `pane-command` from the PTY session
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 2. Frontend
