@@ -7,6 +7,9 @@
 //
 // Builds are unsigned unless the signing environment variables in docs/packaging.md are set.
 // Extra arguments are passed on to `tauri build`.
+//
+// Cargo runs with --no-default-features, which leaves out the dev-only dev-bridge binary: Tauri's bundler puts every
+// binary of the package into the installers.
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +20,11 @@ const ARGS_BY_PLATFORM = {
   linux: ["--bundles", "appimage,deb"],
 };
 
+/** The extra arguments with --no-default-features added for cargo, after a `--` they may already hold. */
+function withCargoArgs(extra) {
+  return extra.includes("--") ? [...extra, "--no-default-features"] : [...extra, "--", "--no-default-features"];
+}
+
 const platformArgs = ARGS_BY_PLATFORM[process.platform];
 if (!platformArgs) {
   console.error(`npm run bundle: no installers are defined for platform "${process.platform}".`);
@@ -24,7 +32,7 @@ if (!platformArgs) {
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const result = spawnSync("npx", ["tauri", "build", ...platformArgs, ...process.argv.slice(2)], {
+const result = spawnSync("npx", ["tauri", "build", ...platformArgs, ...withCargoArgs(process.argv.slice(2))], {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",

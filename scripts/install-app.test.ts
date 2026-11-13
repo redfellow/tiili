@@ -20,7 +20,7 @@ describe("install-app", () => {
   });
 
   it("builds only the host-architecture .app", () => {
-    expect(buildArgs()).toEqual(["tauri", "build", "--bundles", "app"]);
+    expect(buildArgs()).toEqual(["tauri", "build", "--bundles", "app", "--", "--no-default-features"]);
     expect(builtAppPath("/repo")).toBe("/repo/src-tauri/target/release/bundle/macos/tiili.app");
   });
 });
