@@ -79,7 +79,9 @@ fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant) {
         use objc2_app_kit::{NSApplication, NSImage};
         use objc2_foundation::NSData;
 
-        let Some(mtm) = MainThreadMarker::new() else { return };
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
         let data = NSData::with_bytes(variant.png());
         if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
             unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
@@ -89,7 +91,9 @@ fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant) {
 
 #[cfg(not(target_os = "macos"))]
 fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant) {
-    let Ok(image) = tauri::image::Image::from_bytes(variant.png()) else { return };
+    let Ok(image) = tauri::image::Image::from_bytes(variant.png()) else {
+        return;
+    };
     for window in app.webview_windows().values() {
         let _ = window.set_icon(image.clone());
     }
@@ -97,7 +101,11 @@ fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant) {
 
 /// Stores the user's icon choice and shows the matching icon.
 #[tauri::command]
-pub fn app_icon_set<R: Runtime>(app: AppHandle<R>, state: State<'_, IconState>, choice: IconChoice) {
+pub fn app_icon_set<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, IconState>,
+    choice: IconChoice,
+) {
     *state.0.lock().unwrap_or_else(|e| e.into_inner()) = choice;
     apply(&app);
 }
@@ -109,21 +117,36 @@ mod tests {
     #[test]
     fn system_choice_follows_the_os_everywhere() {
         for macos in [true, false] {
-            assert_eq!(resolve(IconChoice::System, Theme::Light, macos), Variant::Light);
-            assert_eq!(resolve(IconChoice::System, Theme::Dark, macos), Variant::Dark);
+            assert_eq!(
+                resolve(IconChoice::System, Theme::Light, macos),
+                Variant::Light
+            );
+            assert_eq!(
+                resolve(IconChoice::System, Theme::Dark, macos),
+                Variant::Dark
+            );
         }
     }
 
     #[test]
     fn pinned_choice_wins_on_macos() {
-        assert_eq!(resolve(IconChoice::Light, Theme::Dark, true), Variant::Light);
+        assert_eq!(
+            resolve(IconChoice::Light, Theme::Dark, true),
+            Variant::Light
+        );
         assert_eq!(resolve(IconChoice::Dark, Theme::Light, true), Variant::Dark);
     }
 
     #[test]
     fn pinned_choice_is_ignored_elsewhere() {
-        assert_eq!(resolve(IconChoice::Light, Theme::Dark, false), Variant::Dark);
-        assert_eq!(resolve(IconChoice::Dark, Theme::Light, false), Variant::Light);
+        assert_eq!(
+            resolve(IconChoice::Light, Theme::Dark, false),
+            Variant::Dark
+        );
+        assert_eq!(
+            resolve(IconChoice::Dark, Theme::Light, false),
+            Variant::Light
+        );
     }
 
     #[test]
