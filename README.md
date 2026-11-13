@@ -1,11 +1,9 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo/mark-dark.svg">
-    <img src="docs/brand/logo/mark-light.svg" alt="tiili" width="104">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo/lockup-dark.svg">
+    <img src="docs/brand/logo/lockup-light.svg" alt="tiili" width="360">
   </picture>
 </p>
-
-<h1 align="center">tiili</h1>
 
 <p align="center">
   <b>A tiling terminal for running many coding agents side by side.</b><br>
