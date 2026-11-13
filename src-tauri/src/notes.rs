@@ -240,10 +240,10 @@ pub fn heynote_release(window: WebviewWindow, owner: State<'_, HeynoteOwner>) {
 /// Brings window `label` forward and has it focus its Heynote pane.
 #[tauri::command]
 pub fn heynote_focus(app: AppHandle, label: String) -> Result<(), String> {
-    let window = app
-        .get_webview_window(&label)
-        .ok_or_else(|| format!("No window {label}"))?;
-    let text = |e: tauri::Error| e.to_string();
+    let window = app.get_webview_window(&label).ok_or_else(|| {
+        "The window holding Heynote has closed; click Heynote again to open it here.".to_string()
+    })?;
+    let text = |e: tauri::Error| format!("Could not bring forward the window holding Heynote: {e}");
     window.unminimize().map_err(text)?;
     window.show().map_err(text)?;
     window.set_focus().map_err(text)?;

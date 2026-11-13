@@ -146,7 +146,7 @@ pub async fn window_new(
     labels: tauri::State<'_, WindowLabels>,
     cwd: Option<String>,
 ) -> Result<(), String> {
-    let text = |e: tauri::Error| e.to_string();
+    let text = |e: tauri::Error| format!("Could not open a new window: {e}");
     let scale = window.scale_factor().map_err(text)?;
     let size = window.inner_size().map_err(text)?.to_logical::<f64>(scale);
     let place = window
