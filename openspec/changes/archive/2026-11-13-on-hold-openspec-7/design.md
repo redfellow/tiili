@@ -1,0 +1,2 @@
+## Approach
+Use a MODIFIED delta that removes the re-flow sentence from "Automatic grid layout", which brings it under 500 characters and keeps all four of its scenarios (the validator does not allow a MODIFIED requirement to drop scenarios). An ADDED delta creates "Grid re-flow". Scenario names stay the same, so the tests that refer to them (`src/layout.test.ts`, `src/layout/model.test.ts`) need no change. Archiving the change updates the main spec.
