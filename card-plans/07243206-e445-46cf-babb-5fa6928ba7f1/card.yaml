@@ -6,3 +6,12 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Base-branch openspec check fails only on over-long requirement text
+    in the settings main spec; splitting the text into shorter requirements
+    keeps every contract unchanged.
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement: Settings dialogue, Theme
+      choice, Font settings (>500 chars)"
+  revision: 090a0dd2-e48f-4e6d-b500-abb0f31b542d
