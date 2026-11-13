@@ -3,6 +3,7 @@ import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import type { Backend, SessionId } from "./backend";
 import { sizeReporter } from "./resize";
+import { responsiveFont } from "./responsive";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
@@ -43,6 +44,23 @@ async function loadFont(font: FontSettings): Promise<void> {
 }
 
 /**
+ * Sets `term`'s font size, line height and letter spacing: the chosen ones, scaled down for a small pane when
+ * responsive text is on. The pane is measured against the tiled area, so a pane that fills it keeps the chosen size.
+ */
+function applySize(term: Terminal, settings: Settings): void {
+  const { font, responsive } = settings;
+  const pane = term.element?.closest<HTMLElement>(".pane");
+  const area = pane?.parentElement?.closest<HTMLElement>("#panes");
+  const fitted =
+    pane && area
+      ? responsiveFont(font, responsive, pane.getBoundingClientRect(), area.getBoundingClientRect())
+      : { size: font.size, lineHeight: font.lineHeight, letterSpacing: font.letterSpacing };
+  if (term.options.fontSize !== fitted.size) term.options.fontSize = fitted.size;
+  if (term.options.lineHeight !== fitted.lineHeight) term.options.lineHeight = fitted.lineHeight;
+  if (term.options.letterSpacing !== fitted.letterSpacing) term.options.letterSpacing = fitted.letterSpacing;
+}
+
+/**
  * Applies the font settings to `term`: family with Geist Mono as fallback, size, weights, line height, letter
  * spacing and the ligatures addon on or off, then refits so the shell gets the new size.
  */
@@ -54,11 +72,9 @@ export async function applyFont(term: Terminal, settings: Settings): Promise<voi
   // A newer call started while this font loaded; its settings win.
   if (fontGenerations.get(term) !== generation) return;
   term.options.fontFamily = fontFamilyList(font.family);
-  term.options.fontSize = font.size;
   term.options.fontWeight = String(font.weight) as FontWeight;
   term.options.fontWeightBold = String(font.weightBold) as FontWeight;
-  term.options.lineHeight = font.lineHeight;
-  term.options.letterSpacing = font.letterSpacing;
+  applySize(term, settings);
   term.options.cursorStyle = settings.cursor.style;
   term.options.cursorBlink = settings.cursor.blink;
 
@@ -102,6 +118,8 @@ export async function openTerminal(
     cursorBlink: settings().cursor.blink,
     // The ligatures addon uses xterm's proposed character joiner API.
     allowProposedApi: true,
+    // xterm sizes its scrollbar by the overview ruler's width (14 px by default); the fit addon reserves the same.
+    overviewRuler: { width: 8 },
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
@@ -149,6 +167,7 @@ export async function openTerminal(
   // the terminal without resizing its pane, so that schedules a report too.
   const reporter = sizeReporter(
     () => {
+      applySize(term, settings());
       fit.fit();
       return { rows: term.rows, cols: term.cols };
     },

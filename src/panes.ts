@@ -8,6 +8,7 @@ import {
   move,
   removePane,
   reset,
+  setMode,
   swap,
   type LayoutState,
   type PaneId,
@@ -72,6 +73,7 @@ export class Panes {
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
     });
+    this.layout = emptyLayout(settings().tiling.layout);
     this.styleRoot(settings());
   }
 
@@ -237,6 +239,9 @@ export class Panes {
   /** Restyles every open pane after the settings changed; `themeChanged` re-reads the theme colours too. */
   async applySettings(settings: Settings, themeChanged: boolean): Promise<void> {
     this.styleRoot(settings);
+    if ((this.layout.mode ?? "grid") !== settings.tiling.layout) {
+      this.relayout(setMode(this.layout, settings.tiling.layout));
+    }
     const terminals = await Promise.all(this.panes.map((pane) => pane.ready));
     await Promise.all(
       terminals.map(async (terminal) => {

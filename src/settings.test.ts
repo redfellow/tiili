@@ -14,6 +14,11 @@ const withInactive = (patch: Partial<Settings["inactive"]>): Settings => ({
   inactive: { ...DEFAULT_SETTINGS.inactive, ...patch },
 });
 
+const withResponsive = (patch: Partial<Settings["responsive"]>): Settings => ({
+  ...DEFAULT_SETTINGS,
+  responsive: { ...DEFAULT_SETTINGS.responsive, ...patch },
+});
+
 const cases: [string, unknown, Settings][] = [
   ["missing file gives the defaults", null, DEFAULT_SETTINGS],
   ["not an object gives the defaults", "settings", DEFAULT_SETTINGS],
@@ -22,12 +27,16 @@ const cases: [string, unknown, Settings][] = [
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
     cursor: { style: "bar", blink: false },
+    tiling: { layout: "tall" },
+    responsive: { enabled: false, strength: 1.25 },
     behaviour: { hoverHighlight: false },
     inactive: { opacity: 0.5, desaturate: true },
   }, {
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
     cursor: { style: "bar", blink: false },
+    tiling: { layout: "tall" },
+    responsive: { enabled: false, strength: 1.25 },
     behaviour: { hoverHighlight: false },
     inactive: { opacity: 0.5, desaturate: true },
   }],
@@ -69,6 +78,15 @@ const cases: [string, unknown, Settings][] = [
   ["inactive opacity above range clamps to 1", { inactive: { opacity: 1.5 } }, withInactive({ opacity: 1 })],
   ["inactive opacity snaps to steps of 0.01", { inactive: { opacity: 0.456 } }, withInactive({ opacity: 0.46 })],
   ["desaturate of the wrong type is the default", { inactive: { desaturate: "yes" } }, DEFAULT_SETTINGS],
+  ["Invalid saved tiling: layout \"spiral\" is Grid, the rest loads", { theme: "nord", tiling: { layout: "spiral" } },
+    { ...DEFAULT_SETTINGS, theme: "nord" }],
+  ["missing tiling and responsive give their defaults", { theme: "koski" }, DEFAULT_SETTINGS],
+  ["tiling and responsive of the wrong type give their defaults", { tiling: "rows", responsive: 1 }, DEFAULT_SETTINGS],
+  ["responsive on of the wrong type is on", { responsive: { enabled: "no", strength: 1 } }, withResponsive({ strength: 1 })],
+  ["responsive strength \"strong\" is 0.5", { responsive: { enabled: false, strength: "strong" } },
+    withResponsive({ enabled: false })],
+  ["responsive strength above range clamps to 2", { responsive: { strength: 9 } }, withResponsive({ strength: 2 })],
+  ["responsive strength below range clamps to 0", { responsive: { strength: -1 } }, withResponsive({ strength: 0 })],
   ["font of the wrong type gives the default font", { theme: "dracula", font: [] }, { ...DEFAULT_SETTINGS, theme: "dracula" }],
 ];
 
