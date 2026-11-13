@@ -1,3 +1,5 @@
+import { gridFor, TILING_MODES, type TilingMode } from "./layout";
+import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
   CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
@@ -41,8 +43,10 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-function field(label: string, control: HTMLElement): HTMLLabelElement {
-  return element("label", { className: "settings-field" }, element("span", {}, label), control);
+/** A label and its control side by side, or with the control under the label when `stacked`. */
+function field(label: string, control: HTMLElement, stacked = false): HTMLLabelElement {
+  const className = stacked ? "settings-field settings-field-stacked" : "settings-field";
+  return element("label", { className }, element("span", {}, label), control);
 }
 
 function numberInput(name: string, range: { min: number; max: number; step: number }): HTMLInputElement {
@@ -101,6 +105,38 @@ async function installedMonospaceFonts(): Promise<string[]> {
     names = COMMON_MONO_FONTS.filter((n) => isInstalled(n) && isMonospace(n));
   }
   return names.filter((n) => !BUNDLED_FONTS.includes(n)).sort((a, b) => a.localeCompare(b));
+}
+
+/** Adds the muted "(default)" after a row's name. */
+function markDefault(row: HTMLElement): void {
+  row.append(element("span", { className: "settings-default" }, "(default)"));
+}
+
+const TILING_LABELS: Record<TilingMode, string> = {
+  grid: "Grid",
+  wide: "Wide grid",
+  tall: "Tall grid",
+  columns: "Side by side",
+  rows: "Stacked",
+};
+
+/** A tiny picture of how seven panes tile in `mode`, drawn as bricks. */
+function tilingIcon(mode: TilingMode): HTMLElement {
+  const { cols, rows, cells } = gridFor(7, mode);
+  const [width, height, gap] = [30, 18, 1];
+  const rects = cells.map((cell) => {
+    const w = (width - (cols - 1) * gap) / cols;
+    const x = cell.col * cell.colSpan * (w + gap);
+    const span = w * cell.colSpan + gap * (cell.colSpan - 1);
+    const h = (height - (rows - 1) * gap) / rows;
+    return `<rect x="${x.toFixed(2)}" y="${(cell.row * (h + gap)).toFixed(2)}" width="${span.toFixed(2)}" ` +
+      `height="${h.toFixed(2)}" rx="0.5"/>`;
+  });
+  const icon = element("span", { className: "settings-layout-icon" });
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML =
+    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="currentColor">${rects.join("")}</svg>`;
+  return icon;
 }
 
 const CURSOR_LABELS = { block: "Brick", underline: "Underline", bar: "Bar" } as const;
@@ -210,7 +246,7 @@ function themeList(onSelect: () => void, locked: () => boolean) {
     swatch.style.setProperty("--sw-fg", colours.fg);
     swatch.style.setProperty("--sw-accent", colours.accent);
     row.append(swatch, element("span", {}, item.name));
-    if (item.id === DEFAULT_SETTINGS.theme) row.append(element("span", { className: "settings-default" }, "(default)"));
+    if (item.id === DEFAULT_SETTINGS.theme) markDefault(row);
   });
   const of = (kind: Theme["kind"]) => THEMES.filter((t) => t.kind === kind).map(({ id, name }) => ({ id, name }));
   picker.setGroups([{ items: of("system") }, { label: "Dark", items: of("dark") }, { label: "Light", items: of("light") }]);
@@ -218,7 +254,8 @@ function themeList(onSelect: () => void, locked: () => boolean) {
 }
 
 /**
- * Builds the settings dialogue into `document.body`: Theme, Font, Cursor, Inactive panes and Behaviour sections, Reset to defaults, Cancel and Save.
+ * Builds the settings dialogue into `document.body`: an Appearance tab (Theme, Font, Cursor, Inactive terminals) and a
+ * Behaviour tab (Tiling, Responsive text, Panes), with Reset to defaults, Cancel and Save.
  * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
@@ -229,6 +266,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const family = pickList("Font family", () => change(read()), () => saving, (row, item) => {
     row.style.fontFamily = `"${item.name}", monospace`;
     row.textContent = item.name;
+    if (item.id === DEFAULT_FONT_FAMILY) markDefault(row);
   });
   /** Fills the family list: a Bundled and an OS group, with `selected` kept even if it is in neither. */
   const renderFamilies = (selected: string) => {
@@ -237,7 +275,14 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     family.setGroups([{ label: "Bundled", items: listed(BUNDLED_FONTS) }, { label: "OS", items: listed(os) }]);
     family.show(selected);
   };
-  const size = numberInput("size", FONT_RANGES.size);
+  const tiling = pickList("Tiling", () => change(read()), () => saving, (row, item) => {
+    row.append(tilingIcon(item.id as TilingMode), element("span", {}, item.name));
+    if (item.id === DEFAULT_SETTINGS.tiling.layout) markDefault(row);
+  });
+  tiling.setGroups([{ items: TILING_MODES.map((id) => ({ id, name: TILING_LABELS[id] })) }]);
+  const responsiveOn = element("input", { type: "checkbox", name: "responsiveEnabled" });
+  const responsiveStrength = rangeInput("responsiveStrength", RESPONSIVE_STRENGTH);
+  const size = rangeInput("size", FONT_RANGES.size);
   const weight = rangeInput("weight", FONT_RANGES.weight);
   const weightBold = rangeInput("weightBold", FONT_RANGES.weightBold);
   const ligatures = element("input", { type: "checkbox", name: "ligatures" });
@@ -260,8 +305,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
 
   const fontFields = element("fieldset", {},
     element("legend", {}, "Font"),
-    field("Family", family.list),
-    field("Size (px)", size),
+    field("Family", family.list, true),
+    field("Size (px)", size.control),
     field("Weight", weight.control),
     field("Bold weight", weightBold.control),
     field("Line height", lineHeight.control),
@@ -276,25 +321,80 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   );
 
   const inactiveFields = element("fieldset", {},
-    element("legend", {}, "Inactive panes"),
+    element("legend", {}, "Inactive terminals"),
     field("Opacity", inactiveOpacity.control),
     element("label", { className: "settings-check" }, inactiveDesaturate, element("span", {}, "Desaturate")),
   );
 
-  const behaviourFields = element("fieldset", {},
-    element("legend", {}, "Behaviour"),
-    element("label", { className: "settings-check" }, hoverHighlight,
-      element("span", {}, "Highlight terminal on mouseover")),
+  const tilingFields = element("fieldset", {},
+    element("legend", {}, "Tiling"),
+    tiling.list,
+    element("p", { className: "settings-hint" }, "How panes are arranged as you open and close them."),
   );
 
-  const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close);
-  const form = element("form", { method: "dialog" },
-    header,
+  const responsiveFields = element("fieldset", {},
+    element("legend", {}, "Responsive text"),
+    element("label", { className: "settings-check" }, responsiveOn, element("span", {}, "Shrink text in small panes")),
+    field("Strength", responsiveStrength.control),
+    element("p", { className: "settings-hint" },
+      `Font size, line height and (slightly) letter spacing shrink as a pane gets smaller than the window, down to ` +
+      `${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks faster.`),
+  );
+
+  const paneFields = element("fieldset", {},
+    element("legend", {}, "Panes"),
+    element("label", { className: "settings-check" }, hoverHighlight,
+      element("span", {}, "Highlight the terminal under the mouse")),
+  );
+
+  const appearance = element("div", { className: "settings-panel", id: "settings-panel-appearance" },
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
     fontFields,
     cursorFields,
     inactiveFields,
-    behaviourFields,
+  );
+  const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
+    tilingFields, responsiveFields, paneFields);
+  const panels = [appearance, behaviour];
+  const tabs = ["Appearance", "Behaviour"].map((name, i) => {
+    const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", panels[i].id);
+    return tab;
+  });
+  const tabList = element("div", { className: "settings-tabs" }, ...tabs);
+  tabList.setAttribute("role", "tablist");
+  panels.forEach((panel, i) => {
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", tabs[i].id);
+  });
+  /** Shows tab `index` and its panel; `focus` moves the keyboard to the tab too. */
+  const showTab = (index: number, focus = false) => {
+    tabs.forEach((tab, i) => {
+      tab.setAttribute("aria-selected", String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
+      panels[i].hidden = i !== index;
+    });
+    if (focus) tabs[index].focus();
+  };
+  // Left and Right move between the tabs, wrapping round at either end.
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => showTab(i));
+    tab.addEventListener("keydown", (event) => {
+      const next = event.key === "ArrowRight" ? i + 1 : event.key === "ArrowLeft" ? i - 1 : undefined;
+      if (next === undefined) return;
+      event.preventDefault();
+      showTab((next + tabs.length) % tabs.length, true);
+    });
+  });
+  showTab(0);
+
+  const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close);
+  const form = element("form", { method: "dialog" },
+    header,
+    tabList,
+    appearance,
+    behaviour,
     status,
     element("footer", { className: "settings-footer" },
       reset, element("div", { className: "settings-actions" }, cancel, save)),
@@ -306,7 +406,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const show = (settings: Settings) => {
     theme.show(settings.theme);
     renderFamilies(settings.font.family);
-    size.value = String(settings.font.size);
+    size.input.value = String(settings.font.size);
+    size.sync();
     weight.input.value = String(settings.font.weight);
     weightBold.input.value = String(settings.font.weightBold);
     weight.sync();
@@ -322,13 +423,18 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     inactiveOpacity.sync();
     inactiveDesaturate.checked = settings.inactive.desaturate;
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
+    tiling.show(settings.tiling.layout);
+    responsiveOn.checked = settings.responsive.enabled;
+    responsiveStrength.input.value = String(settings.responsive.strength);
+    responsiveStrength.input.disabled = !settings.responsive.enabled;
+    responsiveStrength.sync();
   };
 
   const read = (): Settings => normalize({
     theme: theme.value(),
     font: {
       family: family.value(),
-      size: size.valueAsNumber,
+      size: size.input.valueAsNumber,
       weight: weight.input.valueAsNumber,
       weightBold: weightBold.input.valueAsNumber,
       ligatures: ligatures.checked,
@@ -336,6 +442,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       letterSpacing: letterSpacing.input.valueAsNumber,
     },
     cursor: { style: cursorStyle.value, blink: cursorBlink.checked },
+    tiling: { layout: tiling.value() },
+    responsive: { enabled: responsiveOn.checked, strength: responsiveStrength.input.valueAsNumber },
     behaviour: { hoverHighlight: hoverHighlight.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
   });
@@ -356,10 +464,12 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   /** While saving, nothing can be edited, so what is written is what stays applied. */
   const lock = (on: boolean) => {
     saving = on;
-    fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = behaviourFields.disabled = on;
+    fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = on;
+    responsiveFields.disabled = paneFields.disabled = on;
     reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));
+    tiling.list.setAttribute("aria-disabled", String(on));
   };
 
   /** Cancel, Esc and ×: back to the settings from when the dialogue opened, unsaved. */
@@ -439,6 +549,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     open() {
       if (dialog.open) return;
       status.textContent = "";
+      showTab(0);
       offset = { x: 0, y: 0 };
       place();
       dialog.showModal();

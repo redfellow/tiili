@@ -1,3 +1,6 @@
+import { TILING_MODES, type TilingMode } from "./layout";
+import { RESPONSIVE_STRENGTH, type ResponsiveSettings } from "./responsive";
+
 /** Every theme a user can choose; `system` follows the OS between tiili Light and tiili Dark. */
 export const THEME_IDS = [
   "system",
@@ -41,6 +44,11 @@ export interface CursorSettings {
   blink: boolean;
 }
 
+export interface TilingSettings {
+  /** How panes are arranged: see `TILING_MODES`. */
+  layout: TilingMode;
+}
+
 export interface BehaviourSettings {
   /** The pane under the pointer shows at full strength with a faint accent line. */
   hoverHighlight: boolean;
@@ -60,6 +68,9 @@ export interface Settings {
   theme: ThemeId;
   font: FontSettings;
   cursor: CursorSettings;
+  tiling: TilingSettings;
+  /** Text that shrinks in small panes. */
+  responsive: ResponsiveSettings;
   behaviour: BehaviourSettings;
   inactive: InactiveSettings;
 }
@@ -85,6 +96,8 @@ export const DEFAULT_SETTINGS: Settings = {
     letterSpacing: 0,
   },
   cursor: { style: "block", blink: true },
+  tiling: { layout: "grid" },
+  responsive: { enabled: true, strength: 0.5 },
   behaviour: { hoverHighlight: true },
   inactive: { opacity: 0.82, desaturate: false },
 };
@@ -128,6 +141,8 @@ export function normalize(value: unknown): Settings {
   const font = isRecord(raw.font) ? raw.font : {};
   const defaults = DEFAULT_SETTINGS.font;
   const cursor = isRecord(raw.cursor) ? raw.cursor : {};
+  const tiling = isRecord(raw.tiling) ? raw.tiling : {};
+  const responsive = isRecord(raw.responsive) ? raw.responsive : {};
   const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
   const inactive = isRecord(raw.inactive) ? raw.inactive : {};
   return {
@@ -146,6 +161,15 @@ export function normalize(value: unknown): Settings {
         ? (cursor.style as CursorStyle)
         : DEFAULT_SETTINGS.cursor.style,
       blink: typeof cursor.blink === "boolean" ? cursor.blink : DEFAULT_SETTINGS.cursor.blink,
+    },
+    tiling: {
+      layout: TILING_MODES.includes(tiling.layout as TilingMode)
+        ? (tiling.layout as TilingMode)
+        : DEFAULT_SETTINGS.tiling.layout,
+    },
+    responsive: {
+      enabled: typeof responsive.enabled === "boolean" ? responsive.enabled : DEFAULT_SETTINGS.responsive.enabled,
+      strength: number(responsive.strength, DEFAULT_SETTINGS.responsive.strength, RESPONSIVE_STRENGTH),
     },
     behaviour: {
       hoverHighlight:
