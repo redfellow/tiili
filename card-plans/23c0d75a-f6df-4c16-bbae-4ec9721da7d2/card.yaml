@@ -1,0 +1,7 @@
+format: 1
+slug: run-every-pty-integration-test-target-in
+title: Run every PTY integration test target in a release check
+x-harvaaja-card: 23c0d75a-f6df-4c16-bbae-4ec9721da7d2
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
