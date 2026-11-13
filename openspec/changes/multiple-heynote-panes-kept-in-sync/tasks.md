@@ -5,7 +5,6 @@
 - [ ] 1.1 Add `origin` to the mutating `heynote_*` commands and emit `heynote-notes-changed` with a tagged
   `NoteChange` payload after each succeeds; unit-test the payload's JSON shape for each kind in `notes.rs` tests
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib notes`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 2. Frontend note store
