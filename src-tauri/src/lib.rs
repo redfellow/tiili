@@ -1,5 +1,6 @@
 pub mod app_icon;
 pub mod bridge;
+pub mod command;
 pub mod cwd;
 pub mod notes;
 pub mod pty;
@@ -24,6 +25,8 @@ pub const PANE_EVENT: &str = "pane";
 pub const OPEN_SETTINGS_EVENT: &str = "open-settings";
 /// Event sent when a shell's working directory or repository changes; its payload is a [`PaneCwdEvent`].
 pub const PANE_CWD_EVENT: &str = "pane-cwd";
+/// Event sent when what runs in a pane changes; its payload is a [`PaneCommandEvent`].
+pub const PANE_COMMAND_EVENT: &str = "pane-command";
 
 #[derive(Clone, Serialize)]
 struct PtyExit {
@@ -47,6 +50,15 @@ struct PaneCwdEvent {
     repo: Option<RepoInfo>,
 }
 
+/// What session `pane_id`'s pane runs now: the title its foreground program set, else the
+/// foreground process's name, else the shell's name.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneCommandEvent {
+    pane_id: SessionId,
+    command: String,
+}
+
 impl PaneCwdEvent {
     fn new(pane_id: SessionId, at: &cwd::PaneCwd) -> Self {
         Self {
@@ -66,7 +78,7 @@ fn text(err: std::io::Error) -> String {
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) and returns its
 /// session id; its output streams over `on_output`, a channel of its own, and its working directory
-/// as `pane-cwd` events.
+/// as `pane-cwd` events and what runs in it as `pane-command` events.
 #[tauri::command]
 fn pty_spawn(
     app: AppHandle,
@@ -77,6 +89,7 @@ fn pty_spawn(
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
     let cwd_app = app.clone();
+    let command_app = app.clone();
     sessions
         .spawn_tracked(
             cwd.as_deref().map(Path::new),
@@ -87,6 +100,15 @@ fn pty_spawn(
             }),
             Some(Box::new(move |id, at| {
                 let _ = cwd_app.emit(PANE_CWD_EVENT, PaneCwdEvent::new(id, at));
+            })),
+            Some(Box::new(move |id, command| {
+                let _ = command_app.emit(
+                    PANE_COMMAND_EVENT,
+                    PaneCommandEvent {
+                        pane_id: id,
+                        command: command.to_string(),
+                    },
+                );
             })),
             Box::new(move |id, code| {
                 let _ = app.emit(PTY_EXIT_EVENT, PtyExit { id, code });

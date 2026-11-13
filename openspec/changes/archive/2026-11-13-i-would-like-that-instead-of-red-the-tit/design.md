@@ -1,0 +1,4 @@
+## Approach
+- Rust: extend the PTY session with a command tracker. Scan output for OSC 0/2 titles (like `Osc7Scanner`), and in the existing cwd poll thread read the PTY's foreground process group (`tcgetpgrp` on the master fd) and its name (`libproc` on macOS, `/proc/<pid>/comm` on Linux; shell name fallback elsewhere). Combine: title if set since the foreground process last changed, else the process name. Emit `pane-command { paneId, command }` on change only.
+- Frontend: `paneChip.ts` gets a pure `chipLabel(place, command)` returning `place · command` (or `place` when command is unknown); `panes.ts` keeps both values per pane and calls `showPaneChip` on either event.
+- Why: the foreground process works for every program (top sends no title); titles add richness for programs that set them.
