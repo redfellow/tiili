@@ -5,3 +5,18 @@ x-harvaaja-card: 3baa38f1-b074-4480-a2ee-30bb3e7ba70a
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new settings (inactive opacity, desaturate, mouseover highlight)
+    and changes the pane-tiling Focus appearance contract (fixed 82% whole-pane
+    dim becomes a content-only fade). No eligible open change has this intent;
+    the cursor card already merged.
+  citations:
+    - "openspec/specs/pane-tiling/spec.md (origin/hv/main) Requirement: Focus
+      appearance — 82% opacity"
+    - "openspec/specs/settings/spec.md Requirement: Settings dialogue / Settings
+      persist"
+    - card-plans/3baa38f1-b074-4480-a2ee-30bb3e7ba70a/attachments/design-reference.md
+      panes.ts styleRoot, settings.ts InactiveSettings, styles.css content-only
+      fade
+  revision: 141e2d4a-c66a-448a-a3bf-eeed49225c24
