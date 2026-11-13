@@ -22,8 +22,8 @@
 ## 4. Release workflow
 
 - [ ] 4.1 (triage) Add the tag-triggered release workflow
-  file: .github/workflows/release.yml
-  content:
+  - file: .github/workflows/release.yml
+  - content:
   ```yaml
   name: release
   on:
