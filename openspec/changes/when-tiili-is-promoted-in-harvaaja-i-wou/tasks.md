@@ -1,9 +1,9 @@
 ## 1. Install command
 
-- [ ] 1.1 Add `scripts/install-app.mjs`, with the exported pure helpers from design.md and the steps in `main`, plus the `install-app` npm script. Add `scripts/install-app.test.ts` (`@harvaaja-test-tier: fast`), a table-driven test of the pinned check and the Dock entry.
+- [x] 1.1 Add `scripts/install-app.mjs`, with the exported pure helpers from design.md and the steps in `main`, plus the `install-app` npm script. Add `scripts/install-app.test.ts` (`@harvaaja-test-tier: fast`), a table-driven test of the pinned check and the Dock entry.
   - proof: `npx vitest run scripts/install-app.test.ts`
   - proof: `npx eslint scripts/install-app.mjs scripts/install-app.test.ts`
-- [ ] 1.2 Document `npm run install-app` in docs/packaging.md.
+- [x] 1.2 Document `npm run install-app` in docs/packaging.md.
   - proof: `grep -n "install-app" docs/packaging.md`
 
 ## Manual checks after merge (The user)
