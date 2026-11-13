@@ -14,7 +14,7 @@ The public README opens with the bare mark and a separate "tiili" heading. The f
   - After: one lockup image (mark + wordmark), dark or light following the reader's GitHub theme
 
 ## Acceptance
-- Both SVGs on the branch match `origin/docs/readme-lockup` and render via @resvg/resvg-js without error.
+- Both SVGs match `origin/docs/readme-lockup` byte for byte and render via @resvg/resvg-js without error.
 - README header is the `<picture>` above; no `<h1>tiili</h1>` remains.
 
 ## Citations
@@ -22,4 +22,5 @@ The public README opens with the bare mark and a separate "tiili" heading. The f
 
 ## Assumptions
 - Files are taken verbatim from the branch (`git checkout origin/docs/readme-lockup -- <files>` during the build), not regenerated; alternative was rebuilding them from the brand book.
+- The README header is checked by grep rather than a diff against the branch, so later README edits on the base don't break the proof; alternative was diffing the whole README against the branch.
 - Closing PR #52 as superseded is listed as a manual step after merge, since the build should not act on GitHub PRs.
