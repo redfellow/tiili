@@ -5,3 +5,17 @@ x-harvaaja-card: 833ba29d-d0f6-45f7-a19f-1258b0b5c4b9
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds several windows: new observable contracts across pane-tiling,
+    window-state, repository-colours, settings, clipboard and heynote-pane; no
+    active change has this intent (remote-panes is about remote shells)."
+  citations:
+    - openspec/specs/pane-tiling/spec.md
+    - openspec/specs/window-state/spec.md
+    - openspec/specs/repository-colours/spec.md
+    - openspec/specs/heynote-pane/spec.md
+    - src-tauri/src/lib.rs
+    - src-tauri/capabilities/default.json
+    - src/tints.ts
+  revision: 0c9e0259-4c68-4943-9920-7d331d5cd7aa
