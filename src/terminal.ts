@@ -28,6 +28,14 @@ export interface PaneTerminal {
   dispose(): Promise<void>;
 }
 
+/** A zoomed pane's font size stays within these pixels. */
+export const ZOOM_SIZE = { min: 6, max: 48 } as const;
+
+/** The font size `size` with a pane's zoom offset `zoom` added, kept within ZOOM_SIZE. */
+export function zoomedSize(size: number, zoom: number): number {
+  return Math.min(ZOOM_SIZE.max, Math.max(ZOOM_SIZE.min, size + zoom));
+}
+
 /** The addons `applyFont` changes or refits with, per terminal. */
 const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
 
@@ -44,11 +52,13 @@ async function loadFont(font: FontSettings): Promise<void> {
 }
 
 /**
- * Sets `term`'s font size, line height and letter spacing: the chosen ones, scaled down for a small pane when
- * responsive text is on. The pane is measured against the tiled area, so a pane that fills it keeps the chosen size.
+ * Sets `term`'s font size, line height and letter spacing: the chosen ones, the size changed by the pane's zoom
+ * offset `zoom`, then scaled down for a small pane when responsive text is on. The pane is measured against the
+ * tiled area, so a pane that fills it keeps the (zoomed) chosen size.
  */
-function applySize(term: Terminal, settings: Settings): void {
-  const { font, responsive } = settings;
+function applySize(term: Terminal, settings: Settings, zoom: number): void {
+  const { responsive } = settings;
+  const font = { ...settings.font, size: zoomedSize(settings.font.size, zoom) };
   const pane = term.element?.closest<HTMLElement>(".pane");
   const area = pane?.parentElement?.closest<HTMLElement>("#panes");
   const fitted =
@@ -61,10 +71,11 @@ function applySize(term: Terminal, settings: Settings): void {
 }
 
 /**
- * Applies the font settings to `term`: family with Geist Mono as fallback, size, weights, line height, letter
- * spacing and the ligatures addon on or off, then refits so the shell gets the new size.
+ * Applies the font settings to `term`: family with Geist Mono as fallback, size changed by the pane's zoom offset
+ * `zoom`, weights, line height, letter spacing and the ligatures addon on or off, then refits so the shell gets
+ * the new size.
  */
-export async function applyFont(term: Terminal, settings: Settings): Promise<void> {
+export async function applyFont(term: Terminal, settings: Settings, zoom = 0): Promise<void> {
   const { font } = settings;
   const generation = (fontGenerations.get(term) ?? 0) + 1;
   fontGenerations.set(term, generation);
@@ -74,7 +85,7 @@ export async function applyFont(term: Terminal, settings: Settings): Promise<voi
   term.options.fontFamily = fontFamilyList(font.family);
   term.options.fontWeight = String(font.weight) as FontWeight;
   term.options.fontWeightBold = String(font.weightBold) as FontWeight;
-  applySize(term, settings);
+  applySize(term, settings, zoom);
   term.options.cursorStyle = settings.cursor.style;
   term.options.cursorBlink = settings.cursor.blink;
 
@@ -100,7 +111,8 @@ export function refreshTheme(term: Terminal): void {
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
  * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
  * chosen; otherwise it is an outline. The shell runs on `backend`; `onSession` hears the id of each shell session
- * the terminal starts, the first and any after the shell exits.
+ * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
+ * added to the font size whenever the terminal refits.
  */
 export async function openTerminal(
   backend: Backend,
@@ -108,6 +120,7 @@ export async function openTerminal(
   settings: () => Settings,
   cwd?: string,
   onSession: (id: number) => void = () => {},
+  zoom: () => number = () => 0,
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -131,7 +144,7 @@ export async function openTerminal(
     },
     () => settings().theme === "system",
   );
-  await applyFont(term, settings());
+  await applyFont(term, settings(), zoom());
 
   let session: SessionId | undefined;
   let running = false;
@@ -167,7 +180,7 @@ export async function openTerminal(
   // the terminal without resizing its pane, so that schedules a report too.
   const reporter = sizeReporter(
     () => {
-      applySize(term, settings());
+      applySize(term, settings(), zoom());
       fit.fit();
       return { rows: term.rows, cols: term.cols };
     },
