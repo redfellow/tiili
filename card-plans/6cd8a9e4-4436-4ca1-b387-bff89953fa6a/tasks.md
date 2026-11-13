@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1.1 Delete `cmd.env_remove("ZDOTDIR");` from `classic_shell` in src-tauri/tests/pty_session.rs, so the ZDOTDIR that `command_for` set is kept (TIILI_USER_ZDOTDIR is still removed)
+- [x] 1.1 Delete `cmd.env_remove("ZDOTDIR");` from `classic_shell` in src-tauri/tests/pty_session.rs, so the ZDOTDIR that `command_for` set is kept (TIILI_USER_ZDOTDIR is still removed)
   Tests to update: src-tauri/tests/pty_session.rs
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`

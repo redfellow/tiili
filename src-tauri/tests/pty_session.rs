@@ -126,7 +126,6 @@ fn classic_shell(
     set_colour_env(&mut cmd);
     cmd.env("HOME", &home);
     cmd.env_remove("TIILI_USER_ZDOTDIR");
-    cmd.env_remove("ZDOTDIR");
     cmd.env("BASH_SILENCE_DEPRECATION_WARNING", "1");
     let (out_tx, out_rx) = mpsc::channel();
     let session = PtySession::spawn_command(
