@@ -6,3 +6,12 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: new-change
+  rationale: The main spec's "Automatic grid layout" requirement is over 500
+    characters, so strict validation fails. Splitting it into two requirements
+    changes the spec text without changing any behaviour. The edit goes through
+    a change delta so that archiving keeps the main spec in step.
+  citations:
+    - openspec/specs/pane-tiling/spec.md:15
+  revision: b66894f9-d81f-4be7-8e2c-92c999ce4d8c
