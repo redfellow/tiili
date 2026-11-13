@@ -19,6 +19,20 @@ read from `package.json`, so bump it there only.
 Bundling only works on the matching OS: there is no cross-building. Extra arguments are passed on to
 `tauri build`, for example `npm run bundle -- --verbose`.
 
+## Installing on this Mac
+
+To try a build as a real Mac app, run:
+
+```sh
+npm run install-app
+```
+
+It runs `tauri build --bundles app` for this Mac's chip (no `.dmg`, no universal binary), quits tiili if it is
+running, replaces `/Applications/tiili.app` with the new build, and adds tiili to the Dock if it is not pinned
+yet. Pinning edits the `com.apple.dock` `persistent-apps` defaults and restarts the Dock with `killall Dock`;
+running the command again replaces the app and leaves the Dock alone. It runs only on macOS and exits with an
+error elsewhere.
+
 ## Prerequisites
 
 All platforms need Node.js with `npm ci` run, and Rust through rustup.
