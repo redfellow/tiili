@@ -73,7 +73,7 @@ describe("WebSocket backend", () => {
     expect(output).toEqual([[104, 105]]);
   });
 
-  it("Exit and restart: the exit message calls onExit once with the session and code", async () => {
+  it("Exit closes the pane: the exit message calls onExit once with the session and code", async () => {
     const { backend, sockets } = setup();
     const exits: [number, number][] = [];
     await backend.onExit((id, code) => exits.push([id, code]));
