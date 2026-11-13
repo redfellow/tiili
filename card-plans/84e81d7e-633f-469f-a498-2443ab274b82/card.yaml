@@ -5,3 +5,12 @@ x-harvaaja-card: 84e81d7e-633f-469f-a498-2443ab274b82
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: README header and brand logo assets only; no app behaviour or spec'd
+    contract changes (brand-tokens covers tiili.css tokens, not README art).
+  citations:
+    - openspec/specs/brand-tokens/spec.md
+    - README.md:1-8
+    - origin/docs/readme-lockup
+  revision: cf7f298e-98c4-4a69-bc6b-e94fa30b4dd5
