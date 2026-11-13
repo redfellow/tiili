@@ -4,8 +4,12 @@
 // License Condition v1.0; see public/heynote/LICENSE. The changes: notes, folders, settings, open tabs and the
 // theme live in tiili's note store (window.parent.tiiliHeynote, files in the app config folder) instead of
 // localStorage, loaded once before the app starts and written through on each change; tiili can ask the page to
-// save everything at once (window.tiiliFlush) before it closes the pane. Heynote starts with tiili's Geist Mono
-// instead of Hack, and without its left panel until the user opens it.
+// save everything at once (window.tiiliFlush) before it closes the pane. Several Heynote pages stay in sync: each
+// passes its own origin id with every change, hears every change through the store's subscribe, and follows the
+// ones other pages made, handing new note text to Heynote's buffer.addOnChangeCallback callbacks and refreshing
+// its notes list; on close it does not save again the notes other pages deleted or moved (save-on-close.js).
+// Heynote starts with tiili's Geist Mono instead of Hack, and without its left panel until the
+// user opens it.
 
 import {
     SETTINGS_CHANGE_EVENT,
@@ -23,6 +27,7 @@ import { generateClientId } from "@/src/common/client-id";
 import { CURRENCY_RATES_URL, getCurrencyFetchOptions } from "@/src/common/currency-request";
 import { normalizeLibrarySearchMatch } from "@/src/common/library-search-match";
 import { isLibrarySearchQueryLongEnough } from "@/src/common/library-search-query.js";
+import { notesToSave, pathsGone } from "./save-on-close.js";
 
 /** A store kept in this page's localStorage, for when the page is opened on its own, outside tiili. */
 function localStore() {
@@ -53,6 +58,8 @@ function localStore() {
         mkdir: async (path) => keep("tiili-dirs", [...new Set([...dirs(), path])]),
         rmdir: async (path) => keep("tiili-dirs", dirs().filter((dir) => dir !== path)),
         saveState: async (state) => keep("tiili-state", state),
+        // A page on its own is the only one using its notes.
+        subscribe: () => () => {},
     }
 }
 
@@ -111,6 +118,15 @@ const library = await store.load()
 const notes = new Map(Object.entries(library.notes || {}))
 const directories = new Set(library.dirs || [])
 const state = Object.assign({}, library.state || {})
+
+/** This page's id, sent with each change so it can tell its own changes from other Heynote pages'. */
+const origin = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+
+/** Paths other pages deleted or moved away, which this page must not save again when it closes. */
+const gone = new Set()
+
+/** Heynote's callbacks for each open note, called with the note's new text when another page changed it. */
+const onChangeCallbacks = {}
 
 function report(error) {
     console.error("tiili could not save a Heynote change:", error)
@@ -251,8 +267,79 @@ function createLibrarySearchPattern(options, flags) {
 }
 
 function putNote(path, content) {
+    gone.delete(path)
     notes.set(path, content)
-    return store.write(path, content)
+    return store.write(path, content, origin)
+}
+
+/**
+ * Refreshes Heynote's notes list (and with it the folder tree, which follows it) after another page created,
+ * deleted or moved a note or folder. Upstream Heynote has no hook for this: its Electron file watcher only feeds
+ * buffer.addOnChangeCallback for open notes, and its library-path callback reloads the whole library and closes
+ * every tab. So this calls the `updateBuffers` action of Heynote's own store, the one each of its own changes
+ * ends with, found through the page's Vue app and Pinia; failing that, through the notes tree when it is shown.
+ */
+function refreshLibrary() {
+    const pinia = document.querySelector("#app")?.__vue_app__?.config.globalProperties.$pinia
+    const heynoteStore = pinia && [...pinia._s.values()].find((piniaStore) => typeof piniaStore.updateBuffers === "function")
+    const refresh = heynoteStore ?? window._heynote_buffer_tree
+    refresh?.updateBuffers?.()?.catch?.(report)
+}
+
+/** Follows a change another Heynote page made; see applyNoteChange in tiili's src/heynoteStore.ts. */
+function followChange(change) {
+    if (change.origin === origin) {
+        return
+    }
+    for (const path of pathsGone(change)) {
+        gone.add(path)
+    }
+    if (change.kind === "write") {
+        gone.delete(change.path)
+    } else if (change.kind === "move") {
+        gone.delete(change.to)
+    }
+    switch (change.kind) {
+        case "write": {
+            const known = notes.get(change.path)
+            notes.set(change.path, change.content)
+            for (const callback of onChangeCallbacks[change.path] || []) {
+                callback(change.content)
+            }
+            if (known === undefined || getNoteMetadata(known)?.name !== getNoteMetadata(change.content)?.name) {
+                refreshLibrary()
+            }
+            return
+        }
+        case "remove":
+            notes.delete(change.path)
+            break
+        case "move": {
+            const content = notes.get(change.from)
+            if (content !== undefined) {
+                notes.set(change.to, content)
+            }
+            notes.delete(change.from)
+            break
+        }
+        case "mkdir":
+            directories.add(change.path)
+            break
+        case "rmdir":
+            directories.delete(change.path)
+            break
+        default:
+            return
+    }
+    refreshLibrary()
+}
+
+let unsubscribe = store.subscribe ? store.subscribe(followChange) : () => {}
+
+/** Stops hearing other pages' changes, once this page is going away. */
+function stopFollowing() {
+    unsubscribe()
+    unsubscribe = () => {}
 }
 
 const Heynote = {
@@ -279,12 +366,12 @@ const Heynote = {
                 return
             }
             directories.add(path)
-            await store.mkdir(path)
+            await store.mkdir(path, origin)
         },
 
         async delete(path) {
             notes.delete(path)
-            await store.remove(path)
+            await store.remove(path, origin)
         },
 
         async isDirectoryEmpty(path) {
@@ -296,7 +383,7 @@ const Heynote = {
 
         async deleteDirectory(path) {
             directories.delete(path)
-            await store.rmdir(path)
+            await store.rmdir(path, origin)
             return true
         },
 
@@ -306,11 +393,11 @@ const Heynote = {
                 notes.set(newPath, content)
             }
             notes.delete(path)
-            await store.move(path, newPath)
+            await store.move(path, newPath, origin)
         },
 
         async saveAndQuit(contents) {
-            await Promise.all([...contents].map(([path, content]) => putNote(path, content)))
+            await Promise.all(notesToSave(contents, gone).map(([path, content]) => putNote(path, content)))
         },
 
         async exists(path) {
@@ -335,10 +422,17 @@ const Heynote = {
         async close() {
         },
 
-        _onChangeCallbacks: {},
-        addOnChangeCallback() {
+        _onChangeCallbacks: onChangeCallbacks,
+        addOnChangeCallback(path, callback) {
+            onChangeCallbacks[path] = [...(onChangeCallbacks[path] || []), callback]
         },
-        removeOnChangeCallback() {
+        removeOnChangeCallback(path, callback) {
+            const left = (onChangeCallbacks[path] || []).filter((cb) => cb !== callback)
+            if (left.length > 0) {
+                onChangeCallbacks[path] = left
+            } else {
+                delete onChangeCallbacks[path]
+            }
         },
 
         pathSeparator: "/",
@@ -492,8 +586,12 @@ function searchLibrary(options) {
     ipcRenderer.send(LIBRARY_SEARCH_DONE, { searchId: options.searchId })
 }
 
-/** Saves every open note now; tiili calls this before it closes the pane or the window. */
-window.tiiliFlush = () => ipcRenderer.send(WINDOW_CLOSE_EVENT)
+/** Saves every open note now and stops following other pages; tiili calls this before it closes the pane. */
+window.tiiliFlush = () => {
+    ipcRenderer.send(WINDOW_CLOSE_EVENT)
+    stopFollowing()
+}
 window.addEventListener("beforeunload", () => ipcRenderer.send(WINDOW_CLOSE_EVENT))
+window.addEventListener("pagehide", stopFollowing)
 
 export { Heynote, ipcRenderer }

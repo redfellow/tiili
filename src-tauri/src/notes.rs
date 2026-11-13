@@ -2,22 +2,54 @@
 //! own settings and tab state in `heynote/state.json`.
 //!
 //! The pane loads the whole library once when it opens and then writes each change through these commands.
-//! Every path comes from the pane, so each one is checked to stay inside the notes folder.
+//! Every path comes from the pane, so each one is checked to stay inside the notes folder. Each change that
+//! succeeds is sent to every window as `heynote-notes-changed`, so the other Heynote panes follow it; the pane
+//! that made it knows it by the `origin` it passed.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager};
 
 const DIR_NAME: &str = "heynote";
 const NOTES_DIR: &str = "notes";
 const STATE_FILE: &str = "state.json";
+
+/// The event every window gets after a Heynote pane changed the notes.
+pub const NOTES_CHANGED_EVENT: &str = "heynote-notes-changed";
+
+/// One change to the notes, as the other Heynote panes apply it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum NoteChange {
+    Write { path: String, content: String },
+    Remove { path: String },
+    Move { from: String, to: String },
+    Mkdir { path: String },
+    Rmdir { path: String },
+}
+
+/// The `heynote-notes-changed` payload: the change and the page that made it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct NotesChanged {
+    pub origin: String,
+    #[serde(flatten)]
+    pub change: NoteChange,
+}
+
+/// The payload telling every pane that `origin` made `change`. A page built before origins were sent passes none;
+/// its change goes out with an empty origin, which every other page takes as someone else's.
+pub fn notes_changed(origin: Option<String>, change: NoteChange) -> NotesChanged {
+    NotesChanged {
+        origin: origin.unwrap_or_default(),
+        change,
+    }
+}
 
 /// Everything the pane needs to start: each note's text by its library path, the library's folders and the
 /// pane's saved state (settings, open tabs, theme).
@@ -163,92 +195,62 @@ pub fn heynote_load(app: AppHandle) -> Result<Library, String> {
     Ok(load_from(&heynote_dir(&app)?))
 }
 
-#[tauri::command]
-pub fn heynote_write(app: AppHandle, path: String, content: String) -> Result<(), String> {
-    write_in(&heynote_dir(&app)?, &path, &content)
+/// Tells every window that `origin` made `change`, once `result` shows it succeeded.
+fn broadcast(
+    app: &AppHandle,
+    origin: Option<String>,
+    change: NoteChange,
+    result: Result<(), String>,
+) -> Result<(), String> {
+    result?;
+    // A window that misses the event still sees the change the next time Heynote opens.
+    let _ = app.emit(NOTES_CHANGED_EVENT, notes_changed(origin, change));
+    Ok(())
 }
 
 #[tauri::command]
-pub fn heynote_remove(app: AppHandle, path: String) -> Result<(), String> {
-    remove_in(&heynote_dir(&app)?, &path)
+pub fn heynote_write(
+    app: AppHandle,
+    path: String,
+    content: String,
+    origin: Option<String>,
+) -> Result<(), String> {
+    let result = write_in(&heynote_dir(&app)?, &path, &content);
+    broadcast(&app, origin, NoteChange::Write { path, content }, result)
 }
 
 #[tauri::command]
-pub fn heynote_move(app: AppHandle, from: String, to: String) -> Result<(), String> {
-    move_in(&heynote_dir(&app)?, &from, &to)
+pub fn heynote_remove(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
+    let result = remove_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Remove { path }, result)
 }
 
 #[tauri::command]
-pub fn heynote_mkdir(app: AppHandle, path: String) -> Result<(), String> {
-    mkdir_in(&heynote_dir(&app)?, &path)
+pub fn heynote_move(
+    app: AppHandle,
+    from: String,
+    to: String,
+    origin: Option<String>,
+) -> Result<(), String> {
+    let result = move_in(&heynote_dir(&app)?, &from, &to);
+    broadcast(&app, origin, NoteChange::Move { from, to }, result)
 }
 
 #[tauri::command]
-pub fn heynote_rmdir(app: AppHandle, path: String) -> Result<(), String> {
-    rmdir_in(&heynote_dir(&app)?, &path)
+pub fn heynote_mkdir(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
+    let result = mkdir_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Mkdir { path }, result)
+}
+
+#[tauri::command]
+pub fn heynote_rmdir(app: AppHandle, path: String, origin: Option<String>) -> Result<(), String> {
+    let result = rmdir_in(&heynote_dir(&app)?, &path);
+    broadcast(&app, origin, NoteChange::Rmdir { path }, result)
 }
 
 #[tauri::command]
 pub fn heynote_save_state(app: AppHandle, state: Value) -> Result<(), String> {
     save_state_in(&heynote_dir(&app)?, &state)
-}
-
-/// Event sent to the window holding Heynote when another window asks for it: it focuses its Heynote pane.
-pub const HEYNOTE_FOCUS_EVENT: &str = "heynote-focus";
-
-/// Which window holds the one Heynote pane of the app, by label; every Heynote page keeps its own copy of the
-/// notes, so there is at most one across all windows.
-#[derive(Default)]
-pub struct HeynoteOwner(Mutex<Option<String>>);
-
-impl HeynoteOwner {
-    /// Window `label` wants to open Heynote: `None` when it may (it now holds it), else the label of the window
-    /// that already does.
-    pub fn claim(&self, label: &str) -> Option<String> {
-        let mut owner = self.0.lock().ok()?;
-        match owner.as_deref() {
-            Some(other) if other != label => Some(other.to_string()),
-            _ => {
-                *owner = Some(label.to_string());
-                None
-            }
-        }
-    }
-
-    /// Window `label` closed its Heynote pane or itself; Heynote is free when it held it.
-    pub fn release(&self, label: &str) {
-        if let Ok(mut owner) = self.0.lock() {
-            if owner.as_deref() == Some(label) {
-                *owner = None;
-            }
-        }
-    }
-}
-
-/// The calling window wants to open Heynote: null when it may, else the label of the window holding it.
-#[tauri::command]
-pub fn heynote_claim(window: WebviewWindow, owner: State<'_, HeynoteOwner>) -> Option<String> {
-    owner.claim(window.label())
-}
-
-/// The calling window closed its Heynote pane.
-#[tauri::command]
-pub fn heynote_release(window: WebviewWindow, owner: State<'_, HeynoteOwner>) {
-    owner.release(window.label());
-}
-
-/// Brings window `label` forward and has it focus its Heynote pane.
-#[tauri::command]
-pub fn heynote_focus(app: AppHandle, label: String) -> Result<(), String> {
-    let window = app.get_webview_window(&label).ok_or_else(|| {
-        "The window holding Heynote has closed; click Heynote again to open it here.".to_string()
-    })?;
-    let text = |e: tauri::Error| format!("Could not bring forward the window holding Heynote: {e}");
-    window.unminimize().map_err(text)?;
-    window.show().map_err(text)?;
-    window.set_focus().map_err(text)?;
-    app.emit_to(label.as_str(), HEYNOTE_FOCUS_EVENT, ())
-        .map_err(text)
 }
 
 #[cfg(test)]
@@ -326,6 +328,55 @@ mod tests {
     }
 
     #[test]
+    fn the_change_payload_names_its_kind_and_origin() {
+        let s = String::from;
+        let cases = [
+            (
+                NoteChange::Write {
+                    path: s("a.txt"),
+                    content: s("hi"),
+                },
+                json!({ "origin": "pane-1", "kind": "write", "path": "a.txt", "content": "hi" }),
+            ),
+            (
+                NoteChange::Remove { path: s("a.txt") },
+                json!({ "origin": "pane-1", "kind": "remove", "path": "a.txt" }),
+            ),
+            (
+                NoteChange::Move {
+                    from: s("a.txt"),
+                    to: s("work/b.txt"),
+                },
+                json!({ "origin": "pane-1", "kind": "move", "from": "a.txt", "to": "work/b.txt" }),
+            ),
+            (
+                NoteChange::Mkdir { path: s("work") },
+                json!({ "origin": "pane-1", "kind": "mkdir", "path": "work" }),
+            ),
+            (
+                NoteChange::Rmdir { path: s("work") },
+                json!({ "origin": "pane-1", "kind": "rmdir", "path": "work" }),
+            ),
+        ];
+        for (change, expected) in cases {
+            let payload = serde_json::to_value(notes_changed(Some(s("pane-1")), change)).unwrap();
+            assert_eq!(payload, expected);
+        }
+    }
+
+    #[test]
+    fn a_change_without_an_origin_goes_out_with_an_empty_one() {
+        let change = NoteChange::Remove {
+            path: String::from("a.txt"),
+        };
+        let payload = serde_json::to_value(notes_changed(None, change)).unwrap();
+        assert_eq!(
+            payload,
+            json!({ "origin": "", "kind": "remove", "path": "a.txt" })
+        );
+    }
+
+    #[test]
     fn paths_cannot_leave_the_notes_folder() {
         let dir = TempDir::new("escape");
         for bad in ["", "../x.txt", "/etc/passwd", "a/../../x.txt", "./x.txt"] {
@@ -335,22 +386,5 @@ mod tests {
             );
         }
         assert!(move_in(&dir.0, "a.txt", "../b.txt").is_err());
-    }
-
-    #[test]
-    fn heynote_open_in_another_window_names_that_window() {
-        let owner = HeynoteOwner::default();
-        assert_eq!(owner.claim("main"), None);
-        assert_eq!(owner.claim("main"), None, "the holder may ask again");
-        assert_eq!(owner.claim("window-1").as_deref(), Some("main"));
-        owner.release("window-1");
-        assert_eq!(
-            owner.claim("window-1").as_deref(),
-            Some("main"),
-            "only the holder releases"
-        );
-        owner.release("main");
-        assert_eq!(owner.claim("window-1"), None);
-        assert_eq!(owner.claim("main").as_deref(), Some("window-1"));
     }
 }

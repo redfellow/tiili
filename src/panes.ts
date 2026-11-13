@@ -124,8 +124,6 @@ export class Panes {
     const panes = new Panes(backend, root, platform, settings, openSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
-    // Another window asked for Heynote while this one holds it.
-    await backend.onAppEvent("heynote-focus", () => panes.focusHeynote());
     panes.contextMenu = await attachClipboardMenus(
       backend,
       () => panes.current()?.terminal?.term,
@@ -216,33 +214,12 @@ export class Panes {
     await this.backend.newWindow(await this.currentCwd());
   }
 
-  /** Focuses this window's Heynote pane, when it has one. */
-  focusHeynote(): void {
-    const open = this.panes.findIndex((pane) => pane.note !== undefined);
-    if (open >= 0) this.focus(open);
-  }
-
   /**
-   * Opens the Heynote pane after the others and focuses it. There is one at most across all windows, since every
-   * Heynote page keeps its own copy of the notes: when this window has it, it only takes the focus; when another
-   * window has it, that window comes forward with its Heynote pane focused.
+   * Opens a new Heynote pane after the others and focuses it, however many are open in this window already. The
+   * Heynote pages keep each other in sync through the note store (see `heynote/bridge.js`), in this window and
+   * in every other tiili window, so the pane opens in the window that asked for it.
    */
   async openHeynote(): Promise<void> {
-    const has = () => this.panes.some((pane) => pane.note !== undefined);
-    if (has()) {
-      this.focusHeynote();
-      return;
-    }
-    const owner = await this.backend.claimHeynote();
-    if (owner !== null) {
-      await this.backend.focusHeynote(owner);
-      return;
-    }
-    // A second click may have opened it while this one waited for the claim.
-    if (has()) {
-      this.focusHeynote();
-      return;
-    }
     const { element, chip, host } = this.paneElement();
     const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -332,10 +309,7 @@ export class Panes {
   async close(index: number): Promise<void> {
     const pane = this.panes[index];
     if (!pane) return;
-    if (pane.note) {
-      pane.note.flush();
-      this.backend.releaseHeynote().catch((error: unknown) => console.error(error));
-    }
+    pane.note?.flush();
     this.remove(pane);
     if (this.panes.length === 0) {
       await this.backend.closeWindow();
