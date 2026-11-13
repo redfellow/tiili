@@ -1,3 +1,4 @@
+pub mod app_icon;
 pub mod bridge;
 pub mod cwd;
 pub mod pty;
@@ -8,7 +9,7 @@ use std::path::Path;
 
 use serde::Serialize;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use pty::{SessionId, SessionRegistry};
 
@@ -191,7 +192,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(SessionRegistry::new())
+        .manage(app_icon::IconState::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::ThemeChanged(_) = event {
+                app_icon::apply(window.app_handle());
+            }
+        })
         .setup(|app| {
+            app_icon::apply(app.handle());
             #[cfg(target_os = "macos")]
             {
                 let menu = macos_menu(app.handle())?;
@@ -207,8 +215,6 @@ pub fn run() {
                     }
                 });
             }
-            #[cfg(not(target_os = "macos"))]
-            let _ = app;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -218,7 +224,8 @@ pub fn run() {
             pty_close,
             pty_cwd,
             settings::settings_load,
-            settings::settings_save
+            settings::settings_save,
+            app_icon::app_icon_set
         ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");

@@ -34,6 +34,11 @@ const REQUIRED: Record<string, [file: string, size: number | null][]> = {
     ["128x128@2x.png", 256],
     ["icon.png", 512],
   ],
+  // The light and dark icons the app swaps in at run time to follow the OS appearance (src-tauri/src/app_icon.rs).
+  "Run time": [
+    ["app-light.png", 512],
+    ["app-dark.png", 512],
+  ],
 };
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

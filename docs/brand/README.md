@@ -31,7 +31,7 @@ carries a `>_` prompt.
 | App icon tile | kalkki `#F6F1E9` | koski `#182023` |
 
 - Below 64 px the `>_` is left off (`*-small.svg`); the brick is too small to hold it.
-- The app icon tile has a 22.5% corner radius; the mark fills 70% of its width.
+- The app icon tile has a 22.5% corner radius; the mark fills 88% of its width.
 - Next to the wordmark the mark stands free, at 0.82× the wordmark's font size, 0.32 em apart.
 
 Files in `logo/`: `mark-{light,dark}[-small].svg` (free-standing), `icon-{light,dark}[-small].svg` (on the tile) and `lockup-{light,dark}.svg` (mark and brick-dot wordmark together).

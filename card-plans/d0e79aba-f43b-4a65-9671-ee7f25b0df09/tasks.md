@@ -1,0 +1,3 @@
+- [x] 1.1 Change the default font settings to size 12 and ligatures on in `src/settings.ts`
+  - proof: `npx vitest run src/settings.test.ts src/settingsSession.test.ts src/responsive.test.ts`
+  - proof: `npx eslint src/settings.ts`

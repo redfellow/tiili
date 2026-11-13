@@ -36,7 +36,7 @@ Download the installer for your platform from [Releases](https://github.com/redf
 | Platform | Installer |
 | --- | --- |
 | macOS | universal `.dmg` (Apple Silicon and Intel) |
-| Windows | `.msi` |
+| Windows | NSIS setup `.exe` (`tiili_<version>_x64-setup.exe`) |
 | Linux | `.AppImage` or `.deb` |
 
 ## Shortcuts
