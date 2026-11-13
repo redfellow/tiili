@@ -6,6 +6,7 @@ pub mod notes;
 pub mod pty;
 pub mod repo;
 pub mod settings;
+pub mod shell_integration;
 pub mod window_state;
 
 use std::path::Path;
@@ -77,9 +78,10 @@ fn text(err: std::io::Error) -> String {
     err.to_string()
 }
 
-/// Starts a new default shell in `cwd` (home folder when absent or unreadable) and returns its
-/// session id; its output streams over `on_output`, a channel of its own, and its working directory
-/// as `pane-cwd` events and what runs in it as `pane-command` events.
+/// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
+/// in Settings (`off` when absent) and returns its session id; its output streams over `on_output`, a
+/// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
+/// `pane-command` events.
 #[tauri::command]
 fn pty_spawn(
     app: AppHandle,
@@ -87,6 +89,7 @@ fn pty_spawn(
     rows: u16,
     cols: u16,
     cwd: Option<String>,
+    prompt: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
     let cwd_app = app.clone();
@@ -94,6 +97,7 @@ fn pty_spawn(
     sessions
         .spawn_tracked(
             cwd.as_deref().map(Path::new),
+            prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
             rows,
             cols,
             Box::new(move |_id, data| {

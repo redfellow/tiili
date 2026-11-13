@@ -65,6 +65,7 @@ fn change_directory_into_a_repository_tracked_root_follows() {
     let id = registry
         .spawn_tracked(
             Some(&start),
+            "off",
             24,
             80,
             Box::new(|_, _| {}),

@@ -3,6 +3,7 @@ import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } 
 import {
   APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
+import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 
@@ -258,6 +259,38 @@ function themeList(onSelect: () => void, locked: () => boolean) {
   return picker;
 }
 
+/** A prompt drawn line by line in the current theme's terminal ground and ANSI colours, so it follows theme changes. */
+function promptPreview(lines: PromptSegment[][]): HTMLElement {
+  const preview = element("span", { className: "settings-prompt-preview" },
+    ...lines.map((line) => element("span", {},
+      ...line.map(({ text, ansi }) => {
+        const run = element("span", {}, text);
+        run.style.color = ansi === "fg" ? "var(--term-fg)" : `var(--ansi-${ansi})`;
+        return run;
+      }))));
+  preview.setAttribute("aria-hidden", "true");
+  return preview;
+}
+
+/** The prompt list: Off first, then the One-line and Two-line styles, each row with a preview of its prompt. */
+function promptList(onSelect: () => void, locked: () => boolean) {
+  const byId = new Map(PROMPT_STYLES.map((style) => [style.id as string, style]));
+  const picker = pickList("Prompt", onSelect, locked, (row, item) => {
+    const style = byId.get(item.id)!;
+    row.append(element("span", {}, item.name));
+    if (style.preview.length > 0) row.append(promptPreview(style.preview));
+    if (style.preview.length > 1) row.classList.add("settings-option-tall");
+    if (item.id === DEFAULT_SETTINGS.prompt) markDefault(row);
+  });
+  const of = (group: string | undefined) =>
+    PROMPT_STYLES.filter((style) => style.group === group).map(({ id, label }) => ({ id, name: label }));
+  picker.setGroups([{ items: of(undefined) }, { label: "One-line", items: of("One-line") },
+    { label: "Two-line", items: of("Two-line") }]);
+  // Short enough to show whole, so no style hides below a scroll.
+  picker.list.classList.add("settings-list-whole");
+  return picker;
+}
+
 /**
  * Builds the settings dialogue into `document.body`: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab
  * (Font) and a Behaviour tab (Tiling, Responsive text, Panes, Startup), with Reset to defaults, Cancel and Save.
@@ -267,6 +300,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const session = createSettingsSession(options.initial);
 
   const theme = themeList(() => change(read()), () => saving);
+  const prompt = promptList(() => change(read()), () => saving);
   let osFonts: string[] = [];
   const family = pickList("Font family", () => change(read()), () => saving, (row, item) => {
     row.style.fontFamily = `"${item.name}", monospace`;
@@ -369,6 +403,13 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
 
   const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" },
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
+    element("fieldset", {},
+      element("legend", {}, "Prompt"),
+      prompt.list,
+      element("p", { className: "settings-hint" },
+        "Applies to panes opened from now on. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
+        "function) always wins."),
+    ),
     cursorFields,
     inactiveFields,
     ...(options.showAppIcon ? [appIconFields] : []),
@@ -427,6 +468,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
 
   const show = (settings: Settings) => {
     theme.show(settings.theme);
+    prompt.show(settings.prompt);
     renderFamilies(settings.font.family);
     size.input.value = String(settings.font.size);
     size.sync();
@@ -471,6 +513,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     behaviour: { hoverHighlight: hoverHighlight.checked, startupSplash: startupSplash.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
     appIcon: appIcon.value,
+    prompt: prompt.value(),
   });
 
   const report = (error: unknown) => {
@@ -494,6 +537,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     appIconFields.disabled = on;
     reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
+    prompt.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));
     tiling.list.setAttribute("aria-disabled", String(on));
   };

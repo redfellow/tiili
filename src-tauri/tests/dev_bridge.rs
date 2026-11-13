@@ -53,7 +53,10 @@ fn bridge() -> Bridge {
 }
 
 fn connect(bridge: &Bridge, token: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, Error> {
-    let url = format!("ws://{}/pty?rows=24&cols=80&token={token}", bridge.addr);
+    let url = format!(
+        "ws://{}/pty?rows=24&cols=80&prompt=off&token={token}",
+        bridge.addr
+    );
     let (mut ws, _) = tungstenite::connect(url)?;
     if let MaybeTlsStream::Plain(stream) = ws.get_mut() {
         stream
