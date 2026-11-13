@@ -6,7 +6,7 @@ A Heynote scratchpad in a tiili pane, beside the terminals, with its notes kept 
 ## Requirements
 
 ### Requirement: Heynote pane
-tiili SHALL open Heynote's web app in a pane of its own that tiles, resizes, swaps, focuses and closes like a terminal pane. At most one Heynote pane SHALL be open: opening another SHALL focus the open one. The pane's chip SHALL read Heynote.
+tiili SHALL open Heynote's web app in a pane of its own that tiles, resizes, swaps, focuses and closes like a terminal pane. At most one Heynote pane SHALL be open: opening another SHALL focus the open one. The pane's chip SHALL read Heynote. Until the user changes these in Heynote, Heynote SHALL start with its left panel closed and use Geist Mono as its editor font.
 
 #### Scenario: Open Heynote
 - **WHEN** the user clicks the Heynote button
@@ -15,6 +15,14 @@ tiili SHALL open Heynote's web app in a pane of its own that tiles, resizes, swa
 #### Scenario: Already open
 - **WHEN** a Heynote pane is open and the user clicks the Heynote button
 - **THEN** no new pane opens and the Heynote pane takes the focus
+
+#### Scenario: First open
+- **WHEN** a user who has never changed Heynote's settings opens the Heynote pane
+- **THEN** the editor fills the pane without the notes list, in Geist Mono
+
+#### Scenario: Panel choice is kept
+- **WHEN** the user opens the left panel with ⌘⇧S and later opens Heynote again
+- **THEN** the left panel is shown
 
 ### Requirement: Notes are files
 The Heynote pane SHALL keep its notes as files under `heynote/notes/` in tiili's app config folder, and its settings, open tabs and theme in `heynote/state.json`. Each change SHALL be written through as it happens, and all open notes SHALL be saved when the pane closes. A note path that is absolute or leaves the notes folder SHALL be refused.

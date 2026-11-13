@@ -1,0 +1,3 @@
+## Decisions
+- **Defaults live in tiili's bridge.** `heynote/bridge.js` adds `showLeftPanel: false` to its default settings. Heynote's store reads `settings.showLeftPanel ?? true`, and saved settings override the defaults. Heynote's own source is not changed.
+- **Borrowed font.** Before Heynote starts, the bridge copies the parent page's `@font-face` rules for Geist Mono into the frame, with font URLs made absolute against the stylesheet they came from. It waits for `document.fonts.load`, so Heynote's monospace check measures Geist Mono, not a fallback. Only then does it set `defaultFontFamily` to Geist Mono. This reuses tiili's bundled font file in both dev and production, and adds nothing to `public/heynote/`.
