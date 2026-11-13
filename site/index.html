@@ -195,6 +195,8 @@
   .foot-text { font-size: 14px; color: var(--muted); }
   .foot-text p { margin: 0 0 8px; }
   .foot-text .fired { color: var(--fg); font-weight: 500; font-size: 15px; }
+  .foot-text .fired a { color: inherit; }
+  .foot-text .fired a:hover { color: var(--accent-text); }
   .foot-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; }
   .foot-links a { color: var(--fg); text-decoration: none; }
   .foot-links a:hover { color: var(--accent-text); }
@@ -420,7 +422,7 @@ chmod +x tiili_*_amd64.AppImage && ./tiili_*_amd64.AppImage</pre>
   <div class="wrap">
     <div class="stamp" aria-hidden="true"><div class="frog"><span class="t">TIILI</span><small>TRE · Nº 1</small></div></div>
     <div class="foot-text">
-      <p class="fired">Fired in Tampere.</p>
+      <p class="fired">Fired in Tampere by <a href="https://github.com/redfellow">Reijo Nyberg</a>.</p>
       <div class="foot-links">
         <a href="https://github.com/redfellow/tiili">GitHub</a>
         <a href="https://github.com/redfellow/tiili/releases">Releases</a>
