@@ -15,16 +15,21 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   // A missing or broken settings file loads as null, which normalizes to the defaults.
   let settings: Settings = normalize(await backend.loadSettings().catch(() => null));
   applyTheme(settings.theme);
+  // The icon is cosmetic: a failure must not keep the terminal from starting.
+  backend.setAppIcon(settings.appIcon).catch(() => undefined);
 
   const platform = currentPlatform();
   const openSettings = () => dialog.open();
   const panes = await Panes.create(backend, root, platform, () => settings, openSettings);
   const dialog = createSettingsDialog({
     initial: settings,
+    showAppIcon: platform === "macos",
     apply: async (next) => {
       const themeChanged = next.theme !== settings.theme;
+      const iconChanged = next.appIcon !== settings.appIcon;
       settings = next;
       if (themeChanged) applyTheme(next.theme);
+      if (iconChanged) await backend.setAppIcon(next.appIcon);
       await panes.applySettings(next, themeChanged);
     },
     save: (next) => backend.saveSettings(next),
