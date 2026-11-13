@@ -10,6 +10,8 @@ import {
   type LayoutAction,
   type PaneAction,
   type Platform,
+  type ZoomAction,
+  zoomAction,
 } from "./keymap";
 
 function chord(key: string, mods: Partial<Omit<KeyChord, "key">> = {}): KeyChord {
@@ -130,6 +132,42 @@ describe("layoutAction", () => {
     for (const [, platform, event, expected] of layoutCases) {
       if (expected === null) continue;
       expect(paneAction(event, platform)).toBeNull();
+      expect(clipboardAction(event, platform)).toBeNull();
+    }
+  });
+});
+
+const zoomCases: [string, Platform, KeyChord, ZoomAction | null][] = [
+  ["Zoom in one pane: ⌘= zooms in on macOS", "macos", { ...chord("=", { metaKey: true }), code: "Equal" }, "in"],
+  ["Zoom in one pane: ⌘+ zooms in on macOS", "macos", { ...chord("+", { metaKey: true, shiftKey: true }), code: "Equal" }, "in"],
+  ["Zoom in one pane: ⌘− zooms out on macOS", "macos", { ...chord("-", { metaKey: true }), code: "Minus" }, "out"],
+  ["Reset zoom: ⌘0 on macOS", "macos", { ...chord("0", { metaKey: true }), code: "Digit0" }, "reset"],
+  ["Zoom in one pane: Ctrl+= zooms in on Windows", "windows", { ...chord("=", { ctrlKey: true }), code: "Equal" }, "in"],
+  ["Zoom in one pane: Ctrl++ zooms in on Windows", "windows", { ...chord("+", { ctrlKey: true, shiftKey: true }), code: "Equal" }, "in"],
+  ["Zoom in one pane: Ctrl+− zooms out on Windows", "windows", { ...chord("-", { ctrlKey: true }), code: "Minus" }, "out"],
+  ["Reset zoom: Ctrl+0 on Windows", "windows", { ...chord("0", { ctrlKey: true }), code: "Digit0" }, "reset"],
+  ["Zoom in one pane: Ctrl+numpad + zooms in on Linux", "linux", { ...chord("+", { ctrlKey: true }), code: "NumpadAdd" }, "in"],
+  ["Zoom in one pane: Ctrl+numpad − zooms out on Linux", "linux", { ...chord("-", { ctrlKey: true }), code: "NumpadSubtract" }, "out"],
+  ["Reset zoom: Ctrl+numpad 0 on Linux", "linux", { ...chord("0", { ctrlKey: true }), code: "Numpad0" }, "reset"],
+  ["Layout reset ⌃⌘0 is not a zoom key", "macos", { ...chord("0", mac), code: "Digit0" }, null],
+  ["Layout reset Ctrl+Alt+Shift+0 is not a zoom key", "windows", { ...chord(")", pc), code: "Digit0" }, null],
+  ["Alt+− is not a zoom key", "linux", { ...chord("-", { altKey: true }), code: "Minus" }, null],
+  ["Windows: ⌘− is not a zoom key", "windows", { ...chord("-", { metaKey: true }), code: "Minus" }, null],
+  ["macOS: Ctrl+− reaches the shell", "macos", { ...chord("-", { ctrlKey: true }), code: "Minus" }, null],
+  ["Plain − reaches the shell", "linux", { ...chord("-"), code: "Minus" }, null],
+];
+
+describe("zoomAction", () => {
+  it.each(zoomCases)("%s", (_name, platform, event, expected) => {
+    expect(zoomAction(event, platform)).toBe(expected);
+  });
+
+  it("Zoom in one pane: zoom keys are not layout, pane, settings or clipboard keys", () => {
+    for (const [, platform, event, expected] of zoomCases) {
+      if (expected === null) continue;
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(paneAction(event, platform)).toBeNull();
+      expect(settingsShortcut(event, platform)).toBeNull();
       expect(clipboardAction(event, platform)).toBeNull();
     }
   });

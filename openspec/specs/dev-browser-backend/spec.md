@@ -5,21 +5,6 @@ A real shell in tiili's terminal when the frontend runs in a plain browser from 
 
 ## Requirements
 
-### Requirement: Browser dev server runs a real shell
-When the frontend runs in a plain browser from the dev server, the terminal SHALL connect over a WebSocket to a dev-only bridge that runs the user's default shell through tiili's own PTY code, with typing, resize, exit and restart on Enter working as in the app. In the Tauri app the terminal SHALL keep using the Tauri commands.
-
-#### Scenario: Backend selection
-- **WHEN** the page loads with `__TAURI_INTERNALS__` on `window`
-- **THEN** the Tauri backend is used, and otherwise the WebSocket backend
-
-#### Scenario: Shell in the browser
-- **WHEN** the user types `echo hi` and Enter in the browser preview
-- **THEN** the shell's output `hi` is shown
-
-#### Scenario: Exit and restart
-- **WHEN** the shell exits in the browser preview and the user presses Enter
-- **THEN** the exit message is shown and a new shell starts
-
 ### Requirement: Bridge is local, tokened and dev-only
 The bridge SHALL listen on 127.0.0.1 only, SHALL refuse a connection without the per-run token the dev server gives the page, SHALL end the shell when its connection closes, and SHALL NOT be part of `npm run build` or the app bundle.
 
@@ -44,3 +29,18 @@ When the dev bridge accepts a connection but cannot open a pseudo-terminal or st
 #### Scenario: Shell starts
 - **WHEN** the bridge starts the shell
 - **THEN** it sends a ready message, and the terminal runs the user's shell
+
+### Requirement: Browser dev server runs a real shell that closes on exit
+When the frontend runs in a plain browser from the dev server, the terminal SHALL connect over a WebSocket to a dev-only bridge that runs the user's default shell through tiili's own PTY code, with typing, resize and exit working as in the app. In the Tauri app the terminal SHALL keep using the Tauri commands.
+
+#### Scenario: Backend selection
+- **WHEN** the page loads with `__TAURI_INTERNALS__` on `window`
+- **THEN** the Tauri backend is used, and otherwise the WebSocket backend
+
+#### Scenario: Shell in the browser
+- **WHEN** the user types `echo hi` and Enter in the browser preview
+- **THEN** the shell's output `hi` is shown
+
+#### Scenario: Exit closes the pane
+- **WHEN** the shell exits in the browser preview
+- **THEN** its pane closes, as in the app
