@@ -1,0 +1,17 @@
+format: 1
+slug: split-appearance-tab-into-two-tabs-style
+title: "Split Appearance tab into two tabs: Style & Typography"
+x-harvaaja-card: 1d625346-45ee-4d4d-ae1f-1fecffe5f364
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The settings spec's "Settings tabs" and "Inactive pane settings"
+    requirements name the Appearance tab; splitting it changes that contract. No
+    active change covers it.
+  citations:
+    - "openspec/specs/settings/spec.md:117 Requirement: Settings tabs"
+    - "openspec/specs/settings/spec.md:106 Requirement: Inactive pane settings"
+    - src/settingsDialog.ts:362-375
+  revision: 2752e420-f13e-4299-96ba-57879a1c2e3e
