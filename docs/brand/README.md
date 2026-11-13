@@ -34,7 +34,7 @@ carries a `>_` prompt.
 - The app icon tile has a 22.5% corner radius; the mark fills 70% of its width.
 - Next to the wordmark the mark stands free, at 0.82× the wordmark's font size, 0.32 em apart.
 
-Files in `logo/`: `mark-{light,dark}[-small].svg` (free-standing) and `icon-{light,dark}[-small].svg` (on the tile).
+Files in `logo/`: `mark-{light,dark}[-small].svg` (free-standing), `icon-{light,dark}[-small].svg` (on the tile) and `lockup-{light,dark}.svg` (mark and brick-dot wordmark together).
 The prompt is drawn as shapes, so the SVGs do not depend on any font.
 
 ### Brick dots wordmark
