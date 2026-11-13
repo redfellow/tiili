@@ -1,0 +1,20 @@
+format: 1
+slug: eof-shouldnt-offer-a-new-terminal-like-p
+title: EOF shouldnt offer a new terminal like [process exited] Press Enter to
+  start a new shell when shut down. If it's the ...
+x-harvaaja-card: 06de82ec-fa79-4113-a74c-0f17caad23de
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: 'Changes the terminal-session requirement "Shell exit offers a new
+    shell": shell exit now closes its pane (and the window when it is the last),
+    reusing pane close.'
+  citations:
+    - "openspec/specs/terminal-session/spec.md: Requirement: Shell exit offers a
+      new shell"
+    - "openspec/specs/pane-tiling/spec.md: Pane shortcuts / Last pane closed"
+    - src/terminal.ts:149-163
+    - src/panes.ts:279-289
+  revision: aa6d1ecb-8b67-448a-8b7b-294e995bf2bf

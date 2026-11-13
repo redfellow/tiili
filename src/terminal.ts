@@ -7,7 +7,6 @@ import { responsiveFont, zoomedSize } from "./responsive";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
-const EXIT_MESSAGE = "[process exited] Press Enter to start a new shell";
 /** Resizing settles this long before a pane re-fits and tells its shell the new size. */
 const RESIZE_SETTLE_MS = 50;
 
@@ -104,7 +103,7 @@ export function refreshTheme(term: Terminal): void {
  * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
  * chosen; otherwise it is an outline. The shell runs on `backend`; `onSession` hears the id of each shell session
  * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
- * added to the font size whenever the terminal refits.
+ * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits.
  */
 export async function openTerminal(
   backend: Backend,
@@ -113,6 +112,7 @@ export async function openTerminal(
   cwd?: string,
   onSession: (id: number) => void = () => {},
   zoom: () => number = () => 0,
+  onExit: () => void = () => {},
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -154,18 +154,11 @@ export async function openTerminal(
   const unlistenExit = await backend.onExit((id) => {
     if (id !== session) return;
     running = false;
-    term.write(`\r\n${EXIT_MESSAGE}\r\n`);
+    onExit();
   });
 
   term.onData((data) => {
-    if (running) {
-      backend.write(session as SessionId, data).catch(reportError);
-    } else if (data.includes("\r")) {
-      const ended = session;
-      session = undefined;
-      const restart = ended === undefined ? Promise.resolve() : backend.close(ended);
-      restart.then(() => spawn()).catch(reportError);
-    }
+    if (running) backend.write(session as SessionId, data).catch(reportError);
   });
 
   // Re-fit once resizing settles, then tell the shell its size only if it changed. A font change resizes
