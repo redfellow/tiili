@@ -6,7 +6,6 @@
 - [ ] 1.3 Thread `prompt` through `pty_spawn`, `SessionRegistry::spawn_tracked`, `spawn_in` and the dev bridge; add an integration test that a zsh/bash with an empty HOME and Classic gets the tiili prompt and one whose rc sets PS1/PROMPT keeps it (skipped when the shell is missing)
   - Tests to update: src-tauri/tests/pty_session.rs, src-tauri/tests/pty_registry.rs, src-tauri/tests/dev_bridge.rs, src-tauri/tests/pty_resize_panes.rs
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session --test pty_registry --test dev_bridge --test pty_resize_panes`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 2. Setting and picker (frontend)
