@@ -9,7 +9,7 @@ const big: Settings = { ...opening, font: { ...opening.font, size: 16 } };
 const faded: Settings = { ...opening, inactive: { opacity: 0.5, desaturate: true } };
 const stacked: Settings = { ...opening, tiling: { layout: "rows" } };
 const flatText: Settings = { ...opening, responsive: { enabled: false, strength: 0.5 } };
-const noHover: Settings = { ...opening, behaviour: { hoverHighlight: false } };
+const noHover: Settings = { ...opening, behaviour: { ...opening.behaviour, hoverHighlight: false } };
 
 type Step = (s: SettingsSession) => unknown;
 const cases: [string, Step[], unknown, Settings, Settings][] = [

@@ -33,6 +33,8 @@ export interface SettingsDialogOptions {
 
 export interface SettingsDialog {
   open(): void;
+  /** Takes settings saved elsewhere (the splash's "tiili no-splash") as the saved and previewed settings. */
+  adopt(settings: Settings): void;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -258,7 +260,7 @@ function themeList(onSelect: () => void, locked: () => boolean) {
 
 /**
  * Builds the settings dialogue into `document.body`: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab
- * (Font) and a Behaviour tab (Tiling, Responsive text, Panes), with Reset to defaults, Cancel and Save.
+ * (Font) and a Behaviour tab (Tiling, Responsive text, Panes, Startup), with Reset to defaults, Cancel and Save.
  * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
@@ -297,6 +299,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const inactiveOpacity = rangeInput("inactiveOpacity", INACTIVE_OPACITY);
   const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
+  const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const appIcon = element("select", { name: "appIcon" },
     ...APP_ICONS.map((icon) => element("option", { value: icon }, APP_ICON_LABELS[icon])));
   const status = element("p", { className: "settings-status" });
@@ -357,6 +360,13 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("span", {}, "Highlight the terminal under the mouse")),
   );
 
+  const startupFields = element("fieldset", {},
+    element("legend", {}, "Startup"),
+    element("label", { className: "settings-check" }, startupSplash,
+      element("span", {}, "Play the tiili splash when tiili opens")),
+    element("p", { className: "settings-hint" }, "Any key or click skips it."),
+  );
+
   const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" },
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
     cursorFields,
@@ -365,7 +375,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   );
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
-    tilingFields, responsiveFields, paneFields);
+    tilingFields, responsiveFields, paneFields, startupFields);
   const panels = [stylePanel, typography, behaviour];
   const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
@@ -435,6 +445,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     inactiveOpacity.sync();
     inactiveDesaturate.checked = settings.inactive.desaturate;
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
+    startupSplash.checked = settings.behaviour.startupSplash;
     appIcon.value = settings.appIcon;
     tiling.show(settings.tiling.layout);
     responsiveOn.checked = settings.responsive.enabled;
@@ -457,7 +468,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     cursor: { style: cursorStyle.value, blink: cursorBlink.checked },
     tiling: { layout: tiling.value() },
     responsive: { enabled: responsiveOn.checked, strength: responsiveStrength.input.valueAsNumber },
-    behaviour: { hoverHighlight: hoverHighlight.checked },
+    behaviour: { hoverHighlight: hoverHighlight.checked, startupSplash: startupSplash.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
     appIcon: appIcon.value,
   });
@@ -479,7 +490,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const lock = (on: boolean) => {
     saving = on;
     fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = on;
-    responsiveFields.disabled = paneFields.disabled = on;
+    responsiveFields.disabled = paneFields.disabled = startupFields.disabled = on;
     appIconFields.disabled = on;
     reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
@@ -576,6 +587,11 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       // Shown once open, so the selected theme can scroll into view.
       show(session.saved);
       theme.list.focus();
+    },
+    adopt(settings) {
+      session.commit(settings);
+      session.edit(settings);
+      if (dialog.open) show(settings);
     },
   };
 }
