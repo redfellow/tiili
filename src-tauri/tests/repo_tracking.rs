@@ -71,6 +71,7 @@ fn change_directory_into_a_repository_tracked_root_follows() {
             Some(Box::new(move |_, report| {
                 let _ = tx.send(report.clone());
             })),
+            None,
             Box::new(|_, _| {}),
         )
         .expect("shell starts");

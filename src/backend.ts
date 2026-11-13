@@ -1,4 +1,4 @@
-import type { PaneCwd } from "./paneChip";
+import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon } from "./settings";
 
 /** Identifies one shell session of a backend. */
@@ -7,12 +7,13 @@ export type SessionId = number;
 /** An item of the right-click menu: a labelled action, or a separator line. */
 export type MenuItem = { label: string; action: () => void } | { separator: true };
 
-/** Events the app sends: native menu items, the app menu's Settings… and a shell's working directory report. */
+/** Events the app sends: native menu items, the app menu's Settings…, a shell's working directory report and what runs in a pane. */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
   pane: "new" | "close";
   "open-settings": undefined;
   "pane-cwd": PaneCwd;
+  "pane-command": PaneCommand;
 }
 
 /**
