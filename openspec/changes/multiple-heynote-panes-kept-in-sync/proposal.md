@@ -10,6 +10,10 @@ time, as many as wanted, in any window.
 
 - The Heynote button always opens a new Heynote pane after the others and focuses it; the "at most one" rule and
   its "Already open" scenario go.
+- The "One Heynote across windows" rule goes too: clicking the Heynote button opens a pane in that window even when
+  another window holds Heynote, instead of bringing that window forward. The Rust claim/release/focus commands
+  (`heynote_claim`, `heynote_release`, `heynote_focus`, the `heynote-focus` event) and their backend methods are
+  removed.
 - Heynote panes stay in sync. Every note write, create, delete or move, and every folder create or remove, made
   through tiili's note store is broadcast as a Rust event (`heynote-notes-changed`) to every window; each Heynote
   page except the one that made the change updates its notes map and folder list and hands note-text changes to
@@ -25,6 +29,9 @@ time, as many as wanted, in any window.
   - After: a second Heynote pane opens and takes the focus
 - Typing in one Heynote pane
   - After: the same note in another Heynote pane shows the typed text
+- Clicking the Heynote button in a window while another window holds Heynote
+  - Now: the other window comes forward with its Heynote pane focused
+  - After: a Heynote pane opens in the clicked window and takes the focus
 
 ## Assumptions
 
@@ -33,3 +40,4 @@ time, as many as wanted, in any window.
 - A page ignores its own changes by an origin id it sends with each command. Ruled out: comparing content.
 - Works in either order with the multi-window cards: the event is emitted to the whole app, so later windows get it
   with no extra work.
+- The unused claim/release/focus plumbing is deleted rather than left in place. Ruled out: keeping it unused.

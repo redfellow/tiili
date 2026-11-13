@@ -35,3 +35,13 @@ When a Heynote pane writes, creates, deletes or moves a note, or creates or remo
 #### Scenario: Deleted or moved note
 - **WHEN** the user deletes or moves a note in one Heynote pane
 - **THEN** the other Heynote pane no longer lists it under its old path
+
+#### Scenario: Heynote open in another window
+- **WHEN** a Heynote pane is open in one tiili window and the user clicks the Heynote button in another
+- **THEN** a Heynote pane opens in the clicked window and takes the focus, and the other window stays where it is
+
+## REMOVED Requirements
+
+### Requirement: One Heynote across windows
+**Reason**: The rule existed only because two Heynote pages could not sync; with panes kept in sync, every window may hold Heynote panes.
+**Migration**: None. The Heynote button opens a pane in the window where it is clicked.

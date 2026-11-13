@@ -26,10 +26,25 @@
   - proof: `npx eslint src/panes.ts`
   - proof: `npm run typecheck`
 
+## 4. Heynote in every window
+
+- [ ] 4.1 Make `Panes.openHeynote` open a pane in the clicked window without claiming Heynote; remove the
+  `heynote-focus` listener, `Panes.focusHeynote` if then unused, the release on last-pane close, and
+  `claimHeynote`/`releaseHeynote`/`focusHeynote` from `Backend` and its Tauri and WS implementations
+  - proof: `npx eslint src/panes.ts src/backend.ts src/backend-tauri.ts src/backend-ws.ts`
+- [ ] 4.2 Remove `HeynoteOwner`, `heynote_claim`, `heynote_release`, `heynote_focus` and `HEYNOTE_FOCUS_EVENT` from
+  `notes.rs`, their registration and managed state in `lib.rs`, and the ownership unit test in `notes.rs`
+  Tests to update: src-tauri/src/notes.rs (ownership claim/release test)
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib notes`
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `npm run typecheck`
+
 ## Manual checks after merge (The user)
 
 - Open two Heynote panes, type in one: the other shows the text on the same note.
 - Create, delete and move a note in one pane: the other's notes list follows.
 - Close one pane and quit; reopen Heynote: nothing typed is lost.
+- With two tiili windows, open Heynote in one, then click the Heynote button in the other: a pane opens there, and
+  typing in either shows in the other.
 - Run `npm run heynote` outside the sandbox (it needs to fetch Heynote's source) and commit the rebuilt
   `public/heynote/`, so the shipped page carries the new bridge; the two-pane checks above then pass.
