@@ -13,11 +13,15 @@ The tiili window SHALL show a top bar above the panes. On macOS it SHALL sit in 
 - **THEN** the top bar is shown across the top and the pane grid fills the space below it
 
 ### Requirement: Top bar buttons
-The right-hand side of the top bar SHALL hold, in order, New pane, Close pane, Reset layout and Settings buttons. Each SHALL do the same as its shortcut, return keyboard focus to the focused pane, and show a popover tooltip with its name and the platform's shortcut as soon as the pointer is over it.
+The right-hand side of the top bar SHALL hold, in order, New pane, Heynote, Close pane, Reset layout and Settings buttons. Each SHALL do the same as its shortcut, if it has one, return keyboard focus to the focused pane, and show a popover tooltip with its name, and the platform's shortcut where there is one, as soon as the pointer is over it.
 
 #### Scenario: New pane button
 - **WHEN** the user clicks New pane
 - **THEN** a new focused pane opens, as with the new-terminal shortcut
+
+#### Scenario: Heynote button
+- **WHEN** the user clicks Heynote
+- **THEN** the Heynote pane opens, or takes the focus when it is already open
 
 #### Scenario: Close pane button
 - **WHEN** two panes are open and the user clicks Close pane

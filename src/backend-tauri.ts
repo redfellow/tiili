@@ -42,6 +42,15 @@ export function tauriBackend(): Backend {
     loadSettings: () => invoke("settings_load"),
     saveSettings: (value) => invoke("settings_save", { value }),
     setAppIcon: (choice) => invoke("app_icon_set", { choice }),
+    notes: {
+      load: () => invoke("heynote_load"),
+      write: (path, content) => invoke("heynote_write", { path, content }),
+      remove: (path) => invoke("heynote_remove", { path }),
+      move: (from, to) => invoke("heynote_move", { from, to }),
+      mkdir: (path) => invoke("heynote_mkdir", { path }),
+      rmdir: (path) => invoke("heynote_rmdir", { path }),
+      saveState: (state) => invoke("heynote_save_state", { state }),
+    },
     closeWindow: () => getCurrentWindow().close(),
   };
 }

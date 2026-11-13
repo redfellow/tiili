@@ -5,7 +5,8 @@ export type ClipboardAction = "copy" | "paste" | "selectAll";
 /** A layout shortcut: move the focused pane one place, or reset the grid to even sizes. */
 export type LayoutAction = { move: Direction } | "reset";
 /** A pane shortcut: open a new pane, close the focused one, or focus pane `index` (0-based). */
-export type PaneAction = { type: "new" } | { type: "close" } | { type: "focus"; index: number };
+/** A pane action; `heynote` opens (or focuses) the Heynote pane and has no shortcut of its own. */
+export type PaneAction = { type: "new" } | { type: "heynote" } | { type: "close" } | { type: "focus"; index: number };
 
 /** The parts of a keyboard event the shortcut mappings read. */
 export interface KeyChord {
