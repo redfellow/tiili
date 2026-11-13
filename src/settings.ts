@@ -70,6 +70,13 @@ export interface InactiveSettings {
 export const APP_ICONS = ["system", "light", "dark"] as const;
 export type AppIcon = (typeof APP_ICONS)[number];
 
+/**
+ * The prompt tiili gives zsh, bash and PowerShell where the user's own config leaves the shell's default one; `off`
+ * leaves every shell exactly as it starts without tiili.
+ */
+export const PROMPT_IDS = ["off", "classic", "minimal", "tiili"] as const;
+export type PromptId = (typeof PROMPT_IDS)[number];
+
 /** Allowed range of the inactive opacity. */
 export const INACTIVE_OPACITY = { min: 0.3, max: 1, step: 0.01 } as const;
 
@@ -83,6 +90,8 @@ export interface Settings {
   behaviour: BehaviourSettings;
   inactive: InactiveSettings;
   appIcon: AppIcon;
+  /** Applies to panes opened after it changes. */
+  prompt: PromptId;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -111,6 +120,7 @@ export const DEFAULT_SETTINGS: Settings = {
   behaviour: { hoverHighlight: true, startupSplash: true },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
+  prompt: "off",
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
@@ -145,7 +155,8 @@ function family(value: unknown): string {
 
 /**
  * Settings from anything read back from disk or a form: each field that is missing or of the wrong type gets its
- * default, numbers are clamped to their range and snapped to their step, and an unknown theme becomes Koski.
+ * default, numbers are clamped to their range and snapped to their step, an unknown theme becomes Koski and an
+ * unknown prompt becomes Off.
  */
 export function normalize(value: unknown): Settings {
   const raw = isRecord(value) ? value : {};
@@ -198,5 +209,6 @@ export function normalize(value: unknown): Settings {
         typeof inactive.desaturate === "boolean" ? inactive.desaturate : DEFAULT_SETTINGS.inactive.desaturate,
     },
     appIcon: APP_ICONS.includes(raw.appIcon as AppIcon) ? (raw.appIcon as AppIcon) : DEFAULT_SETTINGS.appIcon,
+    prompt: PROMPT_IDS.includes(raw.prompt as PromptId) ? (raw.prompt as PromptId) : DEFAULT_SETTINGS.prompt,
   };
 }

@@ -10,10 +10,10 @@ import { currentPlatform } from "./keymap";
 export function tauriBackend(): Backend {
   return {
     nativeMenus: currentPlatform() === "macos",
-    spawn: (rows, cols, cwd, onOutput) => {
+    spawn: (rows, cols, cwd, prompt, onOutput) => {
       const output = new Channel<number[]>();
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
-      return invoke<number>("pty_spawn", { rows, cols, cwd, onOutput: output });
+      return invoke<number>("pty_spawn", { rows, cols, cwd, prompt, onOutput: output });
     },
     write: (id, data) => invoke("pty_write", { id, data }),
     resize: (id, rows, cols) => invoke("pty_resize", { id, rows, cols }),
