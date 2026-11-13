@@ -153,6 +153,7 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     onAppEvent: async () => undefined,
     loadSettings: async () => null,
     saveSettings: async () => undefined,
+    setAppIcon: async () => undefined,
     closeWindow: async () => undefined,
   };
 }
