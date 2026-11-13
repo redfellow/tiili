@@ -424,10 +424,11 @@ export class Panes {
     const action = paneAction(event, this.platform);
     if (action) {
       // In the macOS app ⌘T and ⌘W come from the Shell menu; here those keys are only kept from the shell.
+      // Cancelling them would stop the menu: WKWebView hands a key to the menu bar only when the page leaves it.
       const viaMenu = this.viaMenu() && action.type !== "focus";
-      if (event.type === "keydown") {
+      if (!viaMenu && event.type === "keydown") {
         event.preventDefault();
-        if (!viaMenu) this.act(action);
+        this.act(action);
       }
       return true;
     }
