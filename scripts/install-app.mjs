@@ -11,9 +11,12 @@ export const APP_NAME = "tiili.app";
 export const APP_IDENTIFIER = "app.tiili";
 export const INSTALL_PATH = `/Applications/${APP_NAME}`;
 
-/** Arguments for `tauri build`: the host architecture only, the .app only (no .dmg, no universal binary). */
+/**
+ * Arguments for `tauri build`: the host architecture only, the .app only (no .dmg, no universal binary), and cargo
+ * without default features so the dev-only dev-bridge binary stays out of the app.
+ */
 export function buildArgs() {
-  return ["tauri", "build", "--bundles", "app"];
+  return ["tauri", "build", "--bundles", "app", "--", "--no-default-features"];
 }
 
 /** Where `tauri build --bundles app` leaves the app, for a repository root. */

@@ -1,7 +1,8 @@
 //! Dev-only bridge for the browser dev server (`npm run dev:browser`): runs a default shell per
 //! WebSocket connection through tiili's own PTY code. Listens on 127.0.0.1 only, refuses
-//! connections without this run's token, and kills a connection's shell when it closes. The app
-//! bundle ships the `tiili` binary alone, so this never reaches users.
+//! connections without this run's token, and kills a connection's shell when it closes. It is
+//! built only with the default `dev-bridge` feature; `npm run bundle` and `npm run install-app`
+//! build without default features, so the installers ship the `tiili` binary alone.
 //!
 //! Environment: `TIILI_BRIDGE_TOKEN` (required, at least 32 hex characters) and
 //! `TIILI_BRIDGE_PORT` (0 or absent picks a free port). Prints `listening on <address>` once ready.
