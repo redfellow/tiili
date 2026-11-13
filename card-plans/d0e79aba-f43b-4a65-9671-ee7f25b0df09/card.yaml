@@ -1,0 +1,13 @@
+format: 1
+slug: change-to-default-settings-font-size-12
+title: "Change to default settings: Font size 12"
+x-harvaaja-card: d0e79aba-f43b-4a65-9671-ee7f25b0df09
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: ab9440d8-8800-4719-8eb4-7a009578e5cd
