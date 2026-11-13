@@ -4,7 +4,8 @@
 // License Condition v1.0; see public/heynote/LICENSE. The changes: notes, folders, settings, open tabs and the
 // theme live in tiili's note store (window.parent.tiiliHeynote, files in the app config folder) instead of
 // localStorage, loaded once before the app starts and written through on each change; tiili can ask the page to
-// save everything at once (window.tiiliFlush) before it closes the pane.
+// save everything at once (window.tiiliFlush) before it closes the pane. Heynote starts with tiili's Geist Mono
+// instead of Hack, and without its left panel until the user opens it.
 
 import {
     SETTINGS_CHANGE_EVENT,
@@ -53,6 +54,54 @@ function localStore() {
         rmdir: async (path) => keep("tiili-dirs", dirs().filter((dir) => dir !== path)),
         saveState: async (state) => keep("tiili-state", state),
     }
+}
+
+/** The font Heynote uses until the user picks another: tiili's own, when the page runs inside tiili. */
+const TIILI_FONT = "Geist Mono"
+
+/**
+ * Copies tiili's @font-face rules for `family` into this page, so Heynote can use the font tiili bundles. Relative
+ * font URLs are resolved against the stylesheet they came from. Returns false when tiili has no such font here.
+ */
+function borrowFont(family) {
+    let parentDocument
+    try {
+        parentDocument = window.parent !== window ? window.parent.document : null
+    } catch {
+        return false
+    }
+    if (!parentDocument) {
+        return false
+    }
+    const rules = []
+    for (const sheet of parentDocument.styleSheets) {
+        let cssRules
+        try {
+            cssRules = sheet.cssRules
+        } catch {
+            continue
+        }
+        const base = sheet.href || parentDocument.baseURI
+        for (const rule of cssRules) {
+            const name = rule.style?.getPropertyValue("font-family").replace(/["']/g, "").trim()
+            if (rule.type === CSSRule.FONT_FACE_RULE && name === family) {
+                rules.push(rule.cssText.replace(/url\((["']?)([^"')]+)\1\)/g, (_, quote, url) => `url("${new URL(url, base)}")`))
+            }
+        }
+    }
+    if (rules.length === 0) {
+        return false
+    }
+    const style = document.createElement("style")
+    style.textContent = rules.join("\n")
+    document.head.append(style)
+    return true
+}
+
+const hasTiiliFont = borrowFont(TIILI_FONT)
+if (hasTiiliFont) {
+    // Loaded before Heynote starts, so its monospace check measures Geist Mono and not a fallback font.
+    await document.fonts.load(`12px "${TIILI_FONT}"`).catch(() => undefined)
 }
 
 const store = (window.parent !== window && window.parent.tiiliHeynote) || localStore()
@@ -142,6 +191,8 @@ let initialSettings = {
     keyBindings: [],
     showTabs: true,
     showTabsInFullscreen: true,
+    // tiili's pane is narrow next to the terminals: the notes list stays closed until the user opens it.
+    showLeftPanel: false,
     leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
     startHidden: false,
     colorPreviewEnabled: true,
@@ -206,7 +257,7 @@ function putNote(path, content) {
 
 const Heynote = {
     platform: platform,
-    defaultFontFamily: "Hack",
+    defaultFontFamily: hasTiiliFont ? TIILI_FONT : "Hack",
     defaultFontSize: 12,
 
     buffer: {
