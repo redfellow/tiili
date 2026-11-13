@@ -35,7 +35,8 @@ import {
   type PaneCwd,
 } from "./paneChip";
 import type { Settings } from "./settings";
-import { applyFont, openTerminal, refreshTheme, zoomedSize, type PaneTerminal } from "./terminal";
+import { zoomedSize } from "./responsive";
+import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
 import { TintAssigner, tintCounts } from "./tints";
 
 /** A pane can't be resized below this many columns and rows of its terminal. */

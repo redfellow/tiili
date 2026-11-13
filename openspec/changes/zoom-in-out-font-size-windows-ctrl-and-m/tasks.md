@@ -5,7 +5,8 @@
 
 ## 2. Per-pane zoom
 - [x] 2.1 Keep a zoom offset per terminal pane in `src/panes.ts`, handle `zoomAction` in `shortcut()` on keydown (clamp to 6–48 px, keep keys from the shell, skip Heynote panes), and pass the offset to `applySize`/`applyFont` in `src/terminal.ts` so it is added before responsive text; keep the offset when Settings change
-  - proof: `npx eslint src/panes.ts src/terminal.ts`
+  - proof: `npx vitest run src/responsive.test.ts`
+  - proof: `npx eslint src/panes.ts src/terminal.ts src/responsive.ts src/responsive.test.ts`
   - proof: `npm run typecheck`
 
 ## Manual checks after merge (The user)

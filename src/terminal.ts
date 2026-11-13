@@ -3,7 +3,7 @@ import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import type { Backend, SessionId } from "./backend";
 import { sizeReporter } from "./resize";
-import { responsiveFont } from "./responsive";
+import { responsiveFont, zoomedSize } from "./responsive";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
@@ -26,14 +26,6 @@ export interface PaneTerminal {
   cellSize(): { width: number; height: number } | undefined;
   /** Ends the shell and frees the terminal. */
   dispose(): Promise<void>;
-}
-
-/** A zoomed pane's font size stays within these pixels. */
-export const ZOOM_SIZE = { min: 6, max: 48 } as const;
-
-/** The font size `size` with a pane's zoom offset `zoom` added, kept within ZOOM_SIZE. */
-export function zoomedSize(size: number, zoom: number): number {
-  return Math.min(ZOOM_SIZE.max, Math.max(ZOOM_SIZE.min, size + zoom));
 }
 
 /** The addons `applyFont` changes or refits with, per terminal. */
