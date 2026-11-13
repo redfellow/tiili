@@ -6,11 +6,18 @@ Let the user choose how tiili looks (theme and terminal font) in one settings di
 ## Requirements
 
 ### Requirement: Settings dialogue
-The app SHALL open a settings dialogue with ⌘, on macOS (also from the app menu's Settings… item) and Ctrl+, on Windows and Linux, and from a Settings… item in the terminal's context menu. Each change in the dialogue SHALL apply to tiili immediately as a preview, and nothing SHALL be saved while the dialogue is open. The dialogue SHALL have Cancel and Save buttons: Save SHALL save the previewed settings and close the dialogue; Cancel, Esc and the × button SHALL restore and apply the settings from when the dialogue was opened and close it without saving. A failed save SHALL keep the dialogue open and show the error.
+The app SHALL open a settings dialogue with ⌘, on macOS (also from the app menu's Settings… item) and Ctrl+, on Windows and Linux, from a Settings… item in the terminal's context menu, and from the gear at the right of the window's top bar. Each change in the dialogue SHALL apply to tiili immediately as a preview, and nothing SHALL be saved while the dialogue is open.
 
 #### Scenario: Open by shortcut
 - **WHEN** the user presses the platform's settings shortcut
 - **THEN** the settings dialogue opens and the key is not sent to the shell
+
+#### Scenario: Open from the top bar
+- **WHEN** the user clicks the gear in the window's top bar
+- **THEN** the settings dialogue opens
+
+### Requirement: Save and cancel
+The dialogue SHALL have Cancel and Save buttons: Save SHALL save the previewed settings and close the dialogue; Cancel, Esc and the × button SHALL restore and apply the settings from when the dialogue was opened and close it without saving. A failed save SHALL keep the dialogue open and show the error.
 
 #### Scenario: Save keeps the preview
 - **WHEN** the user changes the font size to 16 and presses Save
