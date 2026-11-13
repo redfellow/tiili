@@ -1,4 +1,6 @@
-import { CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, normalize, type Settings } from "./settings";
+import {
+  CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
+} from "./settings";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 
@@ -216,7 +218,7 @@ function themeList(onSelect: () => void, locked: () => boolean) {
 }
 
 /**
- * Builds the settings dialogue into `document.body`: Theme and Font sections, Reset to defaults, Cancel and Save.
+ * Builds the settings dialogue into `document.body`: Theme, Font, Cursor, Inactive panes and Behaviour sections, Reset to defaults, Cancel and Save.
  * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
@@ -244,6 +246,9 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const cursorStyle = element("select", { name: "cursorStyle" },
     ...CURSOR_STYLES.map((style) => element("option", { value: style }, CURSOR_LABELS[style])));
   const cursorBlink = element("input", { type: "checkbox", name: "cursorBlink" });
+  const inactiveOpacity = rangeInput("inactiveOpacity", INACTIVE_OPACITY);
+  const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
+  const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
@@ -270,12 +275,26 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     element("label", { className: "settings-check" }, cursorBlink, element("span", {}, "Blink")),
   );
 
+  const inactiveFields = element("fieldset", {},
+    element("legend", {}, "Inactive panes"),
+    field("Opacity", inactiveOpacity.control),
+    element("label", { className: "settings-check" }, inactiveDesaturate, element("span", {}, "Desaturate")),
+  );
+
+  const behaviourFields = element("fieldset", {},
+    element("legend", {}, "Behaviour"),
+    element("label", { className: "settings-check" }, hoverHighlight,
+      element("span", {}, "Highlight terminal on mouseover")),
+  );
+
   const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close);
   const form = element("form", { method: "dialog" },
     header,
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
     fontFields,
     cursorFields,
+    inactiveFields,
+    behaviourFields,
     status,
     element("footer", { className: "settings-footer" },
       reset, element("div", { className: "settings-actions" }, cancel, save)),
@@ -299,6 +318,10 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     letterSpacing.sync();
     cursorStyle.value = settings.cursor.style;
     cursorBlink.checked = settings.cursor.blink;
+    inactiveOpacity.input.value = String(settings.inactive.opacity);
+    inactiveOpacity.sync();
+    inactiveDesaturate.checked = settings.inactive.desaturate;
+    hoverHighlight.checked = settings.behaviour.hoverHighlight;
   };
 
   const read = (): Settings => normalize({
@@ -313,6 +336,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       letterSpacing: letterSpacing.input.valueAsNumber,
     },
     cursor: { style: cursorStyle.value, blink: cursorBlink.checked },
+    behaviour: { hoverHighlight: hoverHighlight.checked },
+    inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
   });
 
   const report = (error: unknown) => {
@@ -331,7 +356,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   /** While saving, nothing can be edited, so what is written is what stays applied. */
   const lock = (on: boolean) => {
     saving = on;
-    fontFields.disabled = cursorFields.disabled = reset.disabled = save.disabled = cancel.disabled = on;
+    fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = behaviourFields.disabled = on;
+    reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));
   };
