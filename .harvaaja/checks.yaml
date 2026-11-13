@@ -49,8 +49,10 @@ checks:
     network: [registry.npmjs.org, index.crates.io, static.crates.io]
     timeoutSeconds: 900
   # Browser preview with a real shell: the launcher starts the dev bridge (a PTY) and Vite, and stops the bridge with it.
+  # Vite binds 127.0.0.1: härvääjä checks the preview there, and plain "localhost" is IPv6 only on macOS.
   - name: design
-    run: npm run dev:browser -- --port "$HV_PREVIEW_PORT" --strictPort
+    run: npm run dev:browser -- --host 127.0.0.1 --port "$HV_PREVIEW_PORT" --strictPort
     role: design
+    pty: true
     stage: manual
     timeoutSeconds: 1200
