@@ -2,7 +2,7 @@
 //
 // - macOS: one universal .dmg (Apple Silicon + Intel). Needs the rustup targets aarch64-apple-darwin and
 //   x86_64-apple-darwin.
-// - Windows: .msi.
+// - Windows: NSIS setup .exe.
 // - Linux: .AppImage and .deb.
 //
 // Builds are unsigned unless the signing environment variables in docs/packaging.md are set.
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const ARGS_BY_PLATFORM = {
   darwin: ["--target", "universal-apple-darwin", "--bundles", "dmg"],
-  win32: ["--bundles", "msi"],
+  win32: ["--bundles", "nsis"],
   linux: ["--bundles", "appimage,deb"],
 };
 

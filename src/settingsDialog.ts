@@ -1,7 +1,7 @@
 import { gridFor, TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
-  CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
+  APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
@@ -21,6 +21,8 @@ const COMMON_MONO_FONTS = [
 
 export interface SettingsDialogOptions {
   initial: Settings;
+  /** Shows the Dock icon choice; only macOS lets the user pick it. */
+  showAppIcon: boolean;
   /** Applies settings live; called on every change, and with the opening settings again on Cancel. */
   apply: (settings: Settings) => Promise<void> | void;
   /** Saves settings; called when the user presses Save, and the dialogue closes once it resolves. */
@@ -140,6 +142,7 @@ function tilingIcon(mode: TilingMode): HTMLElement {
 }
 
 const CURSOR_LABELS = { block: "Brick", underline: "Underline", bar: "Bar" } as const;
+const APP_ICON_LABELS: Record<AppIcon, string> = { system: "Follow system appearance", light: "Light", dark: "Dark" };
 
 interface PickItem { id: string; name: string }
 interface PickGroup { label?: string; items: PickItem[] }
@@ -294,6 +297,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const inactiveOpacity = rangeInput("inactiveOpacity", INACTIVE_OPACITY);
   const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
+  const appIcon = element("select", { name: "appIcon" },
+    ...APP_ICONS.map((icon) => element("option", { value: icon }, APP_ICON_LABELS[icon])));
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
@@ -332,6 +337,11 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     element("p", { className: "settings-hint" }, "How panes are arranged as you open and close them."),
   );
 
+  const appIconFields = element("fieldset", {},
+    element("legend", {}, "Dock icon"),
+    field("Icon", appIcon),
+  );
+
   const responsiveFields = element("fieldset", {},
     element("legend", {}, "Responsive text"),
     element("label", { className: "settings-check" }, responsiveOn, element("span", {}, "Shrink text in small panes")),
@@ -352,6 +362,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     fontFields,
     cursorFields,
     inactiveFields,
+    ...(options.showAppIcon ? [appIconFields] : []),
   );
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
     tilingFields, responsiveFields, paneFields);
@@ -423,6 +434,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     inactiveOpacity.sync();
     inactiveDesaturate.checked = settings.inactive.desaturate;
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
+    appIcon.value = settings.appIcon;
     tiling.show(settings.tiling.layout);
     responsiveOn.checked = settings.responsive.enabled;
     responsiveStrength.input.value = String(settings.responsive.strength);
@@ -446,6 +458,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     responsive: { enabled: responsiveOn.checked, strength: responsiveStrength.input.valueAsNumber },
     behaviour: { hoverHighlight: hoverHighlight.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
+    appIcon: appIcon.value,
   });
 
   const report = (error: unknown) => {
@@ -466,6 +479,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     saving = on;
     fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = on;
     responsiveFields.disabled = paneFields.disabled = on;
+    appIconFields.disabled = on;
     reset.disabled = save.disabled = cancel.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));

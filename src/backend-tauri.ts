@@ -41,6 +41,7 @@ export function tauriBackend(): Backend {
     },
     loadSettings: () => invoke("settings_load"),
     saveSettings: (value) => invoke("settings_save", { value }),
+    setAppIcon: (choice) => invoke("app_icon_set", { choice }),
     closeWindow: () => getCurrentWindow().close(),
   };
 }
