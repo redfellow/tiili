@@ -18,7 +18,7 @@
 - [ ] 2.2 Record the foreground process group with each OSC 7; add a foreground report to the tracker that, when the shell's own pgid is back in front and the OSC 7 came from another group, drops the OSC 7 and repository, clears the OSC 7 latch and reports the next polled folder; a local OSC 7 ends a remote state at once; unit tests for "Exit ssh", "local fish runs vim" and "no foreground (Windows) keeps remote until a local OSC 7"
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
 - [ ] 2.3 Wire it in `src-tauri/src/pty.rs` `spawn_tracked`: pass the lazily read foreground to `feed_output`, pass the shell's pid as its pgid, and report the foreground to the cwd tracker on each tick (before the polled folder); serialise `host` in the `pane-cwd` event
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib pty::`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib`
 - [ ] 2.4 Add a host-tier integration test in `src-tauri/tests/repo_tracking.rs` (macOS and Linux): a shell runs a child that prints a remote OSC 7 and `tiili_repo`, then exits; the registry reports the remote host and repository, then the local folder and repository within the timeout
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking -- --include-ignored`

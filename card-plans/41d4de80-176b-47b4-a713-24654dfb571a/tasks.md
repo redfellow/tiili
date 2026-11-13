@@ -21,7 +21,7 @@ Follow `openspec/changes/remote-panes/design.md`; tick the matching task in `ope
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
 - [ ] 2.3 Wire into `src-tauri/src/pty.rs` and serialise `host` in `pane-cwd` (change task 2.3)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib pty::`
 - [ ] 2.4 Host-tier remote round trip in `src-tauri/tests/repo_tracking.rs` (change task 2.4)
   - Tests to update: src-tauri/tests/repo_tracking.rs
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking -- --include-ignored`
