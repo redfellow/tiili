@@ -20,6 +20,11 @@ bumps it (see [Releasing](#releasing)).
 Bundling only works on the matching OS: there is no cross-building. Extra arguments are passed on to
 `tauri build`, for example `npm run bundle -- --verbose`.
 
+Cargo runs with `--no-default-features`. That leaves out `dev-bridge`, the browser dev server's shell bridge
+(`src-tauri/src/bin/dev-bridge.rs`), which needs the default `dev-bridge` feature: Tauri's bundler puts every binary
+of the package into the installers, and the bridge must never reach users. Plain `cargo build`, `cargo test` and
+`cargo clippy` keep the feature on, so they still build and test it.
+
 ## Installing on this Mac
 
 To try a build as a real Mac app, run:
@@ -28,7 +33,7 @@ To try a build as a real Mac app, run:
 npm run install-app
 ```
 
-It runs `tauri build --bundles app` for this Mac's chip (no `.dmg`, no universal binary), quits tiili if it is
+It runs `tauri build --bundles app` (without default features, as above) for this Mac's chip (no `.dmg`, no universal binary), quits tiili if it is
 running, replaces `/Applications/tiili.app` with the new build, and adds tiili to the Dock if it is not pinned
 yet. Pinning edits the `com.apple.dock` `persistent-apps` defaults and restarts the Dock with `killall Dock`;
 running the command again replaces the app and leaves the Dock alone. It runs only on macOS and exits with an
