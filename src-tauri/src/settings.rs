@@ -7,7 +7,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 const FILE_NAME: &str = "settings.json";
 
@@ -45,10 +45,24 @@ pub fn settings_load(app: AppHandle) -> Value {
         .unwrap_or(Value::Null)
 }
 
+/// Event sent to every other window after one saved the settings; its payload is the saved value.
+pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
+
+/// The windows to tell about settings `sender` saved: every open window but the sender.
+pub fn recipients<'a>(labels: impl IntoIterator<Item = &'a str>, sender: &str) -> Vec<&'a str> {
+    labels.into_iter().filter(|&l| l != sender).collect()
+}
+
+/// Saves the settings, then sends them to every other window so they apply everywhere.
 #[tauri::command]
-pub fn settings_save(app: AppHandle, value: Value) -> Result<(), String> {
+pub fn settings_save(app: AppHandle, window: WebviewWindow, value: Value) -> Result<(), String> {
     let dir = config_dir(&app)?;
-    save_to(&dir, &value).map_err(|e| format!("Could not save settings: {e}"))
+    save_to(&dir, &value).map_err(|e| format!("Could not save settings: {e}"))?;
+    let windows = app.webview_windows();
+    for label in recipients(windows.keys().map(String::as_str), window.label()) {
+        let _ = app.emit_to(label, SETTINGS_CHANGED_EVENT, &value);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -89,6 +103,28 @@ mod tests {
         save_to(&dir.0, &json!({ "theme": "nord" })).unwrap();
         save_to(&dir.0, &json!({ "theme": "dracula" })).unwrap();
         assert_eq!(load_from(&dir.0), json!({ "theme": "dracula" }));
+    }
+
+    #[test]
+    fn settings_saved_in_one_window_go_to_every_other_window() {
+        let cases = [
+            (
+                "two windows",
+                vec!["main", "window-1"],
+                "window-1",
+                vec!["main"],
+            ),
+            ("only window", vec!["main"], "main", vec![]),
+            (
+                "three windows",
+                vec!["main", "window-1", "window-2"],
+                "main",
+                vec!["window-1", "window-2"],
+            ),
+        ];
+        for (name, open, sender, expected) in cases {
+            assert_eq!(recipients(open, sender), expected, "{name}");
+        }
     }
 
     #[test]

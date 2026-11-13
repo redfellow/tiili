@@ -12,7 +12,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     onmessage: ((bytes: number[]) => void) | null = null;
   },
 }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
+const windowListen = vi.hoisted(() => vi.fn(async () => () => undefined));
+vi.mock("@tauri-apps/api/webviewWindow", () => ({ getCurrentWebviewWindow: () => ({ listen: windowListen }) }));
 vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: vi.fn() } }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
@@ -37,5 +38,15 @@ describe("Tauri backend", () => {
     const [command, args] = invoke.mock.calls[0];
     expect(command).toBe("pty_spawn");
     expect(args).toMatchObject({ rows: 24, cols: 80, cwd: "/tmp", prompt });
+  });
+});
+
+describe("Tauri backend events", () => {
+  it("Copy with two windows open: menu and shell events are heard on this window only", async () => {
+    windowListen.mockClear();
+    const backend = tauriBackend();
+    await backend.onAppEvent("clipboard", () => undefined);
+    await backend.onExit(() => undefined);
+    expect(windowListen.mock.calls.map((call: unknown[]) => call[0])).toEqual(["clipboard", "pty-exit"]);
   });
 });

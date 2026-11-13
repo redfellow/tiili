@@ -10,6 +10,8 @@ import { createTopBar } from "./topBar";
 
 /** Event sent when the macOS app menu's Settings… item is chosen. */
 const OPEN_SETTINGS_EVENT = "open-settings";
+/** Event sent when another window saved the settings; its payload is the saved value. */
+const SETTINGS_CHANGED_EVENT = "settings-changed";
 
 async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> {
   const backend = await loadBackend();
@@ -38,22 +40,29 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   const platform = currentPlatform();
   const openSettings = () => dialog.open();
   const panes = await Panes.create(backend, root, platform, () => settings, openSettings);
+  const apply = async (next: Settings) => {
+    const themeChanged = next.theme !== settings.theme;
+    const iconChanged = next.appIcon !== settings.appIcon;
+    settings = next;
+    if (themeChanged) applyTheme(next.theme);
+    if (iconChanged) await backend.setAppIcon(next.appIcon);
+    await panes.applySettings(next, themeChanged);
+  };
   const dialog = createSettingsDialog({
     initial: settings,
     showAppIcon: platform === "macos",
-    apply: async (next) => {
-      const themeChanged = next.theme !== settings.theme;
-      const iconChanged = next.appIcon !== settings.appIcon;
-      settings = next;
-      if (themeChanged) applyTheme(next.theme);
-      if (iconChanged) await backend.setAppIcon(next.appIcon);
-      await panes.applySettings(next, themeChanged);
-    },
+    apply,
     save: (next) => backend.saveSettings(next),
     onClose: () => panes.focusCurrent(),
     copy: (text) => backend.writeClipboard(text),
   });
   adoptSettings = (next) => dialog.adopt(next);
+  // Settings saved in another window apply here too.
+  await backend.onAppEvent(SETTINGS_CHANGED_EVENT, (value) => {
+    const next = normalize(value);
+    dialog.adopt(next);
+    apply(next).catch((error: unknown) => console.error(error));
+  });
 
   if (bar) {
     // Buttons share the shortcuts' code path, then hand the keyboard back to the focused pane.
@@ -73,7 +82,9 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   }
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
-  await panes.open();
+  // A window New Window opened names its first pane's folder in its address.
+  const startCwd = new URLSearchParams(window.location.search).get("cwd") ?? undefined;
+  await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 }
 

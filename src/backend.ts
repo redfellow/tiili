@@ -8,13 +8,20 @@ export type SessionId = number;
 /** An item of the right-click menu: a labelled action, or a separator line. */
 export type MenuItem = { label: string; action: () => void } | { separator: true };
 
-/** Events the app sends: native menu items, the app menu's Settings…, a shell's working directory report and what runs in a pane. */
+/**
+ * Events the app sends this window: native menu items (when this window is focused), the app menu's Settings…, a
+ * shell's working directory report and what runs in a pane (for this window's shells), settings another window
+ * saved, and the ask to focus this window's Heynote pane.
+ */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
   pane: "new" | "close";
+  "new-window": undefined;
   "open-settings": undefined;
   "pane-cwd": PaneCwd;
   "pane-command": PaneCommand;
+  "settings-changed": unknown;
+  "heynote-focus": undefined;
 }
 
 /**
@@ -60,6 +67,17 @@ export interface Backend {
   readonly notes: NoteStore;
   /** Closes the window, after its last pane closed. */
   closeWindow(): Promise<void>;
+  /** Opens a full tiili window, cascaded from this one, whose first pane starts in `cwd` (home folder when absent). */
+  newWindow(cwd: string | undefined): Promise<void>;
+  /**
+   * Asks to open the app's one Heynote pane in this window: resolves to null when this window may (it then holds
+   * it), else to the label of the window that already does.
+   */
+  claimHeynote(): Promise<string | null>;
+  /** This window closed its Heynote pane, so another window may open one. */
+  releaseHeynote(): Promise<void>;
+  /** Brings window `label` forward and has it focus its Heynote pane. */
+  focusHeynote(label: string): Promise<void>;
 }
 
 export type BackendKind = "tauri" | "dev";
