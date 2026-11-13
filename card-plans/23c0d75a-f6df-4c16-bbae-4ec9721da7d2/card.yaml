@@ -7,10 +7,7 @@ x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 route:
   kind: chore
-  rationale: 'Already satisfied: cargo-test-host (release, sandbox none) runs
-    --lib --bins --tests --include-ignored, covering every src-tauri/tests
-    target. Reijo answered "Already done, discard"; nothing to build.'
+  rationale: "Chore: built without a plan"
   citations:
-    - .harvaaja/checks.yaml:37-41 cargo-test-host
-    - "question batch 2e17d7c6: Already done, discard (Reijo, 2026-11-13)"
-  revision: f3bbb272-8908-4faa-a2c2-53ab98a07cc8
+    - The user pressed Build on this chore
+  revision: 4e31eda9-95f4-46ef-9912-47f20090eb40
