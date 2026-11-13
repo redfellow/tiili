@@ -25,4 +25,29 @@ if ($tiiliBuiltIn -and $tiiliPrompt -in @('classic', 'minimal', 'tiili')) {
     }
   }
 }
+# Whichever prompt is now defined (tiili's or the user's) is wrapped to report the folder with OSC 7 first, so tiili
+# knows this pane is local; its output is returned unchanged.
+$global:TiiliWrappedPrompt = (Get-Command prompt -CommandType Function -ErrorAction SilentlyContinue).ScriptBlock
+if ($null -eq $global:TiiliWrappedPrompt) {
+  $global:TiiliWrappedPrompt = {
+    "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
+  }
+}
+function global:prompt {
+  $location = $executionContext.SessionState.Path.CurrentLocation
+  if ($location.Provider.Name -eq 'FileSystem' -and $location.ProviderPath -match '^[A-Za-z]:') {
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($location.ProviderPath -replace '\\', '/'))
+    $encoded = -join ($bytes | ForEach-Object {
+      if (($_ -ge 0x30 -and $_ -le 0x39) -or ($_ -ge 0x41 -and $_ -le 0x5A) -or ($_ -ge 0x61 -and $_ -le 0x7A) -or
+        $_ -in 0x2D, 0x2E, 0x2F, 0x3A, 0x5F, 0x7E) {
+        [string][char]$_
+      } else {
+        '%{0:X2}' -f $_
+      }
+    })
+    $e = [char]27
+    [Console]::Write("$e]7;file://$([Environment]::MachineName)/$encoded$e\")
+  }
+  & $global:TiiliWrappedPrompt
+}
 Remove-Variable tiiliPrompt, tiiliCurrent, tiiliBuiltIn -ErrorAction SilentlyContinue

@@ -43,13 +43,15 @@ struct RepoInfo {
     name: String,
 }
 
-/// Where session `pane_id`'s shell is now, and its repository (`None` outside any).
+/// Where session `pane_id`'s shell is now, its repository (`None` outside any) and its host (`None` when local).
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PaneCwdEvent {
     pane_id: SessionId,
     cwd: String,
     repo: Option<RepoInfo>,
+    /// The host a remote pane is on; `None` for this machine.
+    host: Option<String>,
 }
 
 /// What session `pane_id`'s pane runs now: the title its foreground program set, else the
@@ -70,6 +72,7 @@ impl PaneCwdEvent {
                 root: r.root.to_string_lossy().into_owned(),
                 name: r.name.clone(),
             }),
+            host: at.host.clone(),
         }
     }
 }

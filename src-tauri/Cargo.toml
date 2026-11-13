@@ -40,8 +40,11 @@ name = "dev_bridge"
 path = "tests/dev_bridge.rs"
 required-features = ["dev-bridge"]
 
-[target.'cfg(target_os = "macos")'.dependencies]
+# This machine's hostname (src/cwd.rs) on every Unix; the pane's process info on macOS.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.14"
 # Swapping the Dock icon at run time (src/app_icon.rs); tauri already depends on these versions.
 objc2 = "0.6"

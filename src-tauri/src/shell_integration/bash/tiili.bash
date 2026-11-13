@@ -18,3 +18,23 @@ if [ -z "${PS1-}" ] || [ "$PS1" = '\s-\v\$ ' ] || [ "$PS1" = '\h:\W \u\$ ' ]; th
   esac
 fi
 unset TIILI_PROMPT
+
+# Report the folder with OSC 7 before every prompt, whichever prompt is shown, so tiili knows this pane is local. It
+# runs first and keeps $? for the user's own prompt commands.
+_tiili_osc7() {
+  local _tiili_status=$? LC_ALL=C enc= c i
+  for (( i = 0; i < ${#PWD}; i++ )); do
+    c=${PWD:i:1}
+    case $c in
+      [-/:_.~a-zA-Z0-9]) enc+=$c ;;
+      # bash 3.2 reads bytes above 127 as negative numbers.
+      *) printf -v c '%d' "'$c"; printf -v c '%%%02X' $(( c & 255 )); enc+=$c ;;
+    esac
+  done
+  printf '\e]7;file://%s%s\a' "$HOSTNAME" "$enc"
+  return $_tiili_status
+}
+case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in
+  'declare -a'*) PROMPT_COMMAND=(_tiili_osc7 "${PROMPT_COMMAND[@]}") ;;
+  *) PROMPT_COMMAND="_tiili_osc7${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+esac

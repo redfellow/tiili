@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { TintAssigner, tintCounts } from "./tints";
+import { TintAssigner, tintCounts, tintKey } from "./tints";
 
 /** Sixteen roots, so the next new one has to share a tint. */
 const sixteen = Array.from({ length: 16 }, (_, i) => `/repo${i + 1}`);
@@ -39,5 +39,35 @@ describe("TintAssigner", () => {
 describe("tintCounts", () => {
   it("counts open panes per tint, skipping untinted panes", () => {
     expect(tintCounts([1, 2, 1, undefined])).toEqual(new Map([[1, 2], [2, 1]]));
+  });
+});
+
+type Place = Parameters<typeof tintKey>[0];
+const local = (root: string | null): Place => ({ repo: root === null ? null : { root }, host: null });
+const remote = (host: string, root: string | null = null): Place => ({ repo: root === null ? null : { root }, host });
+
+// [case, first pane, second pane, whether they share a tint]
+const pairs: [string, Place, Place, boolean][] = [
+  ["Two agents in one remote repository: same tint", remote("build-box", "/srv/api"), remote("build-box", "/srv/api"), true],
+  ["Same path on two hosts: own tints", remote("build-box", "/srv/api"), remote("staging", "/srv/api"), false],
+  ["Remote without the snippet: the host's tint", remote("build-box"), remote("build-box"), true],
+  ["Same path exists locally: not the local tint", remote("build-box", "/Users/red/tiili"), local("/Users/red/tiili"), false],
+  ["Remote host never takes a local root's tint", remote("build-box"), local("build-box"), false],
+  ["A host's repository is not the host's own tint", remote("build-box", "/srv/api"), remote("build-box"), false],
+  ["Local panes in one repository: same tint", local("/a"), local("/a"), true],
+];
+
+describe("tintKey", () => {
+  it.each(pairs)("%s", (_, first, second, shared) => {
+    const tints = new TintAssigner();
+    const tintOf = (place: Place) => {
+      const key = tintKey(place);
+      return key === undefined ? undefined : tints.assign(key, new Map());
+    };
+    expect(tintOf(first) === tintOf(second)).toBe(shared);
+  });
+
+  it("Outside a repository: a local pane has no tint key", () => {
+    expect(tintKey(local(null))).toBeUndefined();
   });
 });

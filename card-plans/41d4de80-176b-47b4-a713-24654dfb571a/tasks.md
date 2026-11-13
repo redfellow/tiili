@@ -4,53 +4,54 @@ Follow `openspec/changes/remote-panes/design.md`; tick the matching task in `ope
 
 ## 1. OSC 7 host and user-variable report (`src-tauri/src/cwd.rs`)
 
-- [ ] 1.1 Parse OSC 7 host and path (change task 1.1), with host table cases
+- [x] 1.1 Parse OSC 7 host and path (change task 1.1), with host table cases
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
-- [ ] 1.2 Scanner also finds `SetUserVar=tiili_repo` (change task 1.2)
+- [x] 1.2 Scanner also finds `SetUserVar=tiili_repo` (change task 1.2)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
-- [ ] 1.3 Local-host check and Windows driveless = `WSL` (change task 1.3)
+- [x] 1.3 Local-host check and Windows driveless = `WSL` (change task 1.3)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
-- [ ] 1.4 Strip control characters from host, path and repo (change task 1.4)
+- [x] 1.4 Strip control characters from host, path and repo (change task 1.4)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
 
 ## 2. Remote state in `CwdTracker`
 
-- [ ] 2.1 `host` on `PaneCwd`, remote repo only from `tiili_repo` (change task 2.1)
+- [x] 2.1 `host` on `PaneCwd`, remote repo only from `tiili_repo` (change task 2.1)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
-- [ ] 2.2 Foreground-group end of remote state; local OSC 7 ends it (change task 2.2)
+- [x] 2.2 Foreground-group end of remote state; local OSC 7 ends it (change task 2.2)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
-- [ ] 2.3 Wire into `src-tauri/src/pty.rs` and serialise `host` in `pane-cwd` (change task 2.3)
+- [x] 2.3 Wire into `src-tauri/src/pty.rs` and serialise `host` in `pane-cwd` (change task 2.3)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib pty::`
-- [ ] 2.4 Host-tier remote round trip in `src-tauri/tests/repo_tracking.rs` (change task 2.4)
+- [x] 2.4 Host-tier remote round trip in `src-tauri/tests/repo_tracking.rs` (change task 2.4)
   - Tests to update: src-tauri/tests/repo_tracking.rs
-  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking -- --include-ignored`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking`
 
 ## 3. Chip and tints
 
-- [ ] 3.1 `host` in `src/paneChip.ts` and the `host:name` label (change task 3.1)
+- [x] 3.1 `host` in `src/paneChip.ts` and the `host:name` label (change task 3.1)
   - Tests to update: src/paneChip.test.ts
   - proof: `npx vitest run src/paneChip.test.ts`
-- [ ] 3.2 Remote tint keys in `src/panes.ts` (change task 3.2)
+- [x] 3.2 Remote tint keys in `src/panes.ts` (change task 3.2)
   - Tests to update: src/tints.test.ts
   - proof: `npx vitest run src/tints.test.ts src/paneChip.test.ts`
   - proof: `npx eslint src/panes.ts src/paneChip.ts`
 
 ## 4. Prompt integration sends OSC 7
 
-- [ ] 4.1 zsh and bash send OSC 7 every prompt (change task 4.1)
+- [x] 4.1 zsh and bash send OSC 7 every prompt (change task 4.1)
   - Tests to update: src-tauri/tests/pty_session.rs
-  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session -- --include-ignored`
-- [ ] 4.2 PowerShell prompt wrapper sends OSC 7 (change task 4.2)
-  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session -- --include-ignored`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
+- [x] 4.2 PowerShell prompt wrapper sends OSC 7 (change task 4.2)
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 5. Remote shells in Settings
 
-- [ ] 5.1 Snippets in `src/remoteSnippets.ts` with a table-driven `src/remoteSnippets.test.ts` checking the escape sequences (change task 5.1, without the by-hand step)
+- [x] 5.1 Snippets in `src/remoteSnippets.ts` with a table-driven `src/remoteSnippets.test.ts` checking the escape sequences (change task 5.1, without the by-hand step)
   - proof: `npx vitest run src/remoteSnippets.test.ts`
-- [ ] 5.2 Remote shells group on the Behaviour tab in `src/settingsDialog.ts` with Copy buttons (change task 5.2)
-  - proof: `npx eslint src/settingsDialog.ts src/remoteSnippets.ts`
+- [x] 5.2 Remote shells group on the Behaviour tab in `src/settingsDialog.ts` with Copy buttons (change task 5.2)
+  - proof: `npx eslint src/settingsDialog.ts src/remoteSnippets.ts src/main.ts`
   - proof: `npm run typecheck`
   - proof: `openspec validate --all --strict`
 

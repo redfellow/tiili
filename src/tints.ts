@@ -36,3 +36,16 @@ export class TintAssigner {
     return tint;
   }
 }
+
+/**
+ * The key a pane's tint is assigned by: a local repository's root; for a remote pane, its host and repository root,
+ * else its host alone. A local pane outside any repository has none and stays untinted. NUL can't occur in a path or
+ * a host, so remote keys never equal a local root or another host's key.
+ */
+export function tintKey(place: {
+  repo: { root: string } | null;
+  host: string | null;
+}): string | undefined {
+  if (place.host === null) return place.repo?.root;
+  return place.repo ? `remote\0${place.host}\0${place.repo.root}` : `remote\0${place.host}`;
+}
