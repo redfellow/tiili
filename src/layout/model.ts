@@ -1,4 +1,4 @@
-import { gridFor } from "../layout";
+import { gridFor, type TilingMode } from "../layout";
 
 export type PaneId = number;
 export type Axis = "col" | "row";
@@ -9,6 +9,8 @@ export type Direction = "left" | "right" | "up" | "down";
  * row as fractions that sum to 1. The panes of a short last row share its full width equally.
  */
 export interface LayoutState {
+  /** How the panes are tiled; the automatic grid when absent. */
+  mode?: TilingMode;
   order: PaneId[];
   cols: number;
   rows: number;
@@ -31,14 +33,20 @@ function equal(count: number): number[] {
 }
 
 /** An empty layout. */
-export function emptyLayout(): LayoutState {
-  return { order: [], cols: 0, rows: 0, colSizes: [], rowSizes: [] };
+export function emptyLayout(mode: TilingMode = "grid"): LayoutState {
+  return { mode, order: [], cols: 0, rows: 0, colSizes: [], rowSizes: [] };
+}
+
+/** The same panes tiled in `mode`; tracks whose count stays the same keep their sizes. */
+export function setMode(state: LayoutState, mode: TilingMode): LayoutState {
+  return reflow({ ...state, mode }, state.order);
 }
 
 /** `order` laid out on the automatic grid, keeping `prev`'s sizes for each axis whose track count is unchanged. */
 function reflow(prev: LayoutState, order: PaneId[]): LayoutState {
-  const { cols, rows } = gridFor(order.length);
+  const { cols, rows } = gridFor(order.length, prev.mode);
   return {
+    mode: prev.mode,
     order,
     cols,
     rows,

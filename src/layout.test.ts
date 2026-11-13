@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { gridFor } from "./layout";
+import { gridFor, type TilingMode } from "./layout";
 
 // [panes, columns, rows, panes in each row]
 const cases: [number, number, number, number[]][] = [
@@ -32,6 +32,20 @@ describe("gridFor", () => {
       expect(inRow).toHaveLength(count);
       expect(inRow.reduce((sum, cell) => sum + cell.colSpan, 0)).toBeCloseTo(cols);
     });
+  });
+
+  // [mode, columns, rows] for 5 panes
+  const modes: [TilingMode, number, number][] = [
+    ["grid", 3, 2],
+    ["wide", 3, 2],
+    ["tall", 2, 3],
+    ["columns", 5, 1],
+    ["rows", 1, 5],
+  ];
+  it.each(modes)("Tiling mode sizes: 5 panes in %s make %i×%i", (mode, cols, rows) => {
+    const grid = gridFor(5, mode);
+    expect([grid.cols, grid.rows]).toEqual([cols, rows]);
+    expect(grid.cells).toHaveLength(5);
   });
 
   it("Short last row stretches: 3 panes put two on top and one full-width below", () => {

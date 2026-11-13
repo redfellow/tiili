@@ -1,0 +1,19 @@
+format: 1
+slug: settings-build-the-rest-of-the-design-se
+title: "Settings: build the rest of the Design session's settings (Appearance /
+  Behaviour tabs, tiling modes, responsive text)"
+x-harvaaja-card: 2efc65ac-9cdb-41f9-a4e7-45dc128bfab8
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "This adds new observable contracts: settings tabs, tiling modes,
+    responsive text, the drag ghost and the scrollbar. It also changes the
+    existing Automatic grid layout and Inactive pane settings requirements. No
+    active change exists to polish."
+  citations:
+    - openspec/specs/settings/spec.md#Inactive pane settings
+    - openspec/specs/pane-tiling/spec.md#Automatic grid layout
+    - card-plans/3baa38f1-b074-4480-a2ee-30bb3e7ba70a/attachments/design-reference.md
+  revision: 35af8059-63a4-4503-9f8d-e3ab87ec8aca
