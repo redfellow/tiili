@@ -1,4 +1,5 @@
 import type { PaneCwd } from "./paneChip";
+import type { AppIcon } from "./settings";
 
 /** Identifies one shell session of a backend. */
 export type SessionId = number;
@@ -42,6 +43,8 @@ export interface Backend {
   /** The saved settings, or null when there are none. */
   loadSettings(): Promise<unknown>;
   saveSettings(value: unknown): Promise<void>;
+  /** Shows the light or dark app icon (Dock on macOS, window and taskbar elsewhere) for the user's choice. */
+  setAppIcon(choice: AppIcon): Promise<void>;
   /** Closes the window, after its last pane closed. */
   closeWindow(): Promise<void>;
 }
