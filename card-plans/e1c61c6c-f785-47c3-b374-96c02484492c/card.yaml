@@ -5,3 +5,12 @@ x-harvaaja-card: e1c61c6c-f785-47c3-b374-96c02484492c
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable shortcuts (per-pane zoom in/out/reset); no active
+    change covers them.
+  citations:
+    - openspec/specs/pane-tiling/spec.md#Pane shortcuts
+    - openspec/specs/settings/spec.md#Responsive text
+    - src/keymap.ts
+  revision: 03f1548e-0090-46a7-ace5-42cbd35e0f76
