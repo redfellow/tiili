@@ -13,7 +13,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "icons": "node scripts/icons.mjs",
-    "bundle": "node scripts/bundle.mjs"
+    "bundle": "node scripts/bundle.mjs",
+    "install-app": "node scripts/install-app.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
