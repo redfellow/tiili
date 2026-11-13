@@ -50,7 +50,7 @@ Get the installer for your platform from the [latest release](https://github.com
 
 | Platform | Installer |
 | --- | --- |
-| macOS | universal `.dmg` (Apple Silicon and Intel) |
+| macOS | `.dmg` for Apple Silicon (M1 and later) |
 | Windows | `tiili_<version>_x64-setup.exe` |
 | Linux | `.deb` or `.AppImage` |
 
