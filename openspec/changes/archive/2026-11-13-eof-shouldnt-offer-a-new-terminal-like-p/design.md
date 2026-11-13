@@ -1,0 +1,2 @@
+## Approach
+`openTerminal` (src/terminal.ts) gains an `onExit` callback, called when its session's exit event arrives, instead of writing `EXIT_MESSAGE` and arming the Enter restart. `Panes` (src/panes.ts) passes a callback that finds the pane's current index and calls its existing `close(index)`, which already re-flows the grid, disposes the terminal and closes the window when no pane is left. Reusing `close` keeps one path for "pane goes away". The `running` guard stays so input after exit is not written to a dead session.

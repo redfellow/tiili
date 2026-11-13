@@ -261,8 +261,13 @@ export class Panes {
     this.markFocused(this.panes.length - 1);
 
     try {
-      const opened = await openTerminal(this.backend, host, this.settings, cwd, (session) =>
-        this.onSession(pane, session),
+      const opened = await openTerminal(
+        this.backend,
+        host,
+        this.settings,
+        cwd,
+        (session) => this.onSession(pane, session),
+        () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       pane.terminal = opened;
