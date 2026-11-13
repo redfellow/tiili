@@ -5,6 +5,7 @@ import { Panes } from "./panes";
 import { normalize, type Settings } from "./settings";
 import { createSettingsDialog } from "./settingsDialog";
 import { applyTheme } from "./themes";
+import { playSplash } from "./splash";
 import { createTopBar } from "./topBar";
 
 /** Event sent when the macOS app menu's Settings… item is chosen. */
@@ -17,6 +18,22 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   applyTheme(settings.theme);
   // The icon is cosmetic: a failure must not keep the terminal from starting.
   backend.setAppIcon(settings.appIcon).catch(() => undefined);
+
+  // The splash covers the start-up; the first terminal opens underneath it, where its >_ lands.
+  let adoptSettings: (next: Settings) => void = () => undefined;
+  const splash = settings.behaviour.startupSplash
+    ? playSplash({
+        target: () => root.querySelector(".pane[data-focused] .xterm-screen"),
+        fontSize: settings.font.size,
+        reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        onDisable: async () => {
+          const next: Settings = { ...settings, behaviour: { ...settings.behaviour, startupSplash: false } };
+          await backend.saveSettings(next);
+          settings = next;
+          adoptSettings(next);
+        },
+      })
+    : undefined;
 
   const platform = currentPlatform();
   const openSettings = () => dialog.open();
@@ -35,6 +52,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     save: (next) => backend.saveSettings(next),
     onClose: () => panes.focusCurrent(),
   });
+  adoptSettings = (next) => dialog.adopt(next);
 
   if (bar) {
     // Buttons share the shortcuts' code path, then hand the keyboard back to the focused pane.
@@ -55,6 +73,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
   await panes.open();
+  void splash?.done.then(() => panes.focusCurrent());
 }
 
 const root = document.getElementById("panes");
