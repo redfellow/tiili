@@ -26,6 +26,9 @@ projects stay readable at a glance. *Tiili* is Finnish for brick: each terminal 
   so Ctrl+C still interrupts. Right-click works too.
 - **Themes and fonts.** tiili Light and Dark plus Savi, Muratti, Koski and Laasti, Solarized, Gruvbox, Nord and
   Dracula. Any installed font, with ligatures, weights, line height and spacing.
+- **Heynote scratchpad.** The note button next to **+** opens [Heynote](https://heynote.com) in a pane of its
+  own: block-based notes with math and code blocks, saved as plain files in tiili's settings folder. Currency
+  conversion fetches its rates from Heynote's server.
 - **Small and native.** Tauri 2 and xterm.js: a real app per platform at around 10 MB, no Electron.
   No accounts, no sync, no telemetry.
 
@@ -102,3 +105,8 @@ Signing, notarisation and icons are covered in [`docs/packaging.md`](docs/packag
 ## License
 
 [MIT](LICENSE). The bundled fonts keep their own licences: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
+
+The Heynote pane bundles [Heynote](https://github.com/heyman/heynote) by Jonatan Heyman, built from its source by
+`npm run heynote` into [`public/heynote`](public/heynote). Heynote is licensed under the MIT License with the
+"Commons Clause" License Condition v1.0, which does not allow selling it: see
+[`public/heynote/LICENSE`](public/heynote/LICENSE). Thank you, Jonatan, for making Heynote.

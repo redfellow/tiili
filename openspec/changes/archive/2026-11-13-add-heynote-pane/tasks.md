@@ -13,4 +13,4 @@
 
 ## 4. Verify
 - [x] 4.1 Typecheck, lint, vitest and cargo tests
-- [ ] 4.2 Try it in the app on macOS: open, type, quit, reopen; copy, paste, cut; focus shortcuts
+- [x] 4.2 Try it in the app on macOS: open, type, quit, reopen; copy, paste, cut; focus shortcuts
