@@ -36,7 +36,7 @@ const ICONS = {
 
 /**
  * Fills `bar`, the window's top bar, with the New pane, Close pane, Reset layout and Settings buttons on its
- * right. Each button's tooltip names it with the platform's shortcut. In the macOS overlay title bar the bar
+ * right. Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title bar the bar
  * leaves room for the native window buttons and shows the title; dragging the bar moves the window.
  */
 export function createTopBar(bar: HTMLElement, options: TopBarOptions): void {
@@ -72,13 +72,22 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "top-bar-button";
-    button.title = `${name} (${platform === "macos" ? shortcut[0] : shortcut[1]})`;
     button.setAttribute("aria-label", name);
     // Not a keyboard target: the terminal keeps the keyboard, and clicks leave its focus alone.
     button.tabIndex = -1;
     button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", action);
     button.innerHTML = icon;
+    // A styled popover instead of the native title tooltip: it shows at once on hover and names the shortcut.
+    const tip = document.createElement("span");
+    tip.className = "top-bar-tooltip";
+    tip.setAttribute("role", "tooltip");
+    const label = document.createElement("span");
+    label.textContent = name;
+    const keys = document.createElement("kbd");
+    keys.textContent = platform === "macos" ? shortcut[0] : shortcut[1];
+    tip.append(label, keys);
+    button.append(tip);
     group.append(button);
   }
   bar.append(group);
