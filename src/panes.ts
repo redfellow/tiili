@@ -124,8 +124,6 @@ export class Panes {
     const panes = new Panes(backend, root, platform, settings, openSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
-    // Another window asked for Heynote while this one holds it.
-    await backend.onAppEvent("heynote-focus", () => panes.focusHeynote());
     panes.contextMenu = await attachClipboardMenus(
       backend,
       () => panes.current()?.terminal?.term,
@@ -216,27 +214,12 @@ export class Panes {
     await this.backend.newWindow(await this.currentCwd());
   }
 
-  /** Focuses this window's Heynote pane, when it has one. */
-  focusHeynote(): void {
-    const open = this.panes.findIndex((pane) => pane.note !== undefined);
-    if (open >= 0) this.focus(open);
-  }
-
   /**
    * Opens a new Heynote pane after the others and focuses it, however many are open in this window already. The
-   * Heynote pages keep each other in sync through the note store (see `heynote/bridge.js`). Across windows, one
-   * window holds Heynote: a window without one claims it, and when another window holds it, that window comes
-   * forward with its Heynote pane focused.
+   * Heynote pages keep each other in sync through the note store (see `heynote/bridge.js`), in this window and
+   * in every other tiili window, so the pane opens in the window that asked for it.
    */
   async openHeynote(): Promise<void> {
-    const holds = this.panes.some((pane) => pane.note !== undefined);
-    if (!holds) {
-      const owner = await this.backend.claimHeynote();
-      if (owner !== null) {
-        await this.backend.focusHeynote(owner);
-        return;
-      }
-    }
     const { element, chip, host } = this.paneElement();
     const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -326,12 +309,7 @@ export class Panes {
   async close(index: number): Promise<void> {
     const pane = this.panes[index];
     if (!pane) return;
-    if (pane.note) {
-      pane.note.flush();
-      // This window gives Heynote up to other windows only when its last Heynote pane closes.
-      const others = this.panes.some((other) => other !== pane && other.note !== undefined);
-      if (!others) this.backend.releaseHeynote().catch((error: unknown) => console.error(error));
-    }
+    pane.note?.flush();
     this.remove(pane);
     if (this.panes.length === 0) {
       await this.backend.closeWindow();

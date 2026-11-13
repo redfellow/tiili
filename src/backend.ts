@@ -21,7 +21,6 @@ export interface AppEvents {
   "pane-cwd": PaneCwd;
   "pane-command": PaneCommand;
   "settings-changed": unknown;
-  "heynote-focus": undefined;
 }
 
 /**
@@ -69,15 +68,6 @@ export interface Backend {
   closeWindow(): Promise<void>;
   /** Opens a full tiili window, cascaded from this one, whose first pane starts in `cwd` (home folder when absent). */
   newWindow(cwd: string | undefined): Promise<void>;
-  /**
-   * Asks to open the app's one Heynote pane in this window: resolves to null when this window may (it then holds
-   * it), else to the label of the window that already does.
-   */
-  claimHeynote(): Promise<string | null>;
-  /** This window closed its Heynote pane, so another window may open one. */
-  releaseHeynote(): Promise<void>;
-  /** Brings window `label` forward and has it focus its Heynote pane. */
-  focusHeynote(label: string): Promise<void>;
 }
 
 export type BackendKind = "tauri" | "dev";

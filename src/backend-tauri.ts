@@ -64,8 +64,5 @@ export function tauriBackend(): Backend {
     },
     closeWindow: () => getCurrentWindow().close(),
     newWindow: (cwd) => invoke("window_new", { cwd }),
-    claimHeynote: () => invoke<string | null>("heynote_claim"),
-    releaseHeynote: () => invoke("heynote_release"),
-    focusHeynote: (label) => invoke("heynote_focus", { label }),
   };
 }

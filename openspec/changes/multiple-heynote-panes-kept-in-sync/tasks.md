@@ -28,11 +28,11 @@
 
 ## 4. Heynote in every window
 
-- [ ] 4.1 Make `Panes.openHeynote` open a pane in the clicked window without claiming Heynote; remove the
+- [x] 4.1 Make `Panes.openHeynote` open a pane in the clicked window without claiming Heynote; remove the
   `heynote-focus` listener, `Panes.focusHeynote` if then unused, the release on last-pane close, and
   `claimHeynote`/`releaseHeynote`/`focusHeynote` from `Backend` and its Tauri and WS implementations
   - proof: `npx eslint src/panes.ts src/backend.ts src/backend-tauri.ts src/backend-ws.ts`
-- [ ] 4.2 Remove `HeynoteOwner`, `heynote_claim`, `heynote_release`, `heynote_focus` and `HEYNOTE_FOCUS_EVENT` from
+- [x] 4.2 Remove `HeynoteOwner`, `heynote_claim`, `heynote_release`, `heynote_focus` and `HEYNOTE_FOCUS_EVENT` from
   `notes.rs`, their registration and managed state in `lib.rs`, and the ownership unit test in `notes.rs`
   Tests to update: src-tauri/src/notes.rs (ownership claim/release test)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib notes`

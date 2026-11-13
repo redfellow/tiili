@@ -179,14 +179,13 @@ fn pty_close(
     sessions.close(id).map_err(text)
 }
 
-/// Window `label` was closed: its shells end and it no longer holds Heynote or the focus.
+/// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
         let _ = registry.close(id);
     }
-    app.state::<notes::HeynoteOwner>().release(label);
     app.state::<windows::LastFocused>().forget(label);
 }
 
@@ -320,7 +319,6 @@ pub fn run() {
         .manage(WindowSessions::default())
         .manage(windows::WindowLabels::default())
         .manage(windows::LastFocused::default())
-        .manage(notes::HeynoteOwner::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
@@ -373,9 +371,6 @@ pub fn run() {
             notes::heynote_mkdir,
             notes::heynote_rmdir,
             notes::heynote_save_state,
-            notes::heynote_claim,
-            notes::heynote_release,
-            notes::heynote_focus,
             windows::window_new
         ])
         .run(tauri::generate_context!())

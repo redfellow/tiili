@@ -11,11 +11,10 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager};
 
 const DIR_NAME: &str = "heynote";
 const NOTES_DIR: &str = "notes";
@@ -254,64 +253,6 @@ pub fn heynote_save_state(app: AppHandle, state: Value) -> Result<(), String> {
     save_state_in(&heynote_dir(&app)?, &state)
 }
 
-/// Event sent to the window holding Heynote when another window asks for it: it focuses its Heynote pane.
-pub const HEYNOTE_FOCUS_EVENT: &str = "heynote-focus";
-
-/// Which window holds the one Heynote pane of the app, by label; every Heynote page keeps its own copy of the
-/// notes, so there is at most one across all windows.
-#[derive(Default)]
-pub struct HeynoteOwner(Mutex<Option<String>>);
-
-impl HeynoteOwner {
-    /// Window `label` wants to open Heynote: `None` when it may (it now holds it), else the label of the window
-    /// that already does.
-    pub fn claim(&self, label: &str) -> Option<String> {
-        let mut owner = self.0.lock().ok()?;
-        match owner.as_deref() {
-            Some(other) if other != label => Some(other.to_string()),
-            _ => {
-                *owner = Some(label.to_string());
-                None
-            }
-        }
-    }
-
-    /// Window `label` closed its Heynote pane or itself; Heynote is free when it held it.
-    pub fn release(&self, label: &str) {
-        if let Ok(mut owner) = self.0.lock() {
-            if owner.as_deref() == Some(label) {
-                *owner = None;
-            }
-        }
-    }
-}
-
-/// The calling window wants to open Heynote: null when it may, else the label of the window holding it.
-#[tauri::command]
-pub fn heynote_claim(window: WebviewWindow, owner: State<'_, HeynoteOwner>) -> Option<String> {
-    owner.claim(window.label())
-}
-
-/// The calling window closed its Heynote pane.
-#[tauri::command]
-pub fn heynote_release(window: WebviewWindow, owner: State<'_, HeynoteOwner>) {
-    owner.release(window.label());
-}
-
-/// Brings window `label` forward and has it focus its Heynote pane.
-#[tauri::command]
-pub fn heynote_focus(app: AppHandle, label: String) -> Result<(), String> {
-    let window = app.get_webview_window(&label).ok_or_else(|| {
-        "The window holding Heynote has closed; click Heynote again to open it here.".to_string()
-    })?;
-    let text = |e: tauri::Error| format!("Could not bring forward the window holding Heynote: {e}");
-    window.unminimize().map_err(text)?;
-    window.show().map_err(text)?;
-    window.set_focus().map_err(text)?;
-    app.emit_to(label.as_str(), HEYNOTE_FOCUS_EVENT, ())
-        .map_err(text)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,22 +386,5 @@ mod tests {
             );
         }
         assert!(move_in(&dir.0, "a.txt", "../b.txt").is_err());
-    }
-
-    #[test]
-    fn heynote_open_in_another_window_names_that_window() {
-        let owner = HeynoteOwner::default();
-        assert_eq!(owner.claim("main"), None);
-        assert_eq!(owner.claim("main"), None, "the holder may ask again");
-        assert_eq!(owner.claim("window-1").as_deref(), Some("main"));
-        owner.release("window-1");
-        assert_eq!(
-            owner.claim("window-1").as_deref(),
-            Some("main"),
-            "only the holder releases"
-        );
-        owner.release("main");
-        assert_eq!(owner.claim("window-1"), None);
-        assert_eq!(owner.claim("main").as_deref(), Some("window-1"));
     }
 }
