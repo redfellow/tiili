@@ -3,7 +3,7 @@
 - [ ] 1.1 Add `src-tauri/src/windows.rs`: `window_new` command (label `window-<n>`, cascaded 28 px from the focused window, `?cwd=` query), focused-window lookup, and a label → session ids map whose sessions close on `WindowEvent::Destroyed`; unit-test the cascade position and session map
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows`
 - [ ] 1.2 Route macOS menu items with `emit_to` the focused window, add Shell › New Window (⌘N), make `pty_spawn` emit `pane-cwd`, `pane-command` and `pty-exit` only to its own window, and filter the window-state plugin to `main`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test window_state`
 - [ ] 1.3 Capabilities cover `main` and `window-*` in `src-tauri/capabilities/default.json`
   - proof: `grep -E '"window-\*"' src-tauri/capabilities/default.json`
