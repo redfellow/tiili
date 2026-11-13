@@ -72,6 +72,14 @@ export class Panes {
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
     });
+    this.styleRoot(settings());
+  }
+
+  /** Sets the pane-wide looks the stylesheet reads from `root`: hover highlight and inactive panes. */
+  private styleRoot(settings: Settings): void {
+    this.root.toggleAttribute("data-hover-highlight", settings.behaviour.hoverHighlight);
+    this.root.toggleAttribute("data-desaturate", settings.inactive.desaturate);
+    this.root.style.setProperty("--inactive-opacity", String(settings.inactive.opacity));
   }
 
   /**
@@ -228,6 +236,7 @@ export class Panes {
 
   /** Restyles every open pane after the settings changed; `themeChanged` re-reads the theme colours too. */
   async applySettings(settings: Settings, themeChanged: boolean): Promise<void> {
+    this.styleRoot(settings);
     const terminals = await Promise.all(this.panes.map((pane) => pane.ready));
     await Promise.all(
       terminals.map(async (terminal) => {

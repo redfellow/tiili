@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { THEME_IDS } from "./settings";
-import { THEME_TOKENS, THEMES } from "./themes";
+import { contrast, THEME_TOKENS, THEMES } from "./themes";
 
 const fixedThemes = THEMES.filter((theme) => theme.kind !== "system");
 
@@ -18,4 +18,16 @@ describe("themes", () => {
       }
     },
   );
+
+  it.each(
+    fixedThemes.flatMap((theme) =>
+      (["--bg", "--surface"] as const).flatMap((ground) => [
+        [theme.name, "--fg", ground, 4.5, theme] as const,
+        [theme.name, "--muted", ground, 4.5, theme] as const,
+        [theme.name, "--focus", ground, 3, theme] as const,
+      ]),
+    ),
+  )("Readable theme colours: %s %s on %s reaches %s:1", (_name, token, ground, target, theme) => {
+    expect(contrast(theme.tokens[token]!, theme.tokens[ground]!)).toBeGreaterThanOrEqual(target);
+  });
 });
