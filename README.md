@@ -6,43 +6,67 @@
 </p>
 
 <p align="center">
-  <b>A tiling terminal for running many coding agents side by side.</b><br>
+  <b>Every terminal a brick, the window a wall.</b><br>
   macOS · Windows · Linux
+</p>
+
+<p align="center">
+  <a href="https://github.com/redfellow/tiili/releases/latest"><b>Download for macOS · Windows · Linux</b></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/redfellow/tiili/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/redfellow/tiili?color=A4472B&label=release"></a>
+  <a href="https://github.com/redfellow/tiili/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/redfellow/tiili/total?color=A4472B"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/github/license/redfellow/tiili?color=A4472B"></a>
 </p>
 
 ---
 
 https://github.com/user-attachments/assets/63479795-6228-4b6f-8b87-84d58127d348
 
-tiili tiles its terminals automatically and colours each one by its git repository, so ten agents across three
-projects stay readable at a glance. *Tiili* is Finnish for brick: each terminal is a brick, the window is the wall.
+tiili is a terminal that tiles itself. Open a shell and it fills the window; open more and they settle into a grid
+on their own. Every pane is a real TTY running your own shell, tinted by the git repository it sits in, so a window
+full of shells (servers, logs, editors, a coding agent or ten) stays readable at a glance. *Tiili* is Finnish for
+brick: each terminal is a brick, the window is the wall.
 
 ## Features
 
-- **Auto-tiling.** New terminals take their place on their own: fullscreen, side by side, 2×2, 3×3 and on.
-  Drag dividers to resize, drag a pane's top edge to swap, reset to an even grid with one key.
-- **Colour by repository.** Panes in the same git repository share a tint and a name chip. The chip follows
-  `cd`.
-- **Focus you can see.** The focused pane gets a brick line and a solid brick cursor; the rest dim slightly.
-- **Copy and paste that work.** ⌘C/⌘V on macOS through a real Edit menu; Ctrl+Shift+C/V on Windows and Linux,
-  so Ctrl+C still interrupts. Right-click works too.
-- **Themes and fonts.** tiili Light and Dark plus Savi, Muratti, Koski and Laasti, Solarized, Gruvbox, Nord and
-  Dracula. Any installed font, with ligatures, weights, line height and spacing.
-- **Heynote scratchpad.** The note button next to **+** opens [Heynote](https://heynote.com) in a pane of its
-  own: block-based notes with math and code blocks, saved as plain files in tiili's settings folder. Currency
-  conversion fetches its rates from Heynote's server.
-- **Small and native.** Tauri 2 and xterm.js: a real app per platform at around 10 MB, no Electron.
-  No accounts, no sync, no telemetry.
+- **Auto-tiling.** Fullscreen, side by side, 2×2, 3×3 and on. Drag dividers to resize, drag a pane's top edge to
+  swap, reset to an even grid with one key.
+- **Panes that tell you where you are.** Panes in the same git repository share a tint and a name chip that follows
+  `cd`, and each title shows what is running, such as `bash` or `top`.
+- **Copy and paste that work.** ⌘C/⌘V on macOS; Ctrl+Shift+C/V on Windows and Linux, so Ctrl+C still interrupts.
+  Right-click works too.
+- **Themes and fonts.** tiili Light and Dark, Savi, Muratti, Koski, Laasti, Solarized, Gruvbox, Nord and Dracula,
+  previewed as you pick. Any installed font, with ligatures, weights, line height and spacing.
+- **Heynote scratchpad.** The note button next to **+** opens [Heynote](https://heynote.com) in a pane of its own,
+  with notes saved as plain files. Its currency conversion fetches rates from Heynote's server.
+- **Small and native.** Tauri 2 and xterm.js, around 10 MB, no Electron. It reopens where you left the window, and
+  its icon follows light and dark mode. No accounts, no sync, no telemetry.
 
 ## Install
 
-Download the installer for your platform from [Releases](https://github.com/redfellow/tiili/releases):
+Get the installer for your platform from the [latest release](https://github.com/redfellow/tiili/releases/latest):
 
 | Platform | Installer |
 | --- | --- |
 | macOS | universal `.dmg` (Apple Silicon and Intel) |
-| Windows | NSIS setup `.exe` (`tiili_<version>_x64-setup.exe`) |
-| Linux | `.AppImage` or `.deb` |
+| Windows | `tiili_<version>_x64-setup.exe` |
+| Linux | `.deb` or `.AppImage` |
+
+On Linux:
+
+```sh
+sudo apt install ./tiili_*_amd64.deb
+# or
+chmod +x tiili_*_amd64.AppImage && ./tiili_*_amd64.AppImage
+```
+
+The builds are not signed yet, so the first launch takes one extra step:
+
+- **macOS:** drag tiili to Applications and open it, then click **Open Anyway** in System Settings → Privacy &
+  Security. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/tiili.app`.
+- **Windows:** when SmartScreen says "Windows protected your PC", click **More info** → **Run anyway**.
 
 ## Shortcuts
 
@@ -56,53 +80,20 @@ Download the installer for your platform from [Releases](https://github.com/redf
 | Copy / Paste | ⌘C / ⌘V | Ctrl+Shift+C / Ctrl+Shift+V |
 | Settings | ⌘, | Ctrl+, |
 
-<details>
-<summary><b>Windows: let the chip follow <code>cd</code></b></summary>
+On Windows the name chip follows `cd` only when your shell reports its folder: see
+[Windows: let the chip follow `cd`](docs/windows-cd.md).
 
-On macOS and Linux the pane follows your working directory by itself. On Windows it does so only when the shell
-reports the folder with OSC 7 at each prompt; without that, the chip keeps the folder the pane started in.
+## How it's made
 
-PowerShell, in your profile (`notepad $PROFILE`):
+tiili is planned, built and reviewed by coding agents on härvääjä, a board that runs each idea as a card through an [OpenSpec](https://github.com/Fission-AI/OpenSpec) change: plan,
+build, checks, review, merge. The specs live in [`openspec/specs`](openspec/specs). härvääjä is in closed testing.
 
-```powershell
-function prompt {
-  $loc = $executionContext.SessionState.Path.CurrentLocation
-  $osc7 = ""
-  if ($loc.Provider.Name -eq "FileSystem") {
-    $esc = [char]27
-    $path = $loc.ProviderPath -replace '\\', '/'
-    $osc7 = "$esc]7;file://${env:COMPUTERNAME}/$path$esc\"
-  }
-  "${osc7}PS $loc$('>' * ($nestedPromptLevel + 1)) "
-}
-```
+<p align="center">
+  <img src="docs/harvaaja-board.jpg" alt="The härvääjä board: cards moving from Specced through Building and Review to PR" width="720">
+</p>
 
-cmd, once (it sets the `PROMPT` variable for your user):
-
-```bat
-setx PROMPT "$e]7;file://%COMPUTERNAME%/$P$e\$P$G"
-```
-
-</details>
-
-## Build from source
-
-Needs Node.js and Rust (via rustup), plus the [platform prerequisites](docs/packaging.md#prerequisites).
-
-```sh
-npm ci
-npm run tauri dev     # run the app
-npm test              # unit tests
-npm run bundle        # installers for this OS, under src-tauri/target/**/bundle/
-```
-
-Signing, notarisation and icons are covered in [`docs/packaging.md`](docs/packaging.md).
-
-## More
-
-- [Concept](docs/concept.md): what tiili is, why it exists, and the technology choices.
-- [Brand](docs/brand/README.md): logo, palette and design tokens.
-- Specs live in [`openspec/specs`](openspec/specs); work is planned and built through härvääjä with OpenSpec.
+To build tiili yourself, see [Building from source](docs/building.md). The [concept](docs/concept.md) explains why
+tiili exists and the technology choices; the [brand](docs/brand/README.md) holds the logo, palette and design tokens.
 
 ## License
 
