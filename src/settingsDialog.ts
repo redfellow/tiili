@@ -257,8 +257,8 @@ function themeList(onSelect: () => void, locked: () => boolean) {
 }
 
 /**
- * Builds the settings dialogue into `document.body`: an Appearance tab (Theme, Font, Cursor, Inactive terminals) and a
- * Behaviour tab (Tiling, Responsive text, Panes), with Reset to defaults, Cancel and Save.
+ * Builds the settings dialogue into `document.body`: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab
+ * (Font) and a Behaviour tab (Tiling, Responsive text, Panes), with Reset to defaults, Cancel and Save.
  * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
@@ -357,17 +357,17 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("span", {}, "Highlight the terminal under the mouse")),
   );
 
-  const appearance = element("div", { className: "settings-panel", id: "settings-panel-appearance" },
+  const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" },
     element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
-    fontFields,
     cursorFields,
     inactiveFields,
     ...(options.showAppIcon ? [appIconFields] : []),
   );
+  const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
     tilingFields, responsiveFields, paneFields);
-  const panels = [appearance, behaviour];
-  const tabs = ["Appearance", "Behaviour"].map((name, i) => {
+  const panels = [stylePanel, typography, behaviour];
+  const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", panels[i].id);
@@ -404,7 +404,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const form = element("form", { method: "dialog" },
     header,
     tabList,
-    appearance,
+    stylePanel,
+    typography,
     behaviour,
     status,
     element("footer", { className: "settings-footer" },

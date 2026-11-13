@@ -691,7 +691,7 @@ dialog.settings::backdrop {
   transform: translateY(-50%);
 }
 
-/* Tabs: Appearance and Behaviour, the selected one underlined in the focus colour. */
+/* Tabs: Style, Typography and Behaviour, the selected one underlined in the focus colour. */
 .settings-tabs {
   display: flex;
   gap: var(--space-4);
