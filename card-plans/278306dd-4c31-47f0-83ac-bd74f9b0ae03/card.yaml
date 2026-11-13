@@ -6,3 +6,13 @@ x-harvaaja-card: 278306dd-4c31-47f0-83ac-bd74f9b0ae03
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Changes the settings dialogue contract: theme becomes a visible list
+    with instant preview, changes are previewed until Save, Cancel/Esc/× revert;
+    no active change covers settings."
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement Settings dialogue (Changes
+      SHALL apply immediately)"
+    - "src/settingsDialog.ts: autosave via scheduleSave, native theme select"
+  revision: 48dec5a5-026e-474b-b85c-dda116d7735d
