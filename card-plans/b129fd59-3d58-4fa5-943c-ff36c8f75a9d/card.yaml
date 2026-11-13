@@ -1,0 +1,16 @@
+format: 1
+slug: design-release-pipeline-interview-me-win
+title: "Design release pipeline. Interview me. Windows: exe, Mac: universal dmg,
+  Linux: ?"
+x-harvaaja-card: b129fd59-3d58-4fa5-943c-ff36c8f75a9d
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes the packaging contract (Windows .msi -> NSIS .exe) and adds a
+    release command and tag-triggered CI build; no active change exists.
+  citations:
+    - "openspec/specs/packaging/spec.md: Installers per platform"
+    - src-tauri/tauri.conf.json bundle.targets
+  revision: 660ff9c1-05e0-4539-8968-35794b767bd2
