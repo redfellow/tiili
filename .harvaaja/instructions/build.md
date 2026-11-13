@@ -25,3 +25,5 @@ run one test file, lint or type check, and conventions the code must follow.
   it and reports it ignored; the `cargo-test-host` release check runs it for real outside the sandbox. Don't
   leave the task unchecked or file a finding because the test can't run here. Keep the logic it covers testable
   without a PTY where you can, and test that part with ordinary unit tests.
+- Card checks don't run the Rust tests: only `cargo-test-host` at release does. So a task that touches Rust names
+  the test targets covering it in its proof, and those run on the card.
