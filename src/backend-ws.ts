@@ -1,6 +1,7 @@
 import type { Backend, SessionId } from "./backend";
 import { showContextMenu } from "./context-menu";
 import { localNoteStore } from "./heynoteStore";
+import type { PromptId } from "./settings";
 
 /** A message the page sends the dev bridge: typed input, or the terminal's new size. */
 export type ClientMessage = { type: "input"; data: string } | { type: "resize"; rows: number; cols: number };
@@ -36,10 +37,16 @@ export function decodeServer(text: string): ServerMessage | null {
   return null;
 }
 
-/** The bridge's address on the dev server that served the page, with the shell's size and the token. */
-export function bridgeUrl(page: { protocol: string; host: string }, rows: number, cols: number, token: string): string {
+/** The bridge's address on the dev server that served the page, with the shell's size, its prompt and the token. */
+export function bridgeUrl(
+  page: { protocol: string; host: string },
+  rows: number,
+  cols: number,
+  prompt: PromptId,
+  token: string,
+): string {
   const scheme = page.protocol === "https:" ? "wss:" : "ws:";
-  const query = new URLSearchParams({ rows: String(rows), cols: String(cols), token });
+  const query = new URLSearchParams({ rows: String(rows), cols: String(cols), prompt, token });
   return `${scheme}//${page.host}/pty?${query}`;
 }
 
@@ -96,10 +103,10 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
 
   return {
     nativeMenus: false,
-    spawn: (rows, cols, _cwd, onOutput) =>
+    spawn: (rows, cols, _cwd, prompt, onOutput) =>
       new Promise((resolve, reject) => {
         const id = ++nextId;
-        const socket = options.openSocket(bridgeUrl(options.page, rows, cols, options.token));
+        const socket = options.openSocket(bridgeUrl(options.page, rows, cols, prompt, options.token));
         socket.binaryType = "arraybuffer";
         // The session is registered on open, but the spawn resolves only once the bridge says the shell runs.
         let ready = false;

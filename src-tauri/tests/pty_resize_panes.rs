@@ -63,6 +63,7 @@ mod unix {
                 registry
                     .spawn(
                         None,
+                        "off",
                         ROWS,
                         cols,
                         Box::new(move |id, data| {

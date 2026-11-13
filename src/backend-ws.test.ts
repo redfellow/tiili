@@ -1,6 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { decodeServer, wsBackend, type SocketLike } from "./backend-ws";
+import { PROMPT_IDS } from "./settings";
 
 type Opening = (socket: FakeSocket) => void;
 
@@ -47,14 +48,20 @@ function setup(opening: Opening = startsShell) {
 }
 
 describe("WebSocket backend", () => {
-  it("Shell in the browser: the URL carries rows, cols and token, and input and resize frames are sent", async () => {
+  it.each(PROMPT_IDS)("New panes use the choice: the URL carries prompt %s", async (prompt) => {
     const { backend, sockets } = setup();
-    const id = await backend.spawn(24, 80, undefined, () => undefined);
+    await backend.spawn(24, 80, undefined, prompt, () => undefined);
+    expect(new URL(sockets[0].url).searchParams.get("prompt")).toBe(prompt);
+  });
+
+  it("Shell in the browser: the URL carries rows, cols, prompt and token, and input and resize frames are sent", async () => {
+    const { backend, sockets } = setup();
+    const id = await backend.spawn(24, 80, undefined, "off", () => undefined);
     const url = new URL(sockets[0].url);
     expect(url.protocol).toBe("ws:");
     expect(url.host).toBe("127.0.0.1:5173");
     expect(url.pathname).toBe("/pty");
-    expect(Object.fromEntries(url.searchParams)).toEqual({ rows: "24", cols: "80", token: "secret" });
+    expect(Object.fromEntries(url.searchParams)).toEqual({ rows: "24", cols: "80", prompt: "off", token: "secret" });
     expect(sockets[0].binaryType).toBe("arraybuffer");
 
     await backend.write(id, "echo hi\r");
@@ -68,7 +75,7 @@ describe("WebSocket backend", () => {
   it("Shell in the browser: binary output reaches the terminal", async () => {
     const { backend, sockets } = setup();
     const output: number[][] = [];
-    await backend.spawn(24, 80, undefined, (bytes) => output.push([...bytes]));
+    await backend.spawn(24, 80, undefined, "off", (bytes) => output.push([...bytes]));
     sockets[0].receive(new Uint8Array([104, 105]).buffer);
     expect(output).toEqual([[104, 105]]);
   });
@@ -77,7 +84,7 @@ describe("WebSocket backend", () => {
     const { backend, sockets } = setup();
     const exits: [number, number][] = [];
     await backend.onExit((id, code) => exits.push([id, code]));
-    const id = await backend.spawn(24, 80, undefined, () => undefined);
+    const id = await backend.spawn(24, 80, undefined, "off", () => undefined);
     sockets[0].receive(JSON.stringify({ type: "exit", code: 3 }));
     sockets[0].onclose?.({} as CloseEvent);
     expect(exits).toEqual([[id, 3]]);
@@ -86,7 +93,7 @@ describe("WebSocket backend", () => {
 
   it("Wrong token: a connection closed before it opens fails the spawn", async () => {
     const { backend } = setup((socket) => socket.onclose?.({} as CloseEvent));
-    await expect(backend.spawn(24, 80, undefined, () => undefined)).rejects.toThrow();
+    await expect(backend.spawn(24, 80, undefined, "off", () => undefined)).rejects.toThrow();
   });
 
   it("No pseudo-terminal available: the bridge's error fails the spawn with the reason, and no exit follows", async () => {
@@ -97,7 +104,7 @@ describe("WebSocket backend", () => {
     });
     const exits: number[] = [];
     await backend.onExit((id) => exits.push(id));
-    await expect(backend.spawn(24, 80, undefined, () => undefined)).rejects.toThrow(
+    await expect(backend.spawn(24, 80, undefined, "off", () => undefined)).rejects.toThrow(
       "The dev bridge could not open a shell: openpty: Operation not permitted",
     );
     expect(exits).toEqual([]);
@@ -106,7 +113,7 @@ describe("WebSocket backend", () => {
   it("Shell starts: the spawn waits for the bridge's ready message", async () => {
     const { backend, sockets } = setup((socket) => socket.onopen?.({} as Event));
     let resolved = false;
-    const spawned = backend.spawn(24, 80, undefined, () => undefined).then((id) => {
+    const spawned = backend.spawn(24, 80, undefined, "off", () => undefined).then((id) => {
       resolved = true;
       return id;
     });

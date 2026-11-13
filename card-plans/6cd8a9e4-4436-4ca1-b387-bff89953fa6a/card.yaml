@@ -1,0 +1,20 @@
+format: 1
+slug: on-hold-cargo-test-host-2
+title: "On hold: cargo-test-host"
+x-harvaaja-card: 6cd8a9e4-4436-4ca1-b387-bff89953fa6a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: "Test-only bug: classic_shell() calls cmd.env_remove(\"ZDOTDIR\")
+    after command_for set ZDOTDIR to tiili's integration folder, so zsh never
+    loads the integration and shows macOS's default prompt. Product behaviour
+    and specs are unchanged."
+  citations:
+    - src-tauri/tests/pty_session.rs:122-124 (env_remove ZDOTDIR after
+      command_for)
+    - src-tauri/src/shell_integration.rs:78-90 (zsh plan sets ZDOTDIR)
+    - openspec/specs/terminal-session/spec.md
+  revision: 8cbb07b4-f544-4100-848d-1b8aed27aca8
