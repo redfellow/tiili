@@ -12,7 +12,7 @@
 
 ---
 
-https://github.com/user-attachments/assets/036a0249-6ed1-4265-a797-c3e10b6abc19
+https://github.com/user-attachments/assets/63479795-6228-4b6f-8b87-84d58127d348
 
 tiili tiles its terminals automatically and colours each one by its git repository, so ten agents across three
 projects stay readable at a glance. *Tiili* is Finnish for brick: each terminal is a brick, the window is the wall.
