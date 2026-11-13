@@ -1,0 +1,8 @@
+format: 1
+slug: opt-in-default-coloured-prompt-shell-int
+title: Opt-in default coloured prompt (shell integration) and
+  COLORTERM=truecolor for tiili shells
+x-harvaaja-card: 828f4d23-061a-4700-988f-8693345f3997
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
