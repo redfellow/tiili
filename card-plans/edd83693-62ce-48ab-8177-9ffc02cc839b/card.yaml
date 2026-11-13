@@ -5,3 +5,17 @@ x-harvaaja-card: edd83693-62ce-48ab-8177-9ffc02cc839b
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "The whole Design session changes several observable contracts: Koski
+    becomes the default theme, there are new cursor settings, new weight/spacing
+    ranges, bundled and OS font groups, popover tooltips and a draggable dialog
+    without a dimming backdrop. No change is active. The parts overlap in
+    settingsDialog.ts and styles.css, so splitting them would not save time."
+  citations:
+    - openspec/specs/settings/spec.md
+    - openspec/specs/terminal-session/spec.md:27
+    - openspec/specs/pane-tiling/spec.md:53
+    - openspec/specs/window-top-bar/spec.md:16
+    - src/settings.ts
+  revision: b97de146-a3b4-46be-8567-91412f497d7f
