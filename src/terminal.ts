@@ -59,6 +59,8 @@ export async function applyFont(term: Terminal, settings: Settings): Promise<voi
   term.options.fontWeightBold = String(font.weightBold) as FontWeight;
   term.options.lineHeight = font.lineHeight;
   term.options.letterSpacing = font.letterSpacing;
+  term.options.cursorStyle = settings.cursor.style;
+  term.options.cursorBlink = settings.cursor.blink;
 
   const own = addons.get(term);
   if (!own) return;
@@ -80,9 +82,9 @@ export function refreshTheme(term: Terminal): void {
 /**
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
- * dark. The cursor is a solid block while the terminal has focus and an outline otherwise. The shell runs on
- * `backend`; `onSession` hears the id of each shell session the terminal starts, the first and any after the
- * shell exits.
+ * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
+ * chosen; otherwise it is an outline. The shell runs on `backend`; `onSession` hears the id of each shell session
+ * the terminal starts, the first and any after the shell exits.
  */
 export async function openTerminal(
   backend: Backend,
@@ -95,9 +97,11 @@ export async function openTerminal(
   await loadFont(settings().font);
 
   const term = new Terminal({
-    cursorStyle: "block",
+    cursorStyle: settings().cursor.style,
     cursorInactiveStyle: "outline",
-    cursorBlink: false,
+    cursorBlink: settings().cursor.blink,
+    // The ligatures addon uses xterm's proposed character joiner API.
+    allowProposedApi: true,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);

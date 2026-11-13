@@ -21,20 +21,30 @@ export interface FontSettings {
   family: string;
   /** Pixels, 8–32. */
   size: number;
-  /** 100–900 in steps of 100. */
+  /** 100–900 in steps of 10. */
   weight: number;
-  /** 100–900 in steps of 100. */
+  /** 100–900 in steps of 10. */
   weightBold: number;
   ligatures: boolean;
   /** 1.0–2.0. */
   lineHeight: number;
-  /** Pixels, 0–5. */
+  /** Pixels, -2–5. */
   letterSpacing: number;
+}
+
+/** The cursor's shape: the brick block, an underline or a bar. */
+export const CURSOR_STYLES = ["block", "underline", "bar"] as const;
+export type CursorStyle = (typeof CURSOR_STYLES)[number];
+
+export interface CursorSettings {
+  style: CursorStyle;
+  blink: boolean;
 }
 
 export interface Settings {
   theme: ThemeId;
   font: FontSettings;
+  cursor: CursorSettings;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -47,25 +57,26 @@ export function fontFamilyList(family: string): string {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: "system",
+  theme: "koski",
   font: {
     family: DEFAULT_FONT_FAMILY,
     size: 14,
-    weight: 400,
+    weight: 100,
     weightBold: 700,
     ligatures: false,
     lineHeight: 1.0,
     letterSpacing: 0,
   },
+  cursor: { style: "block", blink: true },
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
 export const FONT_RANGES = {
   size: { min: 8, max: 32, step: 1 },
-  weight: { min: 100, max: 900, step: 100 },
-  weightBold: { min: 100, max: 900, step: 100 },
+  weight: { min: 100, max: 900, step: 10 },
+  weightBold: { min: 100, max: 900, step: 10 },
   lineHeight: { min: 1.0, max: 2.0, step: 0.05 },
-  letterSpacing: { min: 0, max: 5, step: 0.5 },
+  letterSpacing: { min: -2, max: 5, step: 0.1 },
 } as const;
 
 const MAX_FAMILY_LENGTH = 100;
@@ -91,12 +102,13 @@ function family(value: unknown): string {
 
 /**
  * Settings from anything read back from disk or a form: each field that is missing or of the wrong type gets its
- * default, numbers are clamped to their range and snapped to their step, and an unknown theme becomes System.
+ * default, numbers are clamped to their range and snapped to their step, and an unknown theme becomes Koski.
  */
 export function normalize(value: unknown): Settings {
   const raw = isRecord(value) ? value : {};
   const font = isRecord(raw.font) ? raw.font : {};
   const defaults = DEFAULT_SETTINGS.font;
+  const cursor = isRecord(raw.cursor) ? raw.cursor : {};
   return {
     theme: THEME_IDS.includes(raw.theme as ThemeId) ? (raw.theme as ThemeId) : DEFAULT_SETTINGS.theme,
     font: {
@@ -107,6 +119,12 @@ export function normalize(value: unknown): Settings {
       ligatures: typeof font.ligatures === "boolean" ? font.ligatures : defaults.ligatures,
       lineHeight: number(font.lineHeight, defaults.lineHeight, FONT_RANGES.lineHeight),
       letterSpacing: number(font.letterSpacing, defaults.letterSpacing, FONT_RANGES.letterSpacing),
+    },
+    cursor: {
+      style: CURSOR_STYLES.includes(cursor.style as CursorStyle)
+        ? (cursor.style as CursorStyle)
+        : DEFAULT_SETTINGS.cursor.style,
+      blink: typeof cursor.blink === "boolean" ? cursor.blink : DEFAULT_SETTINGS.cursor.blink,
     },
   };
 }
