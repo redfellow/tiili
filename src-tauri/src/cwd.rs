@@ -2,11 +2,7 @@
 //! pane can start where the focused one is and panes follow `cd` on macOS and Linux), and picks up
 //! the OSC 7 reports shells send on every platform.
 
-use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 
 use crate::repo::{find_repo, Repo};
@@ -172,27 +168,6 @@ impl CwdTracker {
     }
 }
 
-/// Reads process `pid`'s working directory into `tracker` about once a second while `alive` holds,
-/// on macOS and Linux; elsewhere it does nothing.
-pub fn poll(pid: u32, tracker: Arc<Mutex<CwdTracker>>, alive: Arc<AtomicBool>) -> io::Result<()> {
-    if cfg!(not(any(target_os = "linux", target_os = "macos"))) {
-        return Ok(());
-    }
-    thread::Builder::new()
-        .name("pty-cwd".into())
-        .spawn(move || {
-            while alive.load(Ordering::Relaxed) {
-                if let Some(dir) = process_cwd(pid) {
-                    if let Ok(mut tracker) = tracker.lock() {
-                        tracker.report_polled(dir);
-                    }
-                }
-                thread::sleep(POLL_INTERVAL);
-            }
-        })?;
-    Ok(())
-}
-
 /// The working directory of process `pid`, or `None` when it cannot be read (always on Windows,
 /// where ConPTY gives no way to read a child's working directory).
 #[cfg(target_os = "linux")]
@@ -240,6 +215,7 @@ pub fn process_cwd(_pid: u32) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn osc7_paths() {
