@@ -1,0 +1,16 @@
+format: 1
+slug: remember-the-window-size-and-position-be
+title: Remember the window size and position between launches
+x-harvaaja-card: 63e535ac-4afa-4142-8e63-306cf0336b5b
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable contract (window restores size/position/state across
+    launches); no main spec or active change covers window state.
+  citations:
+    - src-tauri/tauri.conf.json app.windows[0] width 900 height 600
+    - openspec/specs/terminal-session/spec.md has no window-state requirement
+    - openspec/changes has only archive
+  revision: 2a3b44db-6ce2-4fa1-9cff-abf6243670c5

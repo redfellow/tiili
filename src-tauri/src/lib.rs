@@ -6,6 +6,7 @@ pub mod notes;
 pub mod pty;
 pub mod repo;
 pub mod settings;
+pub mod window_state;
 
 use std::path::Path;
 
@@ -210,10 +211,55 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         .build()
 }
 
+/// Size of the main window when it has no usable saved state; the same as `tauri.conf.json`.
+const DEFAULT_WINDOW_SIZE: tauri::LogicalSize<f64> = tauri::LogicalSize::new(900.0, 600.0);
+
+/// Puts the main window back to its default size, centred, when its saved position lies on no connected
+/// screen: the window-state plugin leaves the position to the OS then but still restores the saved size.
+fn reset_off_screen_window(app: &tauri::App) -> tauri::Result<()> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    let path = app
+        .path()
+        .app_config_dir()?
+        .join(tauri_plugin_window_state::DEFAULT_FILENAME);
+    let Some(saved) = window_state::read_saved(&path, window.label()) else {
+        return Ok(());
+    };
+    let monitors: Vec<_> = window
+        .available_monitors()?
+        .iter()
+        .map(|m| window_state::Rect {
+            x: m.position().x,
+            y: m.position().y,
+            width: m.size().width,
+            height: m.size().height,
+        })
+        .collect();
+    if !window_state::is_on_screen(saved, &monitors) {
+        window.set_size(DEFAULT_WINDOW_SIZE)?;
+        window.center()?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use tauri_plugin_window_state::StateFlags;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .manage(SessionRegistry::new())
         .manage(app_icon::IconState::default())
         .on_window_event(|window, event| {
@@ -223,6 +269,7 @@ pub fn run() {
         })
         .setup(|app| {
             app_icon::apply(app.handle());
+            reset_off_screen_window(app)?;
             #[cfg(target_os = "macos")]
             {
                 let menu = macos_menu(app.handle())?;
