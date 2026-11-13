@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/brand/logo/lockup-dark.svg" alt="tiili" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo/lockup-dark.svg">
+    <img src="docs/brand/logo/lockup-light.svg" alt="tiili" width="360">
+  </picture>
 </p>
 
 <p align="center">
