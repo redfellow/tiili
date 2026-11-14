@@ -5,3 +5,14 @@ x-harvaaja-card: 0686531f-08bd-4d4d-a6ab-8a0ef5c87456
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Moving the settings dialogue into its own OS window changes the
+    'Settings dialogue placement' contract (drag within the window, centred in
+    it). No active change covers settings.
+  citations:
+    - "openspec/specs/settings/spec.md#Requirement: Settings dialogue placement"
+    - src/main.ts createSettingsDialog
+    - src/styles.css dialog.settings max-height calc(100vh)
+    - src-tauri/capabilities/default.json windows main, window-*
+  revision: 5cf54695-e4e8-4b4b-b049-a9eb0408f1a9
