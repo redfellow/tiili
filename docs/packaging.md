@@ -65,9 +65,11 @@ keeps the light icon, so that is what the Dock shows while tiili is not running.
 
 ## Signing and notarisation
 
-Signing is off by default: `signingIdentity` and `certificateThumbprint` are unset in `tauri.conf.json`, and
-a build without the variables below succeeds unsigned. Signing is switched on through environment variables
-only.
+Without the variables below, Windows builds are unsigned (`certificateThumbprint` is unset) and macOS builds are
+ad-hoc signed: `signingIdentity` is `"-"` in `tauri.conf.json`. Ad-hoc signing seals the whole `.app`. Without it
+only the executable carries the linker's signature, and a downloaded copy (quarantined by the browser) is reported
+as damaged with only "Move to Bin", and no **Open Anyway** in Privacy & Security. Real signing is switched on
+through the environment variables below; `APPLE_SIGNING_IDENTITY` takes the place of `"-"`.
 
 **Where secrets go**: in your shell environment for a local build, or in the CI provider's encrypted secrets
 for a release build. Never in the repository: not in `tauri.conf.json`, not in a committed `.env` file.
