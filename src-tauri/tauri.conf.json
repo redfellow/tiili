@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": [
       "dmg",
       "nsis",
@@ -48,6 +49,14 @@
     },
     "windows": {
       "certificateThumbprint": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/redfellow/tiili/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc3RTYwRDNFQjg1Mjk0OUUKUldTZWxGSzRQZzNtZDd1MVk2UHVrNTArTkd6c2lsZGZQK2lNMmkxcndZUTl5TitsbEhXWGx5cjUK"
     }
   }
 }

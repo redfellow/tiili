@@ -2,17 +2,17 @@
 
 ## 1. Rust and config
 
-- [ ] 1.1 Add `tauri-plugin-updater` and `tauri-plugin-process` to `src-tauri/Cargo.toml`, register both in `src-tauri/src/lib.rs`, add `updater:default` and `process:allow-restart` to `src-tauri/capabilities/default.json`, and add the `update_install_kind` command with a pure `install_kind(os, appimage_set)` helper and a table-driven unit test (linux+no APPIMAGE → deb; linux+APPIMAGE, macos, windows → bundle).
+- [x] 1.1 Add `tauri-plugin-updater` and `tauri-plugin-process` to `src-tauri/Cargo.toml`, register both in `src-tauri/src/lib.rs`, add `updater:default` and `process:allow-restart` to `src-tauri/capabilities/default.json`, and add the `update_install_kind` command with a pure `install_kind(os, appimage_set)` helper and a table-driven unit test (linux+no APPIMAGE → deb; linux+APPIMAGE, macos, windows → bundle).
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib install_kind`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
-- [ ] 1.2 In `src-tauri/tauri.conf.json` set `bundle.createUpdaterArtifacts: true` and `plugins.updater` with endpoint `https://github.com/redfellow/tiili/releases/latest/download/latest.json` and pubkey `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc3RTYwRDNFQjg1Mjk0OUUKUldTZWxGSzRQZzNtZDd1MVk2UHVrNTArTkd6c2lsZGZQK2lNMmkxcndZUTl5TitsbEhXWGx5cjUK`. In `scripts/bundle.mjs` add `--config` turning `createUpdaterArtifacts` off when `TAURI_SIGNING_PRIVATE_KEY` is unset (export the argument builder and test it).
+- [x] 1.2 In `src-tauri/tauri.conf.json` set `bundle.createUpdaterArtifacts: true` and `plugins.updater` with endpoint `https://github.com/redfellow/tiili/releases/latest/download/latest.json` and pubkey `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc3RTYwRDNFQjg1Mjk0OUUKUldTZWxGSzRQZzNtZDd1MVk2UHVrNTArTkd6c2lsZGZQK2lNMmkxcndZUTl5TitsbEhXWGx5cjUK`. In `scripts/bundle.mjs` add `--config` turning `createUpdaterArtifacts` off when `TAURI_SIGNING_PRIVATE_KEY` is unset (export the argument builder and test it).
   - proof: `node -e "const c=require('./src-tauri/tauri.conf.json');if(!c.bundle.createUpdaterArtifacts||!c.plugins.updater.pubkey)process.exit(1)"`
   - proof: `npx vitest run scripts/bundle.test.ts`
   - proof: `npx eslint scripts/bundle.mjs scripts/bundle.test.ts`
 
 ## 2. Frontend
 
-- [ ] 2.1 Add `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process`; add `updates: { autoCheck: boolean }` to `Settings` (default true, invalid → true) in `src/settings.ts` with a case in the existing normalise test table.
+- [x] 2.1 Add `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process`; add `updates: { autoCheck: boolean }` to `Settings` (default true, invalid → true) in `src/settings.ts` with a case in the existing normalise test table.
   - proof: `npx vitest run src/settings.test.ts`
 - [ ] 2.2 Add `src/updates.ts` (pure `shouldAutoCheck`, `isSkipped`, localStorage last-check and skipped version, check/install/relaunch flow, deb branch via `update_install_kind`) with `src/updates.test.ts` (fast tier, table-driven for the 24 h rule and skip rule); add `src/updateDialog.ts` for the in-app dialog (versions, preformatted notes, Install now / Later / Skip this version, progress, error, deb variant with Open release page) and start the check from the main window in `src/main.ts`.
   - proof: `npx vitest run src/updates.test.ts`
