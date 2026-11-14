@@ -7,6 +7,8 @@ export interface PaneCwd {
   cwd: string;
   repo: { root: string; name: string } | null;
   host: string | null;
+  /** The pane's project tint, assigned app-wide so a repository has the same tint in every window; null untinted. */
+  tint: number | null;
 }
 
 /** Event sent when a shell's working directory or repository changes. */

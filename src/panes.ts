@@ -37,7 +37,7 @@ import {
 import type { Settings } from "./settings";
 import { zoomedSize } from "./responsive";
 import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
-import { TintAssigner, tintCounts, tintKey } from "./tints";
+import { paneTint } from "./tints";
 
 /** A pane can't be resized below this many columns and rows of its terminal. */
 const MIN_COLS = 20;
@@ -75,7 +75,6 @@ export class Panes {
   private focused = -1;
   private contextMenu: (event: MouseEvent) => void = () => {};
   private readonly view: TileView;
-  private readonly tints = new TintAssigner();
   /** The latest `pane-cwd` report per session; a report can arrive before its pane knows its session id. */
   private readonly places = new Map<number, PaneCwd>();
   /** The latest `pane-command` report per session, kept like `places`. */
@@ -141,6 +140,8 @@ export class Panes {
       await backend.onAppEvent("pane", (payload) => {
         panes.act(payload === "new" ? { type: "new" } : { type: "close" });
       });
+      // The Shell menu's New Window (⌘N), sent to the focused window only.
+      await backend.onAppEvent("new-window", () => panes.act({ type: "newWindow" }));
     }
     return panes;
   }
@@ -195,21 +196,30 @@ export class Panes {
   act(action: PaneAction): void {
     const report = (error: unknown) => this.report(error);
     if (action.type === "new") this.open().catch(report);
-    else if (action.type === "heynote") this.openHeynote();
+    else if (action.type === "heynote") this.openHeynote().catch(report);
     else if (action.type === "close") this.close(this.focused).catch(report);
+    else if (action.type === "newWindow") this.newWindow().catch(report);
     else this.focus(action.index);
   }
 
+  /** The folder of the focused pane's shell, where a new pane or window starts; undefined when it can't be read. */
+  private async currentCwd(): Promise<string | undefined> {
+    return this.current()
+      ?.ready.then((t) => t?.cwd())
+      .catch(() => undefined);
+  }
+
+  /** Opens a new tiili window, cascaded from this one, whose pane starts in the focused pane's folder. */
+  async newWindow(): Promise<void> {
+    await this.backend.newWindow(await this.currentCwd());
+  }
+
   /**
-   * Opens the Heynote pane after the others and focuses it. There is one at most, since every Heynote page keeps
-   * its own copy of the notes: when it is already open, it only takes the focus.
+   * Opens a new Heynote pane after the others and focuses it, however many are open in this window already. The
+   * Heynote pages keep each other in sync through the note store (see `heynote/bridge.js`), in this window and
+   * in every other tiili window, so the pane opens in the window that asked for it.
    */
-  openHeynote(): void {
-    const open = this.panes.findIndex((pane) => pane.note !== undefined);
-    if (open >= 0) {
-      this.focus(open);
-      return;
-    }
+  async openHeynote(): Promise<void> {
     const { element, chip, host } = this.paneElement();
     const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -254,10 +264,12 @@ export class Panes {
     else pane.terminal?.term.focus();
   }
 
-  /** Opens a pane after the others, in the focused pane's working directory, and focuses it. */
-  async open(): Promise<void> {
-    const from = this.current();
-    const cwd = await from?.ready.then((t) => t?.cwd()).catch(() => undefined);
+  /**
+   * Opens a pane after the others and focuses it: in `start` when given (a new window's first pane), else in the
+   * focused pane's working directory.
+   */
+  async open(start?: string): Promise<void> {
+    const cwd = start ?? (await this.currentCwd());
 
     const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -369,16 +381,11 @@ export class Panes {
   /**
    * Shows the pane's repository in its tint, or its folder in the neutral chip outside a repository, followed by
    * what runs in the pane. A remote pane shows `host:place`, tinted by its host and repository, else by its host.
+   * The core assigns the tint app-wide, so a repository has the same one in every window.
    */
   private showPlace(pane: Pane, place: PaneCwd): void {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
-    const key = tintKey(place);
-    if (key === undefined) {
-      pane.tint = undefined;
-    } else {
-      const others = tintCounts(this.panes.filter((p) => p !== pane).map((p) => p.tint));
-      pane.tint = this.tints.assign(key, others);
-    }
+    pane.tint = paneTint(place);
     showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
   }
 
