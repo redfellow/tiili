@@ -5,3 +5,12 @@ x-harvaaja-card: 7d58fd37-bdbd-4ced-96b7-80628f49fc5e
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "This adds a new visible behaviour: panes animate when they open,
+    close, re-flow and swap. No active change has the same intent, and the
+    pane-attention change is no longer eligible."
+  citations:
+    - openspec/specs/pane-tiling/spec.md#Grid re-flow
+    - openspec/specs/pane-layout/spec.md#Swap panes
+  revision: 0f4df291-a6c3-4de8-bd1c-6c05fd4ba615
