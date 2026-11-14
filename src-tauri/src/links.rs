@@ -216,6 +216,9 @@ pub fn resolve_path(cwd: &Path, home: Option<&Path>, text: &str) -> Option<Resol
 #[tauri::command]
 pub fn link_open(app: AppHandle, uri: String, confirmed: bool) -> Result<(), String> {
     match classify_url(&uri) {
+        UrlRule::Deny if scheme_of(&uri).as_deref() == Some("file") => Err(format!(
+            "tiili doesn't open links to files on another computer: {uri}"
+        )),
         UrlRule::Deny => Err(format!("tiili never opens {uri}")),
         UrlRule::Confirm if !confirmed => Err(format!("Opening {uri} needs your confirmation")),
         _ => app
