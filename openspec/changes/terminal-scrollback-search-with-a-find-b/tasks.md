@@ -1,26 +1,26 @@
 ## 1. Search logic
-- [ ] 1.1 Add `@xterm/addon-search` and `src/search.ts` (count label, regex check, hex blend, decoration options from theme tokens) with table-driven `src/search.test.ts` (`@harvaaja-test-tier: fast`)
+- [x] 1.1 Add `@xterm/addon-search` and `src/search.ts` (count label, regex check, hex blend, decoration options from theme tokens) with table-driven `src/search.test.ts` (`@harvaaja-test-tier: fast`)
   - proof: `npx vitest run src/search.test.ts`
   - proof: `npx eslint src/search.ts src/search.test.ts`
-- [ ] 1.2 Add `selectionBackground` distinct from match colours to `terminalTheme` in `src/theme.ts`
+- [x] 1.2 Add `selectionBackground` distinct from match colours to `terminalTheme` in `src/theme.ts`
   Tests to update: src/theme.test.ts
   - proof: `npx vitest run src/theme.test.ts`
   - proof: `npx eslint src/theme.ts`
 
 ## 2. Keys and menu
-- [ ] 2.1 Add `findAction` to `src/keymap.ts` (⌘F/⌘G/⇧⌘G; Ctrl+Shift+F, F3, Shift+F3; plain Ctrl+F null) with cases in `src/keymap.test.ts`
+- [x] 2.1 Add `findAction` to `src/keymap.ts` (⌘F/⌘G/⇧⌘G; Ctrl+Shift+F, F3, Shift+F3; plain Ctrl+F null) with cases in `src/keymap.test.ts`
   Tests to update: src/keymap.test.ts
   - proof: `npx vitest run src/keymap.test.ts`
   - proof: `npx eslint src/keymap.ts src/keymap.test.ts`
-- [ ] 2.2 Add Find…, Find Next, Find Previous to the macOS Edit menu in `src-tauri/src/lib.rs`, emitted to the focused window
+- [x] 2.2 Add Find…, Find Next, Find Previous to the macOS Edit menu in `src-tauri/src/lib.rs`, emitted to the focused window
   - proof: `cargo check --manifest-path src-tauri/Cargo.toml --lib`
   - proof: `grep -nE "Find Next|Find Previous" src-tauri/src/lib.rs`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 3. Find bar
-- [ ] 3.1 Add `src/findBar.ts` overlay and styles in `src/styles.css`; load the addon in `src/terminal.ts`, recompute decorations on theme refresh
+- [x] 3.1 Add `src/findBar.ts` overlay and styles in `src/styles.css`; load the addon in `src/terminal.ts`, recompute decorations on theme refresh
   - proof: `npx eslint src/findBar.ts src/terminal.ts`
-- [ ] 3.2 Dispatch find keys and menu payloads in `src/panes.ts` / `src/main.ts`; Heynote panes open Heynote's search
+- [x] 3.2 Dispatch find keys and menu payloads in `src/panes.ts` / `src/main.ts`; Heynote panes open Heynote's search
   - proof: `npx eslint src/panes.ts src/main.ts`
   - proof: `npm run typecheck`
   - proof: `openspec validate terminal-scrollback-search-with-a-find-b --strict`

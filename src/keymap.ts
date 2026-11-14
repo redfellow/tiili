@@ -17,6 +17,15 @@ export type PaneAction =
   | { type: "moveToNewWindow" };
 /** A zoom shortcut: the focused pane's text one step larger, smaller, or back to the Settings size. */
 export type ZoomAction = "in" | "out" | "reset";
+/** A find shortcut: open the focused pane's find bar, or go to the next or previous match. */
+export type FindAction = "find" | "next" | "previous";
+
+/** The Edit menu items' payloads on the clipboard event, as find actions; the other payloads are clipboard actions. */
+export const FIND_MENU_ITEMS: Readonly<Record<string, FindAction>> = {
+  find: "find",
+  findNext: "next",
+  findPrevious: "previous",
+};
 
 /** The parts of a keyboard event the shortcut mappings read. */
 export interface KeyChord {
@@ -143,6 +152,26 @@ export function attentionShortcut(event: KeyChord, platform: Platform): "next" |
   if (!isJ || event.altKey) return null;
   if (platform === "macos") return event.metaKey && !event.ctrlKey && !event.shiftKey ? "next" : null;
   return event.ctrlKey && event.shiftKey && !event.metaKey ? "next" : null;
+}
+
+/**
+ * Which find action a key press asks for, or null when the key belongs to the shell.
+ * macOS: ⌘F find, ⌘G next, ⇧⌘G previous. Windows and Linux: Ctrl+Shift+F find, F3 next, Shift+F3 previous; plain
+ * Ctrl+F stays with the shell.
+ */
+export function findAction(event: KeyChord, platform: Platform): FindAction | null {
+  if (event.altKey) return null;
+  const key = event.key.toLowerCase();
+  if (platform === "macos") {
+    if (!event.metaKey || event.ctrlKey) return null;
+    if (key === "f" && !event.shiftKey) return "find";
+    if (key === "g") return event.shiftKey ? "previous" : "next";
+    return null;
+  }
+  if (event.metaKey) return null;
+  if (event.ctrlKey) return event.shiftKey && (key === "f" || event.code === "KeyF") ? "find" : null;
+  if (event.key === "F3") return event.shiftKey ? "previous" : "next";
+  return null;
 }
 
 /** The platform the webview runs on. */
