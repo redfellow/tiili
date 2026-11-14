@@ -24,6 +24,7 @@ tungstenite = { version = "0.29", default-features = false, features = ["handsha
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-opener = "2"
 
 [features]
 # The browser dev server's shell bridge (src/bin/dev-bridge.rs) and its test. On by default, so cargo build, test and

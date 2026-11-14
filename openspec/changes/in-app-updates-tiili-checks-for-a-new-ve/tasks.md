@@ -14,16 +14,16 @@
 
 - [x] 2.1 Add `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process`; add `updates: { autoCheck: boolean }` to `Settings` (default true, invalid → true) in `src/settings.ts` with a case in the existing normalise test table.
   - proof: `npx vitest run src/settings.test.ts`
-- [ ] 2.2 Add `src/updates.ts` (pure `shouldAutoCheck`, `isSkipped`, localStorage last-check and skipped version, check/install/relaunch flow, deb branch via `update_install_kind`) with `src/updates.test.ts` (fast tier, table-driven for the 24 h rule and skip rule); add `src/updateDialog.ts` for the in-app dialog (versions, preformatted notes, Install now / Later / Skip this version, progress, error, deb variant with Open release page) and start the check from the main window in `src/main.ts`.
+- [x] 2.2 Add `src/updates.ts` (pure `shouldAutoCheck`, `isSkipped`, localStorage last-check and skipped version, check/install/relaunch flow, deb branch via `update_install_kind`) with `src/updates.test.ts` (fast tier, table-driven for the 24 h rule and skip rule); add `src/updateDialog.ts` for the in-app dialog (versions, preformatted notes, Install now / Later / Skip this version, progress, error, deb variant with Open release page) and start the check from the main window in `src/main.ts`.
   - proof: `npx vitest run src/updates.test.ts`
   - proof: `npx eslint src/updates.ts src/updates.test.ts src/updateDialog.ts src/main.ts`
-- [ ] 2.3 Add the Updates section to the Behaviour tab in `src/settingsDialog.ts` (checkbox bound to `updates.autoCheck`, Check for updates button with inline result `tiili is up to date.` / `Couldn't check for updates.` or the dialog), styles in `src/styles.css`.
+- [x] 2.3 Add the Updates section to the Behaviour tab in `src/settingsDialog.ts` (checkbox bound to `updates.autoCheck`, Check for updates button with inline result `tiili is up to date.` / `Couldn't check for updates.` or the dialog), styles in `src/styles.css`.
   - proof: `npx eslint src/settingsDialog.ts`
   - proof: `npm run typecheck`
 
 ## 3. Release
 
-- [ ] 3.1 Add `scripts/updater-manifest.mjs` (+ `.d.mts`) that, given the tag, a folder of `.sig` files and a notes file, prints `latest.json` (version without `v`, notes, `pub_date`, platforms darwin-aarch64 / windows-x86_64 / linux-x86_64 each with url `https://github.com/redfellow/tiili/releases/download/<tag>/<file>` and the signature text), failing when a platform's signature is missing; test in `scripts/updater-manifest.test.ts` (fast tier).
+- [x] 3.1 Add `scripts/updater-manifest.mjs` (+ `.d.mts`) that, given the tag, a folder of `.sig` files and a notes file, prints `latest.json` (version without `v`, notes, `pub_date`, platforms darwin-aarch64 / windows-x86_64 / linux-x86_64 each with url `https://github.com/redfellow/tiili/releases/download/<tag>/<file>` and the signature text), failing when a platform's signature is missing; test in `scripts/updater-manifest.test.ts` (fast tier).
   - proof: `npx vitest run scripts/updater-manifest.test.ts`
   - proof: `npx eslint scripts/updater-manifest.mjs scripts/updater-manifest.test.ts`
 - [ ] 3.2 (triage) Sign updater bundles, upload them with their signatures, and add the manifest job.
@@ -173,7 +173,7 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Update README.md, site/index.html (both "no telemetry" lines), docs/concept.md and docs/packaging.md: the update check is one anonymous request to GitHub once a day, off in Settings; packaging docs explain the updater secrets, the skip-with-warning, and that `.deb` installs are pointed at the release page. Say nothing promising macOS signing.
+- [x] 4.1 Update README.md, site/index.html (both "no telemetry" lines), docs/concept.md and docs/packaging.md: the update check is one anonymous request to GitHub once a day, off in Settings; packaging docs explain the updater secrets, the skip-with-warning, and that `.deb` installs are pointed at the release page. Say nothing promising macOS signing.
   - proof: `grep -n "anonymous request" README.md site/index.html docs/packaging.md`
   - proof: `openspec validate in-app-updates-tiili-checks-for-a-new-ve --strict`
 
