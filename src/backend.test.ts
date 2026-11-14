@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { selectBackend, type Backend, type BackendKind, type PaneMoves } from "./backend";
 import { tauriBackend } from "./backend-tauri";
-import { PROMPT_IDS } from "./settings";
+import { DEFAULT_SETTINGS, PROMPT_IDS } from "./settings";
 
 const invoke = vi.hoisted(() => vi.fn<(command: string, args?: unknown) => Promise<unknown>>(async () => 1));
 
@@ -18,6 +18,8 @@ type MenuNew = (options: unknown) => Promise<{ popup: () => Promise<void> }>;
 const menuNew = vi.hoisted(() => vi.fn<MenuNew>(async () => ({ popup: async () => undefined })));
 vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: menuNew } }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
+const emitTo = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("@tauri-apps/api/event", () => ({ emitTo }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
 
 describe("Backend selection: Tauri internals pick the Tauri backend, otherwise the WebSocket one", () => {
@@ -90,6 +92,22 @@ describe("Tauri backend pane moves", () => {
   it("Nothing pending: take resolves to undefined", async () => {
     invoke.mockResolvedValueOnce(null);
     await expect((tauriBackend().moves as PaneMoves).take("move-9")).resolves.toBeUndefined();
+  });
+});
+
+describe("Tauri backend settings window", () => {
+  it("Open settings twice: each time asks the core to open or focus this window's settings window", async () => {
+    invoke.mockClear();
+    const settings = tauriBackend().settingsWindows;
+    await settings?.open();
+    await settings?.open();
+    expect(invoke.mock.calls.map((call) => call[0])).toEqual(["settings_open", "settings_open"]);
+  });
+
+  it("Previews show in the owning window: the preview goes to the owner only", async () => {
+    emitTo.mockClear();
+    await tauriBackend().settingsWindows?.preview("window-2", DEFAULT_SETTINGS);
+    expect(emitTo).toHaveBeenCalledWith("window-2", "settings-preview", DEFAULT_SETTINGS);
   });
 });
 

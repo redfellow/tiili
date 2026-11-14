@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
 import { Menu } from "@tauri-apps/api/menu";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -85,6 +86,13 @@ export function tauriBackend(): Backend {
       setName: (name) => invoke("window_set_name", { name }),
       move: (target, payload) => invoke("pane_move", { target: target ?? null, payload }),
       take: async (token) => (await invoke<MovePayload | null>("pane_move_take", { token })) ?? undefined,
+    },
+    settingsWindows: {
+      open: () => invoke("settings_open"),
+      preview: (owner, settings) => emitTo(owner, "settings-preview", settings),
+      onCloseRequested: async (handler) => {
+        await getCurrentWindow().onCloseRequested(() => handler());
+      },
     },
   };
 }

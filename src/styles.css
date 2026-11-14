@@ -423,6 +423,24 @@ dialog.settings::backdrop {
   background: transparent;
 }
 
+/* The settings window: the form is the whole page, as big as the window, which scrolls when the form is taller. */
+html:has(body.settings-window),
+body.settings-window {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  background: var(--surface);
+}
+
+.settings-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: var(--space-5);
+  background: var(--surface);
+  color: var(--fg);
+  font: 400 13.5px/1.5 var(--font-sans);
+}
+
 .settings form {
   display: flex;
   flex-direction: column;
@@ -435,17 +453,6 @@ dialog.settings::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.settings-header {
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.settings-header[data-dragging] {
-  cursor: grabbing;
 }
 
 .settings-header button {

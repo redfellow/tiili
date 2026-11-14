@@ -14,10 +14,13 @@ describe("menuEntries", () => {
       [win("main", "tiili"), win("window-1", "Heynote"), win("window-2", "tiili"), win("window-3", "tiili"), win("window-4", "Heynote")],
       ["tiili", "Heynote", "tiili (2)", "tiili (3)", "Heynote (2)"],
     ],
+    ["a settings window is not listed", [win("main", "tiili"), win("settings-main", "Settings")], ["tiili"]],
   ];
   it.each(cases)("%s", (_name, windows, texts) => {
     const entries = menuEntries(windows);
     expect(entries.map((entry) => entry.text)).toEqual(texts);
-    expect(entries.map((entry) => entry.label)).toEqual(windows.map((w) => w.label));
+    expect(entries.map((entry) => entry.label)).toEqual(
+      windows.filter((w) => !w.label.startsWith("settings-")).map((w) => w.label),
+    );
   });
 });

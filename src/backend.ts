@@ -1,6 +1,6 @@
 import type { NoteStore } from "./heynoteStore";
 import type { PaneCommand, PaneCwd } from "./paneChip";
-import type { AppIcon, PromptId } from "./settings";
+import type { AppIcon, PromptId, Settings } from "./settings";
 import type { WindowEntry } from "./windowMenu";
 
 /** Identifies one shell session of a backend. */
@@ -36,11 +36,21 @@ export interface PaneMoves {
   take(token: string): Promise<MovePayload | undefined>;
 }
 
+/** Settings in a window of their own, where the backend can open OS windows. */
+export interface SettingsWindows {
+  /** Opens this window's settings window centred over it, or brings it to the front when it is open already. */
+  open(): Promise<void>;
+  /** From a settings window: previews `settings` in window `owner`, the tiili window that opened it. */
+  preview(owner: string, settings: Settings): Promise<void>;
+  /** From a settings window: runs `handler` before the window closes by its OS close control. */
+  onCloseRequested(handler: () => Promise<void>): Promise<void>;
+}
+
 /**
  * Events the app sends this window: native menu items (when this window is focused), the app menu's Settings…, a
  * shell's working directory report and what runs in a pane (for this window's shells), settings another window
- * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label) and a
- * pane arriving from another window.
+ * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label), a
+ * pane arriving from another window, settings this window's settings window previews and that window having closed.
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
@@ -52,6 +62,8 @@ export interface AppEvents {
   "pane-cwd": PaneCwd;
   "pane-command": PaneCommand;
   "settings-changed": unknown;
+  "settings-preview": unknown;
+  "settings-closed": undefined;
 }
 
 /**
@@ -106,6 +118,8 @@ export interface Backend {
   newWindow(cwd: string | undefined): Promise<void>;
   /** Moving panes between windows; absent where there is one window only (the dev server). */
   readonly moves?: PaneMoves;
+  /** Settings in their own OS window; absent where there is one window only (the dev server shows them in the page). */
+  readonly settingsWindows?: SettingsWindows;
 }
 
 export type BackendKind = "tauri" | "dev";

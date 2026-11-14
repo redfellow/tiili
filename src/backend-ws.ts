@@ -167,7 +167,9 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     // The dev server has no files of its own for notes: the browser keeps them.
     notes: localNoteStore(localStorage),
     closeWindow: async () => undefined,
-    // The dev server is one browser page: no other windows.
+    // The dev server is one browser page: no other windows, so no pane moves and no settings window; settings show
+    // in the page instead.
     newWindow: async () => undefined,
+    settingsWindows: undefined,
   };
 }
