@@ -13,7 +13,9 @@
 //
 // It runs origin/main's copy of itself when this one differs, so a checkout that is behind releases with the current
 // flow. Each step checks whether it is already done: running the same command again after a stop or a failure carries
-// on where it left off, and an unpublished release is finished before a new one is cut.
+// on where it left off, and an unpublished release is finished before a new one is cut. When that release's build
+// failed, it builds again: from main's newer commit if a fix has landed (the draft and tag were never published, so they
+// are replaced), or by running only the failed jobs again.
 import { execFile, execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -99,13 +101,12 @@ export function setCargoVersion(text, version) {
   throw new Error("Cargo.toml has no [package] version line.");
 }
 
-// Rewrites the version of Cargo.lock's own `tiili` package entry; other packages stay.
+// Rewrites the version of Cargo.lock's own `tiili` package entry; other packages stay. Lines may end in CRLF: git
+// checks text files out that way on the Windows runner.
 export function setCargoLockVersion(text, version) {
-  const next = text.replace(/(\[\[package\]\]\nname = "tiili"\nversion = ")[^"]*(")/, `$1${version}$2`);
-  if (next === text && !text.includes(`name = "tiili"\nversion = "${version}"`)) {
-    throw new Error('Cargo.lock has no [[package]] entry for "tiili".');
-  }
-  return next;
+  const entry = /(\[\[package\]\]\r?\nname = "tiili"\r?\nversion = ")[^"]*(")/;
+  if (!entry.test(text)) throw new Error('Cargo.lock has no [[package]] entry for "tiili".');
+  return text.replace(entry, `$1${version}$2`);
 }
 
 /** 0:42, 7:26 or 1:02:05 for a number of milliseconds. */
@@ -295,6 +296,7 @@ function lastDuration() {
 }
 
 async function followBuild(tag) {
+  const sha = out("git", ["rev-parse", `refs/tags/${tag}^{commit}`]);
   const estimate = lastDuration();
   const startedWaiting = Date.now();
   let runId;
@@ -310,8 +312,10 @@ async function followBuild(tag) {
   try {
     for (;;) {
       if (!runId) {
+        // The run for this tag's commit: a tag that was moved also has the old commit's runs.
         const id = await outAsync("gh", [
-          "run", "list", "--workflow", WORKFLOW, "--branch", tag, "--limit", "1", "--json", "databaseId", "--jq", ".[0].databaseId",
+          "run", "list", "--workflow", WORKFLOW, "--branch", tag, "--limit", "5", "--json", "databaseId,headSha",
+          "--jq", `[.[] | select(.headSha == "${sha}")][0].databaseId // ""`,
         ]).catch(() => "");
         if (id) runId = id;
       }
@@ -332,6 +336,37 @@ async function followBuild(tag) {
         `  See ${state.url} or run: gh run view ${runId} --log-failed`,
     );
   }
+}
+
+/**
+ * For an unpublished release whose last build failed. When main has moved on (a fix landed), the draft and the tag,
+ * which were never published, are deleted and main is tagged again; true then. Otherwise only the failed jobs run
+ * again, for a runner that broke.
+ */
+function retryFailedBuild(version) {
+  const tag = `v${version}`;
+  const json = tryOut("gh", [
+    "run", "list", "--workflow", WORKFLOW, "--branch", tag, "--limit", "1", "--json", "databaseId,status,conclusion,headSha",
+  ]);
+  const last = json ? JSON.parse(json)[0] : undefined;
+  if (!last || last.status !== "completed" || last.conclusion === "success") return false;
+  if (releaseState(tag)?.isDraft === false) return false;
+  const main = out("git", ["rev-parse", `origin/${MAIN}`]);
+  if (last.headSha === main) {
+    console.log(`  the last build of ${tag} ended ${last.conclusion}; running its failed jobs again`);
+    out("gh", ["run", "rerun", String(last.databaseId), "--failed"]);
+    for (let i = 0; i < 30; i++) {
+      const status = tryOut("gh", ["run", "view", String(last.databaseId), "--json", "status", "--jq", ".status"]);
+      if (status && status !== "completed") break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    }
+    return false;
+  }
+  console.log(`  the build of ${tag} ended ${last.conclusion} and ${MAIN} has moved on: tagging ${MAIN} again`);
+  tryOut("gh", ["release", "delete", tag, "--yes"]);
+  out("git", ["push", "--quiet", "origin", "--delete", `refs/tags/${tag}`]);
+  tryOut("git", ["tag", "-d", tag]);
+  return true;
 }
 
 async function buildAndPublish(version) {
@@ -361,6 +396,10 @@ async function main() {
   started = true;
   if (resume) {
     console.log(`v${version} is tagged but not published yet: finishing it first.`);
+    if (retryFailedBuild(version)) {
+      step(`Tag ${MAIN} v${version}`);
+      tagMain(version, highestTag(remoteTags()));
+    }
   } else {
     console.log(`Releasing v${version} from ${MAIN} (latest is v${latest}).`);
     step(`Tag ${MAIN} v${version}`);
