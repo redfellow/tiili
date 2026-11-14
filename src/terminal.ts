@@ -80,6 +80,11 @@ function applySize(term: Terminal, settings: Settings, zoom: number): void {
   if (term.options.letterSpacing !== fitted.letterSpacing) term.options.letterSpacing = fitted.letterSpacing;
 }
 
+/** Whether the terminal's input has focus. A terminal without focus never blinks its cursor. */
+function hasFocus(term: Terminal): boolean {
+  return term.textarea !== undefined && term.textarea === document.activeElement;
+}
+
 /**
  * Applies the font settings to `term`: family with Geist Mono as fallback, size changed by the pane's zoom offset
  * `zoom`, weights, line height, letter spacing and the ligatures addon on or off, then refits so the shell gets
@@ -97,7 +102,7 @@ export async function applyFont(term: Terminal, settings: Settings, zoom = 0): P
   term.options.fontWeightBold = String(font.weightBold) as FontWeight;
   applySize(term, settings, zoom);
   term.options.cursorStyle = settings.cursor.style;
-  term.options.cursorBlink = settings.cursor.blink;
+  term.options.cursorBlink = settings.cursor.blink && hasFocus(term);
 
   const own = addons.get(term);
   if (!own) return;
@@ -120,13 +125,13 @@ export function refreshTheme(term: Terminal): void {
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
  * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
- * chosen; otherwise it is an outline. The shell runs on `backend`; `onSession` hears the id of each shell session
- * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
- * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits. With `adopt`
- * the terminal starts no shell: it shows the adopted scrollback, then takes over that running session, whose output
- * kept during the move follows, and resizes it so full-screen programs redraw. `onSignal` hears each bell and each
- * notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the shell sends, with its message made safe; an adopted
- * scrollback rings nothing.
+ * chosen; otherwise it is a steady outline that never blinks, whatever the Blink setting. The shell runs on
+ * `backend`; `onSession` hears the id of each shell session the terminal starts, the first and any after the shell
+ * exits. `zoom()` is the pane's zoom offset in pixels, added to the font size whenever the terminal refits, and
+ * `onExit` is called when a shell exits. With `adopt` the terminal starts no shell: it shows the adopted scrollback,
+ * then takes over that running session, whose output kept during the move follows, and resizes it so full-screen
+ * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
+ * shell sends, with its message made safe; an adopted scrollback rings nothing.
  */
 export async function openTerminal(
   backend: Backend,
@@ -145,7 +150,8 @@ export async function openTerminal(
   const term = new Terminal({
     cursorStyle: settings().cursor.style,
     cursorInactiveStyle: "outline",
-    cursorBlink: settings().cursor.blink,
+    // Blinking starts when the terminal gets focus.
+    cursorBlink: false,
     // The ligatures addon uses xterm's proposed character joiner API.
     allowProposedApi: true,
     // xterm sizes its scrollbar by the overview ruler's width (14 px by default); the fit addon reserves the same.
@@ -157,6 +163,14 @@ export async function openTerminal(
   term.loadAddon(serializer);
   addons.set(term, { fit });
   term.open(container);
+  const onFocus = () => {
+    term.options.cursorBlink = settings().cursor.blink;
+  };
+  const onBlur = () => {
+    term.options.cursorBlink = false;
+  };
+  term.textarea?.addEventListener("focus", onFocus);
+  term.textarea?.addEventListener("blur", onBlur);
   const stopTheme = followSystemTheme(
     (theme) => {
       term.options.theme = theme;
@@ -248,6 +262,8 @@ export async function openTerminal(
     reporter.cancel();
     unlistenExit();
     stopTheme();
+    term.textarea?.removeEventListener("focus", onFocus);
+    term.textarea?.removeEventListener("blur", onBlur);
     running = false;
     term.dispose();
   };
