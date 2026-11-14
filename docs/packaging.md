@@ -13,7 +13,7 @@ bumps it (see [Releasing](#releasing)).
 
 | Platform | Installers | What `npm run bundle` runs |
 | --- | --- | --- |
-| macOS | `.dmg` for Apple Silicon (Intel Macs are not supported) | `tauri build --target aarch64-apple-darwin --bundles dmg` |
+| macOS | `.dmg` for Apple Silicon (Intel Macs are not supported) | `tauri build --target aarch64-apple-darwin --bundles app,dmg` (the app target makes the updater bundle) |
 | Windows | NSIS setup `.exe` | `tauri build --bundles nsis` |
 | Linux | `.AppImage` and `.deb` | `tauri build --bundles appimage,deb` |
 
