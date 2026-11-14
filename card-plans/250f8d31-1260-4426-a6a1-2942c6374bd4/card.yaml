@@ -5,3 +5,11 @@ x-harvaaja-card: 250f8d31-1260-4426-a6a1-2942c6374bd4
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Pure CSS size tweak of the Settings view; no spec requirement pins
+    Settings UI font sizes.
+  citations:
+    - openspec/specs/settings/spec.md (no UI font-size requirement)
+    - src/styles.css:405-790 settings rules
+  revision: c7ba04b0-a912-4fee-b05a-8a24093762ea
