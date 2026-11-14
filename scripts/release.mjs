@@ -13,12 +13,13 @@
 //   4. Publish: wait for that workflow, then publish the draft as the latest release. The website and the README badge
 //      read the latest release from GitHub, so they follow on their own.
 //
+// It first runs origin/hv/main's copy of itself when this one differs, so a checkout that is behind needs no pull.
 // Each step checks whether it is already done, so running the same command again after a stop or a failure carries on
 // where it left off. With no argument it only finishes a release whose tag exists but whose draft is not published.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const KINDS = ["patch", "minor", "major"];
@@ -101,7 +102,11 @@ export function setCargoVersion(text, version) {
 
 // --- side effects -------------------------------------------------------------------------------------------------
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// The repository the command runs in (npm runs scripts from the package root), not the script's folder: the script
+// may be a fresh copy from origin/hv/main in a temporary folder.
+const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+const SELF = fileURLToPath(import.meta.url);
+const LATEST_ENV = "TIILI_RELEASE_LATEST";
 
 function out(command, args, cwd = ROOT) {
   return execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -279,12 +284,39 @@ function buildAndPublish(version) {
   console.log("The website and the README badge pick it up as the latest release.");
 }
 
+/**
+ * Runs origin/hv/main's copy of this script instead of this one when they differ, so a checkout that is behind still
+ * releases with the newest flow and never needs a pull first. True when the newer copy ran.
+ */
+function runLatest() {
+  if (process.env[LATEST_ENV]) return false;
+  const latest = tryOut("git", ["show", `origin/${INTEGRATION}:scripts/release.mjs`]);
+  if (!latest || latest === readFileSync(SELF, "utf8").trim()) return false;
+  const dir = mkdtempSync(join(tmpdir(), "tiili-release-script-"));
+  const script = join(dir, "release.mjs");
+  writeFileSync(script, `${latest}\n`);
+  console.log(`Using the newest release script from origin/${INTEGRATION}.`);
+  try {
+    execFileSync(process.execPath, [script, ...process.argv.slice(2)], {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env, [LATEST_ENV]: "1" },
+    });
+  } catch (error) {
+    process.exitCode = typeof error?.status === "number" ? error.status : 1;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  return true;
+}
+
 async function main() {
   const arg = process.argv[2];
   if (arg !== undefined && !KINDS.includes(arg) && !SEMVER.test(arg)) {
     throw new Error(`give the release kind or version: npm run release <${KINDS.join("|")}|x.y.z>.`);
   }
   fetchOrigin();
+  if (runLatest()) return;
   const latest = highestTag(remoteTags());
   const latestPublished = latest === "0.0.0" || releaseState(`v${latest}`)?.isDraft === false;
   const { version, resume } = pickTarget(arg, latest, latestPublished);
@@ -314,7 +346,8 @@ async function main() {
   buildAndPublish(version);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpath on both sides: on macOS the temporary folder is reached through the /var -> /private/var link.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(SELF)) {
   main().catch((error) => {
     console.error(`\nnpm run release: ${error instanceof Error ? error.message : error}`);
     if (started) console.error("Run the same command again to carry on from where it stopped.");
