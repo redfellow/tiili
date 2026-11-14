@@ -5,8 +5,9 @@
 // (scripts/stamp-version.mjs). So the command never commits, never switches this checkout's branch, never touches
 // hv/main and does not need a pull:
 //
-//   1. Tag origin/main's commit vX.Y.Z and push only the tag. That starts .github/workflows/release.yml, which builds
-//      the installers into a draft GitHub Release.
+//   1. Tag origin/main's commit vX.Y.Z and push only the tag. That starts .github/workflows/release.yml, which writes
+//      the notes from the promotions since the previous tag (scripts/release-notes.mjs) and builds the installers into
+//      a draft GitHub Release.
 //   2. Follow that workflow with a live view of each platform's build, then publish the draft as the latest release.
 //      The website and the README badge read the latest release from GitHub, so they follow on their own.
 //
@@ -259,9 +260,12 @@ function tagMain(version, latest) {
     console.log(`  ${tag} is already on origin`);
     return;
   }
-  if (!tryOut("git", ["cat-file", "-e", `origin/${MAIN}:scripts/stamp-version.mjs`])) {
+  const missing = ["scripts/stamp-version.mjs", "scripts/release-notes.mjs"].filter(
+    (file) => tryOut("git", ["cat-file", "-e", `origin/${MAIN}:${file}`]) === undefined,
+  );
+  if (missing.length) {
     throw new Error(
-      `${MAIN}'s release workflow does not stamp the version from the tag yet; press Release on the board once to bring this flow to ${MAIN}.`,
+      `${MAIN}'s release workflow is older than this release flow (no ${missing.join(", ")}); press Release on the board once to bring it to ${MAIN}.`,
     );
   }
   const commit = out("git", ["rev-parse", `origin/${MAIN}`]);
