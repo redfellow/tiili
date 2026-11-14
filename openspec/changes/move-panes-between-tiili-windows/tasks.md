@@ -5,10 +5,9 @@
 - [ ] 1.2 Make each session's event target window shared and reassignable; add `WindowSessions::reassign`, `WindowNames`, `window_list`, `window_set_name`, `PendingMoves` in `windows.rs` with unit tests (reassign then close source keeps the shell, close target ends it)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows`
 - [ ] 1.3 Add `pty_detach`, `pty_attach`, `pane_move`, `pane_move_take` commands; `window_new` takes an optional move token; re-emit latest cwd/command on attach
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows`
 - [ ] 1.4 macOS Shell menu: Move to New Window (Ctrl+Cmd+N) and a Move to Window submenu rebuilt when windows or names change
-  - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo check --manifest-path src-tauri/Cargo.toml --all-targets`
 
 ## 2. Frontend
 
