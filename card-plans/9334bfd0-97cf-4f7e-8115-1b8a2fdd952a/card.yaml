@@ -1,0 +1,18 @@
+format: 1
+slug: bug-shells-in-the-linux-appimage-inherit
+title: "Bug: shells in the Linux AppImage inherit the AppImage's library paths,
+  breaking system tools (zypper tab completion ..."
+x-harvaaja-card: 9334bfd0-97cf-4f7e-8115-1b8a2fdd952a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds an observable contract to the shell environment (no AppImage
+    paths/markers in spawned shells); terminal-session's Shell colour
+    environment requirement is the nearest home, no active same-intent change.
+  citations:
+    - "openspec/specs/terminal-session/spec.md: Requirement: Shell colour
+      environment"
+    - "src-tauri/src/pty.rs: set_colour_env / PtySession::spawn_in"
+  revision: e5df9504-1bbf-404a-8119-369988329dfa
