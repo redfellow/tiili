@@ -1,5 +1,5 @@
 ## 1. Smaller Settings text
-- [ ] 1.1 Lower the font sizes in the Settings rules of `src/styles.css` by about one step as listed in plan.md
+- [x] 1.1 Lower the font sizes in the Settings rules of `src/styles.css` by about one step as listed in plan.md
   - proof: `git diff --stat -- src/styles.css`
 
 ## Manual checks after merge (The user)
