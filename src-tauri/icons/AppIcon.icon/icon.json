@@ -1,0 +1,47 @@
+{
+  "fill": {
+    "solid": "srgb:0.96471,0.94510,0.91373,1.00000"
+  },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.09412,0.12549,0.13725,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "dark.png"
+            }
+          ],
+          "name": "Bricks"
+        }
+      ],
+      "name": "Bricks",
+      "shadow": {
+        "kind": "none",
+        "opacity": 0.5
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

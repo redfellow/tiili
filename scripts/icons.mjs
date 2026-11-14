@@ -7,13 +7,28 @@
 // It also renders app-light.png and app-dark.png (512 px, large icon), which the app embeds and swaps in at run time
 // so its Dock or taskbar icon follows the OS light or dark mode.
 //
+// For macOS it writes AppIcon.icon, an Icon Composer bundle with a light and a dark appearance, and compiles it into
+// Assets.car when Xcode 26 or later is installed, so the installed app's icon follows the OS appearance while tiili
+// is not running (see scripts/app-icon.mjs). Without Xcode, Assets.car is left as it is: rebuild it with the
+// app-icon workflow.
+//
 // Run with `npm run icons`. The outputs are committed.
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
+import { actoolMajor, compile, ICON_NAME, iconJson, splitIcon } from "./app-icon.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const logoDir = join(root, "docs/brand/logo");
@@ -24,6 +39,9 @@ const darkSvg = readFileSync(join(logoDir, "icon-dark.svg"));
 
 /** Size, in pixels, of the light and dark icons the app swaps in at run time. */
 const RUNTIME_SIZE = 512;
+
+/** Size, in pixels, of the layer images in the Icon Composer bundle. */
+const LAYER_SIZE = 1024;
 
 /** Largest size, in pixels, that is rendered from the small icon. */
 const SMALL_MAX = 32;
@@ -97,6 +115,30 @@ function ico(sizes) {
   return Buffer.concat([header, ...images.map(({ png }) => png)]);
 }
 
+/** Writes the Icon Composer bundle from the light and dark icons and compiles it when Xcode's actool is there. */
+function writeIconBundle() {
+  const light = splitIcon(largeSvg.toString("utf8"));
+  const dark = splitIcon(darkSvg.toString("utf8"));
+  const bundle = join(outDir, `${ICON_NAME}.icon`);
+  rmSync(bundle, { recursive: true, force: true });
+  mkdirSync(join(bundle, "Assets"), { recursive: true });
+  writeFileSync(join(bundle, "icon.json"), `${JSON.stringify(iconJson(light, dark), null, 2)}\n`);
+  for (const [name, { layer }] of [["light.png", light], ["dark.png", dark]]) {
+    const png = new Resvg(layer, { fitTo: { mode: "width", value: LAYER_SIZE } }).render().asPng();
+    writeFileSync(join(bundle, "Assets", name), png);
+  }
+
+  const major = actoolMajor();
+  if (major !== undefined && major >= 26) {
+    compile(bundle, join(outDir, "Assets.car"));
+  } else {
+    console.warn(
+      `npm run icons: Xcode 26 or later is not installed, so Assets.car was not rebuilt from ${ICON_NAME}.icon. ` +
+        "Run the app-icon workflow on GitHub and commit the Assets.car it uploads.",
+    );
+  }
+}
+
 const work = mkdtempSync(join(tmpdir(), "tiili-icons-"));
 try {
   const source = join(work, "icon-1024.png");
@@ -122,6 +164,8 @@ try {
   writeFileSync(join(outDir, "app-light.png"), render(RUNTIME_SIZE));
   const dark = new Resvg(darkSvg, { fitTo: { mode: "width", value: RUNTIME_SIZE } }).render().asPng();
   writeFileSync(join(outDir, "app-dark.png"), dark);
+
+  writeIconBundle();
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
