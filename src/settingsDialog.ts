@@ -433,12 +433,13 @@ function themeGrid(onSelect: () => void, locked: () => boolean) {
   const items = [...of("system"), ...of("dark"), ...of("light")];
   return cardGrid("Theme", "settings-theme-cards", items, onSelect, locked, (card, item) => {
     const theme = byId.get(item.id)!;
-    // System shows the brand light and dark grounds side by side, named in the dark half's text colour.
+    // System shows the brand light and dark grounds side by side. Its name sits on the light (left) half, so it takes
+    // the light theme's text colour; the stripe uses the dark theme's ANSI colours.
     const tokens = theme.kind === "system" ? dark : theme.tokens;
     card.style.setProperty("--card-bg", theme.kind === "system"
       ? `linear-gradient(115deg, ${light["--term-bg"]} 50%, ${dark["--term-bg"]} 50%)`
       : tokens["--term-bg"]!);
-    card.style.setProperty("--card-fg", tokens["--term-fg"]!);
+    card.style.setProperty("--card-fg", (theme.kind === "system" ? light : tokens)["--term-fg"]!);
     const stripe = element("span", { className: "settings-theme-stripe" },
       ...[1, 2, 3, 4, 5, 6].map((i) => {
         const dot = element("span");
@@ -588,6 +589,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     preview.style.lineHeight = String(font.lineHeight);
     preview.style.letterSpacing = `${font.letterSpacing}px`;
     preview.style.fontVariantLigatures = font.ligatures ? "normal" : "none";
+    ligatureExample.style.fontFamily = preview.style.fontFamily;
+    ligatureExample.style.fontVariantLigatures = preview.style.fontVariantLigatures;
     const lines = promptLines(settings.prompt);
     const caret = element("span", { className: "settings-preview-cursor" });
     caret.dataset.style = cursor.style;
@@ -748,8 +751,6 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     weight.sync();
     weightBold.sync();
     ligatures.checked = settings.font.ligatures;
-    ligatureExample.style.fontFamily = fontFamilyList(settings.font.family);
-    ligatureExample.style.fontVariantLigatures = settings.font.ligatures ? "normal" : "none";
     lineHeight.input.value = String(settings.font.lineHeight);
     letterSpacing.input.value = String(settings.font.letterSpacing);
     lineHeight.sync();
