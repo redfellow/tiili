@@ -74,8 +74,20 @@ fn size(rows: u16, cols: u16) -> PtySize {
 }
 
 /// What every shell tiili starts is told about the terminal: 256 colours in `TERM`, 24-bit colour in
-/// `COLORTERM`, and which terminal this is.
+/// `COLORTERM`, and which terminal this is. Run from a Linux AppImage (`APPDIR` set), it also takes
+/// the AppImage's own entries out of the environment (see [`crate::appimage_env`]).
 pub fn set_colour_env(cmd: &mut CommandBuilder) {
+    let appdir = std::env::var("APPDIR").ok();
+    let env = cmd
+        .iter_full_env_as_str()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect::<Vec<_>>();
+    for edit in crate::appimage_env::scrub(appdir.as_deref(), env.into_iter()) {
+        match edit {
+            crate::appimage_env::EnvEdit::Set(key, value) => cmd.env(key, value),
+            crate::appimage_env::EnvEdit::Remove(key) => cmd.env_remove(key),
+        }
+    }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "tiili");
