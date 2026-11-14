@@ -134,6 +134,17 @@ export function settingsShortcut(event: KeyChord, platform: Platform): "settings
   return event.ctrlKey && !event.metaKey ? "settings" : null;
 }
 
+/**
+ * Whether a key press focuses the oldest pane that needs you: ⌘J on macOS, Ctrl+Shift+J on Windows and Linux.
+ * Null when it belongs to the shell.
+ */
+export function attentionShortcut(event: KeyChord, platform: Platform): "next" | null {
+  const isJ = event.key.toLowerCase() === "j" || event.code === "KeyJ";
+  if (!isJ || event.altKey) return null;
+  if (platform === "macos") return event.metaKey && !event.ctrlKey && !event.shiftKey ? "next" : null;
+  return event.ctrlKey && event.shiftKey && !event.metaKey ? "next" : null;
+}
+
 /** The platform the webview runs on. */
 export function currentPlatform(userAgent: string = navigator.userAgent): Platform {
   if (/Mac/.test(userAgent)) return "macos";
