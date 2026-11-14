@@ -84,6 +84,11 @@ export interface Backend {
     prompt: PromptId,
     onOutput: (bytes: Uint8Array) => void,
   ): Promise<SessionId>;
+  /**
+   * Makes `prompt` the current choice for new shells and the open local zsh, bash and PowerShell shells, where their
+   * own config leaves the default prompt; does nothing where shells only take the prompt they start with.
+   */
+  setPrompt(prompt: PromptId): Promise<void>;
   /** Sends typed input to session `id`'s shell. */
   write(id: SessionId, data: string): Promise<void>;
   /** Tells session `id`'s shell its terminal now has `rows` x `cols`. */

@@ -94,7 +94,10 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     if (same(next, settings)) return;
     const themeChanged = next.theme !== settings.theme;
     const iconChanged = next.appIcon !== settings.appIcon;
+    const promptChanged = next.prompt !== settings.prompt;
     settings = next;
+    // Open panes follow the prompt live: while picking, on Save, on Cancel and when another window saves.
+    if (promptChanged) backend.setPrompt(next.prompt).catch((error: unknown) => console.error(error));
     if (themeChanged) applyTheme(next.theme);
     if (iconChanged) await backend.setAppIcon(next.appIcon);
     await panes.applySettings(next, themeChanged);

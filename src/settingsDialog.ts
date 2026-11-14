@@ -447,7 +447,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       element("legend", {}, "Prompt"),
       prompt.list,
       element("p", { className: "settings-hint" },
-        "Applies to panes opened from now on. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
+        "Applies to open panes and new ones. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
         "function) always wins."),
     ),
     cursorFields,

@@ -90,7 +90,7 @@ export interface Settings {
   behaviour: BehaviourSettings;
   inactive: InactiveSettings;
   appIcon: AppIcon;
-  /** Applies to panes opened after it changes. */
+  /** Applies to open panes and new ones. */
   prompt: PromptId;
 }
 

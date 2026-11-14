@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use tiili_lib::pty::{set_colour_env, PtySession};
-use tiili_lib::shell_integration::command_for;
+use tiili_lib::shell_integration::{command_for, write_prompt};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -270,4 +270,150 @@ fn folder_reported_at_every_prompt_powershell_sends_osc7() {
         Some((r"cd C:\Windows", &[osc7.as_str()])),
     );
     assert!(found, "PowerShell sent no OSC 7 for C:\\Windows: {seen:?}");
+}
+
+/// Open panes switch: a zsh and a bash whose config sets no prompt, started with Off, show the Classic prompt once
+/// the prompt file says Classic and a newline is sent, without restarting.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn open_panes_switch_off_shells_show_classic_after_the_choice_changes() {
+    const CLASSIC: &str = "\x1b[39m@\x1b[32m";
+    for shell in ["/bin/zsh", "/bin/bash"] {
+        if !std::path::Path::new(shell).exists() {
+            eprintln!("{shell} is missing; skipped");
+            continue;
+        }
+        let tag = format!("switch-{}", tiili_lib::command::program_name(shell));
+        let home = temp_dir(&format!("home-{tag}"));
+        let scripts = temp_dir(&format!("scripts-{tag}"));
+        write_prompt(&scripts, "off").expect("prompt file");
+        let mut cmd =
+            command_for(shell, "off", &scripts).expect("zsh and bash start integrated with Off");
+        set_colour_env(&mut cmd);
+        cmd.env("HOME", &home);
+        cmd.env_remove("TIILI_USER_ZDOTDIR");
+        cmd.env("BASH_SILENCE_DEPRECATION_WARNING", "1");
+        let (out_tx, out_rx) = mpsc::channel();
+        let session = PtySession::spawn_command(
+            cmd,
+            24,
+            80,
+            Box::new(move |data| {
+                let _ = out_tx.send(data.to_vec());
+            }),
+            Box::new(|_| {}),
+        )
+        .expect("shell starts");
+        let mut seen = Vec::new();
+        // The integration reports the folder before its first prompt.
+        assert!(
+            wait_for(&out_rx, &mut seen, "\x1b]7;file://"),
+            "{shell} with Off never reached its prompt: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+        assert!(
+            !String::from_utf8_lossy(&seen).contains(CLASSIC),
+            "{shell} with Off showed Classic: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+        write_prompt(&scripts, "classic").expect("prompt file");
+        session.write(b"\r").expect("send a newline");
+        assert!(
+            wait_for(&out_rx, &mut seen, CLASSIC),
+            "{shell} did not switch to Classic: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+    }
+}
+
+/// A started shell, its output, what it printed so far and its integration folder.
+#[cfg(unix)]
+type IdleShell = (
+    PtySession,
+    mpsc::Receiver<Vec<u8>>,
+    Vec<u8>,
+    std::path::PathBuf,
+);
+
+/// Starts an integrated zsh with Off and a home without startup files, the way tiili starts one that redraws on
+/// SIGUSR1, and waits for its first prompt. `None` where there is no zsh.
+#[cfg(unix)]
+fn idle_off_zsh(tag: &str) -> Option<IdleShell> {
+    let shell = "/bin/zsh";
+    if !std::path::Path::new(shell).exists() {
+        eprintln!("{shell} is missing; skipped");
+        return None;
+    }
+    let home = temp_dir(&format!("home-{tag}"));
+    let scripts = temp_dir(&format!("scripts-{tag}"));
+    write_prompt(&scripts, "off").expect("prompt file");
+    let mut cmd = command_for(shell, "off", &scripts).expect("zsh starts integrated with Off");
+    set_colour_env(&mut cmd);
+    cmd.env("HOME", &home);
+    cmd.env_remove("TIILI_USER_ZDOTDIR");
+    let (out_tx, out_rx) = mpsc::channel();
+    let session = PtySession::spawn_integrated(
+        cmd,
+        true,
+        24,
+        80,
+        Box::new(move |data| {
+            let _ = out_tx.send(data.to_vec());
+        }),
+        Box::new(|_| {}),
+    )
+    .expect("shell starts");
+    let mut seen = Vec::new();
+    assert!(
+        wait_for(&out_rx, &mut seen, "\x1b]7;file://"),
+        "zsh with Off never reached its prompt: {:?}",
+        String::from_utf8_lossy(&seen)
+    );
+    Some((session, out_rx, seen, scripts))
+}
+
+/// Open panes switch: a zsh started with Off and idle at its prompt redraws it as Classic once the prompt file says
+/// Classic and the session is asked to redraw, with nothing typed into the shell.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn open_panes_switch_idle_zsh_redraws_classic_without_input() {
+    const CLASSIC: &str = "\x1b[39m@\x1b[32m";
+    let Some((session, out_rx, mut seen, scripts)) = idle_off_zsh("redraw") else {
+        return;
+    };
+    write_prompt(&scripts, "classic").expect("prompt file");
+    assert!(session.redraw_prompt(), "the idle zsh was not signalled");
+    assert!(
+        wait_for(&out_rx, &mut seen, CLASSIC),
+        "the idle zsh did not redraw as Classic: {:?}",
+        String::from_utf8_lossy(&seen)
+    );
+}
+
+/// Open panes switch, never ending a pane: once the integrated zsh has `exec`'d a program without a SIGUSR1
+/// handler, asking the session to redraw sends nothing and the program keeps running.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn open_panes_switch_zsh_replaced_by_exec_is_never_signalled() {
+    let Some((session, _out_rx, _seen, scripts)) = idle_off_zsh("exec") else {
+        return;
+    };
+    let pid = session.pid().expect("the shell's pid");
+    session.write(b"exec sleep 30\r").expect("type exec");
+    let deadline = Instant::now() + TIMEOUT;
+    while tiili_lib::command::catches_signal(pid, libc::SIGUSR1) != Some(false) {
+        assert!(Instant::now() < deadline, "zsh never exec'd sleep");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    write_prompt(&scripts, "classic").expect("prompt file");
+    assert!(!session.redraw_prompt(), "sleep was sent SIGUSR1");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(
+        tiili_lib::command::catches_signal(pid, libc::SIGUSR1),
+        Some(false),
+        "sleep is no longer running"
+    );
 }

@@ -277,6 +277,13 @@ fn pty_close(
     sessions.close(id).map_err(text)
 }
 
+/// The prompt choice changed (picked, saved, cancelled or saved in another window): new shells and the open local
+/// zsh, bash and PowerShell shells follow it; an idle zsh redraws its prompt at once.
+#[tauri::command]
+fn pty_set_prompt(sessions: State<'_, SessionRegistry>, prompt: String) -> Result<(), String> {
+    sessions.set_prompt(&prompt).map_err(text)
+}
+
 /// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
     let registry = app.state::<SessionRegistry>();
@@ -517,6 +524,7 @@ pub fn run() {
             pty_resize,
             pty_close,
             pty_cwd,
+            pty_set_prompt,
             settings::settings_load,
             settings::settings_save,
             settings::settings_open,
