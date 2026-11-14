@@ -131,7 +131,7 @@ The Style tab SHALL have an Inactive terminals section with an Opacity slider fr
 - **THEN** the opacity is 0.82, the highlight is on and the other settings load
 
 ### Requirement: Settings tabs
-The settings dialogue SHALL show three tabs, Style, Typography and Behaviour in that order, as a tablist. Left and Right arrow keys SHALL move between the tabs, wrapping at either end, and the dialogue SHALL open on Style. Style SHALL hold Theme, Cursor and Inactive terminals. Typography SHALL hold Font (with Family on its own row above its list, then Size as a slider, Weight, Bold weight, Line height, Letter spacing and Ligatures). Behaviour SHALL hold Tiling, Responsive text, Panes and Remote shells.
+The settings dialogue SHALL show three tabs, Style, Typography and Behaviour in that order, as a tablist. Left and Right arrow keys SHALL move between the tabs, wrapping at either end, and the dialogue SHALL open on Style.
 
 #### Scenario: Arrow to the Typography tab
 - **WHEN** the Style tab has focus and the user presses the Right arrow
@@ -140,6 +140,13 @@ The settings dialogue SHALL show three tabs, Style, Typography and Behaviour in 
 #### Scenario: Arrow to the Behaviour tab
 - **WHEN** the Typography tab has focus and the user presses the Right arrow
 - **THEN** the Behaviour tab is selected and its panel is shown
+
+### Requirement: Settings tab contents
+Style SHALL hold Theme, Cursor and Inactive terminals. Typography SHALL hold Font (with Family on its own row above its list, then Size as a slider, Weight, Bold weight, Line height, Letter spacing and Ligatures). Behaviour SHALL hold Tiling, Responsive text, Panes and Remote shells.
+
+#### Scenario: Behaviour tab sections
+- **WHEN** the user opens the Behaviour tab
+- **THEN** it shows the Tiling, Responsive text, Panes and Remote shells sections
 
 ### Requirement: Tiling setting
 The Behaviour tab SHALL have a Tiling list. Each row SHALL have an icon, and the rows SHALL be Grid (default), Wide grid, Tall grid, Side by side and Stacked, with the hint "How panes are arranged as you open and close them." Choosing a mode SHALL re-lay out the open panes live, and the mode SHALL be saved with the settings. A missing or invalid saved mode SHALL fall back to Grid.
