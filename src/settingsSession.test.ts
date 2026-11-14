@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import { createSettingsSession, type SettingsSession } from "./settingsSession";
+import { createSettingsSession, type SettingsSession, whileTyping } from "./settingsSession";
 
 const opening: Settings = { ...DEFAULT_SETTINGS, theme: "nord" };
 const dracula: Settings = { ...DEFAULT_SETTINGS, theme: "dracula" };
@@ -43,5 +43,21 @@ describe("createSettingsSession", () => {
     expect(last).toEqual(result);
     expect(session.saved).toEqual(saved);
     expect(session.draft).toEqual(draft);
+  });
+});
+
+const withScrollback = (settings: Settings, scrollback: number): Settings =>
+  ({ ...settings, behaviour: { ...settings.behaviour, scrollback } });
+
+const typingCases: [string, Settings, Settings, Settings][] = [
+  // name, read from the form, draft, applied
+  ["Change scrollback: a partial 500 typed on the way to 50 000 keeps the panes' 10 000",
+    withScrollback(opening, 1000), opening, opening],
+  ["Change scrollback: other fields still apply while typing", withScrollback(dracula, 1000), opening, dracula],
+];
+
+describe("whileTyping", () => {
+  it.each(typingCases)("%s", (_name, read, draft, applied) => {
+    expect(whileTyping(read, draft)).toEqual(applied);
   });
 });
