@@ -204,6 +204,24 @@ body {
   opacity: 1;
 }
 
+/* The count of panes that need the user: a brick and a number, hidden when none do. */
+.top-bar-attention {
+  width: auto;
+  padding: 0 var(--space-1);
+  gap: 3px;
+  color: var(--fg);
+  font: 600 11.5px/16px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.top-bar-attention .pane-chip-brick {
+  margin-right: 0;
+}
+
+.top-bar-attention[hidden] {
+  display: none;
+}
+
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
   --pane-gap: 3px;
@@ -242,12 +260,14 @@ body {
   opacity: var(--inactive-opacity, 0.82);
 }
 
-#panes[data-desaturate] .pane:not([data-focused]) > :is(.pane-title, .pane-terminal) {
+#panes[data-desaturate] .pane:not([data-focused], [data-attention]) > :is(.pane-title, .pane-terminal) {
   filter: grayscale(0.8);
 }
 
-.pane[data-focused] > :is(.pane-title, .pane-terminal) {
+.pane[data-focused] > :is(.pane-title, .pane-terminal),
+.pane[data-attention] > :is(.pane-title, .pane-terminal) {
   opacity: 1;
+  filter: none;
 }
 
 /* Focused pane: a 2 px accent line on its top edge; no glow, no border. */
@@ -317,8 +337,41 @@ body {
 }
 
 /* Keeps the title row's height before the folder is known. */
-.pane-chip:empty {
+.pane-chip:empty,
+.pane-chip:has(> .pane-chip-text:empty):not(:has(> .pane-chip-brick)) {
   visibility: hidden;
+}
+
+/* A pane that needs the user: a small brick before the chip's text, in the chip's label colour (the accent on the
+   neutral chip); the chip pulses once when the mark arrives. */
+.pane-chip-brick {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--space-1);
+  border-radius: 1px;
+  background: var(--accent);
+  vertical-align: 0;
+}
+
+.pane[data-tint] .pane-chip-brick {
+  background: var(--pane-tint-on);
+}
+
+.pane-chip[data-pulse] {
+  animation: pane-attention-pulse 0.6s ease-out 1;
+}
+
+@keyframes pane-attention-pulse {
+  40% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-chip[data-pulse] {
+    animation: none;
+  }
 }
 
 /* In a repository: the project tint with its label colour. */
@@ -1128,7 +1181,8 @@ body.settings-window {
 }
 
 .settings-snippet {
-  max-height: 150px;
+  /* A fixed height that scrolls inside, so the Behaviour tab fits a 720×640 settings window. */
+  height: 96px;
   margin: var(--space-1) 0 0;
   padding: var(--space-2) var(--space-3);
   overflow: auto;

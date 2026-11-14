@@ -34,6 +34,7 @@ const cases: [string, unknown, Settings][] = [
     appIcon: "dark",
     prompt: "tiili",
     updates: { autoCheck: false },
+    attention: { notify: "messagesAndBells", badge: false, bounce: "untilReturn" },
   }, {
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
@@ -45,6 +46,7 @@ const cases: [string, unknown, Settings][] = [
     appIcon: "dark",
     prompt: "tiili",
     updates: { autoCheck: false },
+    attention: { notify: "messagesAndBells", badge: false, bounce: "untilReturn" },
   }],
   ["Koski by default: unknown theme id becomes Koski", { theme: "neon" }, DEFAULT_SETTINGS],
   ["Koski by default: theme of the wrong type becomes Koski", { theme: 3 }, DEFAULT_SETTINGS],
@@ -110,6 +112,13 @@ const cases: [string, unknown, Settings][] = [
   ["Invalid saved update setting: automatic check \"yes\" is on, the rest loads",
     { theme: "nord", updates: { autoCheck: "yes" } }, { ...DEFAULT_SETTINGS, theme: "nord" }],
   ["updates of the wrong type give automatic checks on", { updates: false }, DEFAULT_SETTINGS],
+  ["Invalid saved attention settings: notify \"loud\" is Messages, the rest loads",
+    { attention: { notify: "loud", badge: false, bounce: "never" } },
+    { ...DEFAULT_SETTINGS, attention: { notify: "messages", badge: false, bounce: "never" } }],
+  ["Invalid saved attention settings: badge \"yes\" is on, bounce 2 is once",
+    { attention: { notify: "off", badge: "yes", bounce: 2 } },
+    { ...DEFAULT_SETTINGS, attention: { notify: "off", badge: true, bounce: "once" } }],
+  ["attention of the wrong type gives the defaults", { attention: "quiet" }, DEFAULT_SETTINGS],
   ["font of the wrong type gives the default font", { theme: "dracula", font: [] }, { ...DEFAULT_SETTINGS, theme: "dracula" }],
 ];
 

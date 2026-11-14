@@ -1,6 +1,7 @@
 //! The user's settings, stored as `settings.json` in the OS app config folder.
 //!
-//! The core only reads and writes the JSON; the frontend checks each value and falls back to defaults.
+//! The core reads and writes the JSON; the frontend checks each value and falls back to defaults. The core reads
+//! only the Attention settings itself, with the same fallbacks.
 
 use std::fs;
 use std::io;
@@ -43,6 +44,65 @@ pub fn settings_load(app: AppHandle) -> Value {
     config_dir(&app)
         .map(|dir| load_from(&dir))
         .unwrap_or(Value::Null)
+}
+
+/// When a pane that needs the user sends a desktop notification: for messages, for messages and bells, or never.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Notify {
+    Messages,
+    MessagesAndBells,
+    Off,
+}
+
+/// How often the app asks for the user's attention (Dock bounce, taskbar flash) when a pane is marked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bounce {
+    Once,
+    UntilReturn,
+    Never,
+}
+
+/// The Attention settings the core acts on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AttentionSettings {
+    pub notify: Notify,
+    /// Whether the app icon shows how many panes need the user.
+    pub badge: bool,
+    pub bounce: Bounce,
+}
+
+impl Default for AttentionSettings {
+    fn default() -> Self {
+        Self {
+            notify: Notify::Messages,
+            badge: true,
+            bounce: Bounce::Once,
+        }
+    }
+}
+
+/// The Attention settings in saved `value`; each one missing or invalid is its default, as in the frontend.
+pub fn attention(value: &Value) -> AttentionSettings {
+    let defaults = AttentionSettings::default();
+    let section = value.get("attention");
+    let field = |name: &str| section.and_then(|s| s.get(name));
+    AttentionSettings {
+        notify: match field("notify").and_then(Value::as_str) {
+            Some("messages") => Notify::Messages,
+            Some("messagesAndBells") => Notify::MessagesAndBells,
+            Some("off") => Notify::Off,
+            _ => defaults.notify,
+        },
+        badge: field("badge")
+            .and_then(Value::as_bool)
+            .unwrap_or(defaults.badge),
+        bounce: match field("bounce").and_then(Value::as_str) {
+            Some("once") => Bounce::Once,
+            Some("untilReturn") => Bounce::UntilReturn,
+            Some("never") => Bounce::Never,
+            _ => defaults.bounce,
+        },
+    }
 }
 
 /// Event sent to every other window after one saved the settings; its payload is the saved value.
@@ -300,6 +360,40 @@ mod tests {
                 expected,
                 "{name}"
             );
+        }
+    }
+
+    #[test]
+    fn settings_attention_falls_back_per_field() {
+        let defaults = AttentionSettings::default();
+        let cases = [
+            ("no settings", serde_json::Value::Null, defaults),
+            (
+                "Invalid saved attention settings: notify \"loud\" is Messages, the rest loads",
+                json!({ "attention": { "notify": "loud", "badge": false, "bounce": "untilReturn" } }),
+                AttentionSettings {
+                    notify: Notify::Messages,
+                    badge: false,
+                    bounce: Bounce::UntilReturn,
+                },
+            ),
+            (
+                "valid settings are kept",
+                json!({ "attention": { "notify": "messagesAndBells", "badge": true, "bounce": "never" } }),
+                AttentionSettings {
+                    notify: Notify::MessagesAndBells,
+                    badge: true,
+                    bounce: Bounce::Never,
+                },
+            ),
+            (
+                "wrong types fall back",
+                json!({ "attention": { "notify": 3, "badge": "yes", "bounce": null } }),
+                defaults,
+            ),
+        ];
+        for (name, value, expected) in cases {
+            assert_eq!(attention(&value), expected, "{name}");
         }
     }
 

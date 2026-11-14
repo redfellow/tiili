@@ -1,3 +1,4 @@
+import type { AttentionMark } from "./attention";
 import type { NoteStore } from "./heynoteStore";
 import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon, PromptId, Settings } from "./settings";
@@ -36,6 +37,21 @@ export interface PaneMoves {
   take(token: string): Promise<MovePayload | undefined>;
 }
 
+/** Panes that need the user, kept app-wide by session so a mark follows its pane to another window. */
+export interface PaneAttention {
+  /**
+   * Marks session `id` as needing the user, with `message` when the shell sent one; `title` is its pane's chip text,
+   * which a desktop notification shows. Marking a marked session again only adds a message it lacked.
+   */
+  mark(id: SessionId, message: string | undefined, title: string): Promise<void>;
+  /** Clears session `id`'s mark, if it has one. */
+  clear(id: SessionId): Promise<void>;
+  /** Brings the window of the oldest marked pane to the front and has it focus that pane, which clears its mark. */
+  next(): Promise<void>;
+  /** Every marked session, oldest first. */
+  list(): Promise<AttentionMark[]>;
+}
+
 /** Settings in a window of their own, where the backend can open OS windows. */
 export interface SettingsWindows {
   /** Opens this window's settings window centred over it, or brings it to the front when it is open already. */
@@ -50,7 +66,8 @@ export interface SettingsWindows {
  * Events the app sends this window: native menu items (when this window is focused), the app menu's Settings…, a
  * shell's working directory report and what runs in a pane (for this window's shells), settings another window
  * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label), a
- * pane arriving from another window, settings this window's settings window previews and that window having closed.
+ * pane arriving from another window, settings this window's settings window previews and that window having closed,
+ * the panes that need the user (every window hears these) and the ask to focus one of this window's marked panes.
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
@@ -64,6 +81,8 @@ export interface AppEvents {
   "settings-changed": unknown;
   "settings-preview": unknown;
   "settings-closed": undefined;
+  "attention-changed": { marks: AttentionMark[] };
+  "attention-focus": SessionId;
 }
 
 /**
@@ -120,6 +139,8 @@ export interface Backend {
   newWindow(cwd: string | undefined): Promise<void>;
   /** Moving panes between windows; absent where there is one window only (the dev server). */
   readonly moves?: PaneMoves;
+  /** Marking panes that need the user; absent where nothing tracks them (the dev server). */
+  readonly attention?: PaneAttention;
   /** Settings in their own OS window; absent where there is one window only (the dev server shows them in the page). */
   readonly settingsWindows?: SettingsWindows;
 }

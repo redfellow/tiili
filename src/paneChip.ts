@@ -49,7 +49,26 @@ export function placeLabel(place: Pick<PaneCwd, "cwd" | "repo" | "host">): strin
 export function createPaneChip(): HTMLElement {
   const chip = document.createElement("span");
   chip.className = "pane-chip";
+  chip.addEventListener("animationend", () => chip.removeAttribute("data-pulse"));
   return chip;
+}
+
+/** The chip's text span, made on first use, after the brick when there is one. */
+function chipText(chip: HTMLElement): HTMLElement {
+  let text = chip.querySelector<HTMLElement>(".pane-chip-text");
+  if (!text) {
+    text = document.createElement("span");
+    text.className = "pane-chip-text";
+    chip.append(text);
+  }
+  return text;
+}
+
+/** The chip's tooltip: its label, then the attention message on a line of its own. */
+function chipTooltip(chip: HTMLElement): void {
+  const label = chipText(chip).textContent ?? "";
+  const message = chip.dataset.message;
+  chip.title = message ? `${label}\n${message}` : label;
 }
 
 /**
@@ -57,8 +76,8 @@ export function createPaneChip(): HTMLElement {
  * its label colour; without one, the pane is untinted and the chip neutral.
  */
 export function showPaneChip(pane: HTMLElement, chip: HTMLElement, label: string, tint?: number): void {
-  chip.textContent = label;
-  chip.title = label;
+  chipText(chip).textContent = label;
+  chipTooltip(chip);
   if (tint === undefined) {
     pane.style.removeProperty("--pane-tint");
     pane.style.removeProperty("--pane-tint-on");
@@ -68,4 +87,39 @@ export function showPaneChip(pane: HTMLElement, chip: HTMLElement, label: string
     pane.style.setProperty("--pane-tint-on", `var(--tint-${tint}-on)`);
     pane.dataset.tint = String(tint);
   }
+}
+
+/**
+ * Shows whether the pane needs the user: marked, its chip gets a brick before its text and the message (if any) in
+ * its tooltip, and the pane is not faded; unmarked (`mark` undefined), both go. The chip pulses once when the mark
+ * is new. The chip's text stays its label.
+ */
+export function showPaneAttention(
+  pane: HTMLElement,
+  chip: HTMLElement,
+  mark: { message: string | null } | undefined,
+): void {
+  const text = chipText(chip);
+  let brick = chip.querySelector<HTMLElement>(".pane-chip-brick");
+  if (mark) {
+    if (!brick) {
+      brick = document.createElement("span");
+      brick.className = "pane-chip-brick";
+      brick.setAttribute("aria-hidden", "true");
+      chip.insertBefore(brick, text);
+      chip.removeAttribute("data-pulse");
+      // Reading the layout restarts the pulse animation for a mark that comes back.
+      void chip.offsetWidth;
+      chip.dataset.pulse = "";
+    }
+    pane.dataset.attention = "";
+    if (mark.message) chip.dataset.message = mark.message;
+    else delete chip.dataset.message;
+  } else {
+    brick?.remove();
+    chip.removeAttribute("data-pulse");
+    pane.removeAttribute("data-attention");
+    delete chip.dataset.message;
+  }
+  chipTooltip(chip);
 }

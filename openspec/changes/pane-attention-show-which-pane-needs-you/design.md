@@ -6,3 +6,11 @@
 - **Notifications**: `tauri-plugin-notification`; Rust batches marks with a message (and bells if "Messages and bells") in a 2 s window: one → title `<place> · <command>` (sent by the frontend with the mark), body message; more → "N panes need you". One per session until it clears. Permission requested at first send. Click: start with a spike task; where the click reaches the app, focus that pane via `attention-focus`, else just show the app.
 - **Settings**: three fields in `settings.ts` / `settings.rs` with fallback defaults; Attention section in `settingsDialog.ts`; Remote shells snippet gets a fixed height with inner scroll if needed for 720×640.
 - **Shortcut**: `attentionShortcut` in `keymap.ts` (Cmd+J / Ctrl+Shift+J).
+
+## Notification click findings (spike)
+Read from `tauri-plugin-notification` 2.8.1's desktop code (`src/desktop.rs`), since a sandboxed build cannot show notifications:
+- **All desktop OSes**: once a Rust `on_action` handler is registered, a click on a notification is reported as the action `tap` with the notification's id. tiili shows a single pane's notification with that pane's session as id and a summary with id `-1`; a click focuses that pane (the oldest marked one for a summary) through `attention-focus`, or just brings tiili forward when the pane is gone.
+- **macOS**: notify-rust waits on a thread per notification and reports the click; macOS also activates the app. In dev builds notifications come from Terminal, so clicks need a signed, installed build (manual check).
+- **Windows**: a click is reported only while the toast is on screen, not from the Action Center; toasts get the app's AppUserModelID only outside `target/debug` and `target/release`, so they work in installed builds only (hence the Settings hint).
+- **Linux**: the plugin adds the `default` action, so a click is reported where the notification server supports actions (GNOME, KDE, most daemons); elsewhere nothing happens.
+- Notifications are not sent while a tiili window is in front: the marked chip already shows it, and such marks count as notified.

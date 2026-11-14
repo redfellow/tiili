@@ -40,6 +40,7 @@ async function startSettings(owner: string): Promise<void> {
   document.body.classList.add("settings-window");
   const page = mountSettingsPage(document.body, {
     initial,
+    platform: currentPlatform(),
     showAppIcon: currentPlatform() === "macos",
     apply: async (next) => {
       showTheme(next);
@@ -128,6 +129,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   if (!settingsWindows) {
     dialog = createSettingsDialog({
       initial: settings,
+      platform,
       showAppIcon: platform === "macos",
       apply,
       save: (next) => backend.saveSettings(next),
@@ -161,7 +163,8 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       action();
       panes.focusCurrent();
     };
-    createTopBar(bar, {
+    const attention = backend.attention;
+    const topBar = createTopBar(bar, {
       platform,
       overlay: platform === "macos" && selectBackend(window) === "tauri",
       onNewPane: thenRefocus(() => panes.act({ type: "new" })),
@@ -169,7 +172,13 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       onClosePane: thenRefocus(() => panes.act({ type: "close" })),
       onResetLayout: thenRefocus(() => panes.actLayout("reset")),
       onSettings: openSettings,
+      onNextAttention: attention ? () => attention.next().catch(report) : undefined,
     });
+    // The count covers every window's marked panes.
+    if (attention) {
+      await backend.onAppEvent("attention-changed", ({ marks }) => topBar.setAttentionCount(marks.length));
+      topBar.setAttentionCount((await attention.list().catch(() => [])).length);
+    }
   }
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
