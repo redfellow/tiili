@@ -68,7 +68,9 @@ impl Refusal {
     /// The error the reply carries.
     pub fn message(&self) -> String {
         match self {
-            Refusal::BadToken => "wrong or missing token".to_string(),
+            Refusal::BadToken => {
+                "wrong or missing token (run tiili from a pane of the running app)".to_string()
+            }
             Refusal::Malformed(why) => format!("malformed request: {why}"),
         }
     }
@@ -177,6 +179,18 @@ pub fn list_lines(panes: &[PaneInfo]) -> String {
         .iter()
         .map(|p| format!("{}\t{}\t{}\n", p.id, p.cwd, p.title))
         .collect()
+}
+
+/// A window's `sessions` in the grid order its frontend last reported (`grid`, left to right, top to bottom); sessions
+/// it has not reported yet follow in the order given, and reported sessions no longer in the window are left out.
+pub fn grid_order(sessions: Vec<SessionId>, grid: &[SessionId]) -> Vec<SessionId> {
+    let mut ordered: Vec<SessionId> = grid
+        .iter()
+        .copied()
+        .filter(|id| sessions.contains(id))
+        .collect();
+    ordered.extend(sessions.into_iter().filter(|id| !grid.contains(id)));
+    ordered
 }
 
 /// A pane's chip name as the frontend shows it: the repository's name, with ` › worktree` in a linked worktree,
@@ -523,6 +537,28 @@ mod tests {
         ];
         for (argv, expected) in cases {
             assert_eq!(parse_args(&argv).map_err(|_| ()), expected, "{argv:?}");
+        }
+    }
+
+    /// List panes: the panes come in grid order, also after two were swapped.
+    #[test]
+    fn list_panes_follow_the_grid_order() {
+        let cases: &[(&[SessionId], &[SessionId], &[SessionId])] = &[
+            (&[1, 2, 3], &[1, 2, 3], &[1, 2, 3]),
+            // Panes 1 and 3 swapped in the grid.
+            (&[1, 2, 3], &[3, 2, 1], &[3, 2, 1]),
+            // Pane 4 opened since the last report.
+            (&[1, 2, 3, 4], &[2, 1, 3], &[2, 1, 3, 4]),
+            // Pane 2 has ended.
+            (&[1, 3], &[3, 2, 1], &[3, 1]),
+            (&[5, 6], &[], &[5, 6]),
+        ];
+        for (sessions, grid, expected) in cases {
+            assert_eq!(
+                grid_order(sessions.to_vec(), grid),
+                expected.to_vec(),
+                "{sessions:?} {grid:?}"
+            );
         }
     }
 }

@@ -46,7 +46,7 @@ describe("Tauri backend", () => {
 
   const launches: [string, Parameters<Backend["spawn"]>[5], Record<string, unknown>][] = [
     ["Open a pane (a shell): no command", undefined, { command: null, path: null }],
-    ["Open a command pane: the command, no caller PATH", { command: ["top"] }, { command: ["top"], path: null }],
+    ["Open a pane: the command, no caller PATH", { command: ["top"] }, { command: ["top"], path: null }],
     [
       "Command found on the caller's PATH: the command and that PATH",
       { command: ["tail", "-f", "x.log"], path: "/opt/tools:/usr/bin" },
@@ -63,12 +63,18 @@ describe("Tauri backend", () => {
 describe("Tauri backend pane control", () => {
   const cases: [string, { pane: number } | { error: string }, Record<string, unknown>][] = [
     ["Open a pane: the window answers with its session", { pane: 7 }, { requestId: 3, pane: 7, error: null }],
-    ["Command not found: the window answers why", { error: "no such program" }, { requestId: 3, pane: null, error: "no such program" }],
+    ["A pane that cannot start: the window answers why", { error: "no such program" }, { requestId: 3, pane: null, error: "no such program" }],
   ];
   it.each(cases)("%s", async (_name, result, args) => {
     invoke.mockClear();
     await tauriBackend().paneControl?.done(3, result);
     expect(invoke.mock.calls).toEqual([["pane_open_done", args]]);
+  });
+
+  it("List panes: the window reports its sessions in grid order", async () => {
+    invoke.mockClear();
+    await tauriBackend().paneControl?.setOrder([4, 2, 7]);
+    expect(invoke.mock.calls).toEqual([["pane_order_set", { sessions: [4, 2, 7] }]]);
   });
 });
 

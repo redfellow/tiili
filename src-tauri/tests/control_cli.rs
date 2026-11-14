@@ -112,8 +112,8 @@ mod listener {
         }
     }
 
-    /// Open a command pane, Open in a folder, Open with a title, List panes, Wrong token: what `tiili` prints and
-    /// exits with, and what reaches the app.
+    /// Open a pane, Open in another folder with a title, List panes, Request without the token is refused: what
+    /// `tiili` prints and exits with, and what reaches the app.
     #[test]
     #[ignore = "host: binds a Unix socket, which the sandbox refuses; the cargo-test-host release check runs it"]
     fn open_and_list_reach_the_app_and_print_its_answer() {

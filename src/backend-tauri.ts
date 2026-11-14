@@ -117,6 +117,7 @@ export function tauriBackend(): Backend {
           pane: "pane" in result ? result.pane : null,
           error: "error" in result ? result.error : null,
         }),
+      setOrder: (sessions) => invoke("pane_order_set", { sessions }),
     },
   };
 }

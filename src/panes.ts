@@ -100,6 +100,8 @@ export class Panes {
   private reportedName = "";
   /** The window title last set, so an unchanged one is not set again. */
   private shownTitle = "tiili >_";
+  /** The session order last reported to the app, for `tiili list`. */
+  private reportedOrder = "";
   /** Every marked session app-wide, so a pane that arrives from another window shows its mark. */
   private marks = new Map<number, AttentionMark>();
 
@@ -564,6 +566,7 @@ export class Panes {
   private onSession(pane: Pane, session: number): void {
     if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
+    this.reportOrder();
     showPaneAttention(pane.element, pane.chip, this.marks.get(session));
     if (pane === this.current()) this.showTitle();
     const place = this.places.get(session);
@@ -683,6 +686,18 @@ export class Panes {
   /** Lays the panes out again: one row element per grid row, panes in order, with the dividers. */
   private render(): void {
     this.view.render(this.layout);
+    this.reportOrder();
+  }
+
+  /** Tells the app the panes' sessions in grid order when it changed, so `tiili list` follows the grid. */
+  private reportOrder(): void {
+    const control = this.backend.paneControl;
+    if (!control) return;
+    const sessions = this.panes.flatMap((pane) => (pane.session === undefined ? [] : [pane.session]));
+    const order = sessions.join(",");
+    if (order === this.reportedOrder) return;
+    this.reportedOrder = order;
+    control.setOrder(sessions).catch(() => undefined);
   }
 
   /** xterm's key hook: layout, pane, settings, find and clipboard shortcuts are kept from the shell. */

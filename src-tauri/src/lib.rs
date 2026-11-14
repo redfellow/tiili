@@ -308,6 +308,7 @@ fn pty_set_prompt(sessions: State<'_, SessionRegistry>, prompt: String) -> Resul
 
 /// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
+    app.state::<control_app::PaneOrders>().forget(label);
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
@@ -525,6 +526,7 @@ pub fn run() {
         .manage(control_app::PendingOpens::default())
         .manage(control_app::PaneTitles::default())
         .manage(control_app::ControlState::default())
+        .manage(control_app::PaneOrders::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
@@ -612,7 +614,8 @@ pub fn run() {
             attention::attention_clear,
             attention::attention_list,
             attention::attention_next,
-            control_app::pane_open_done
+            control_app::pane_open_done,
+            control_app::pane_order_set
         ])
         .build(tauri::generate_context!())
         .expect("error while building tiili")

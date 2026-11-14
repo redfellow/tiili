@@ -61,12 +61,24 @@ pub fn run(
         );
         return FAILED;
     };
-    let Some(pane) = env(PANE_VAR).and_then(|p| p.to_str()?.parse().ok()) else {
-        let _ = writeln!(
-            err,
-            "tiili: not inside a tiili pane ({PANE_VAR} is not set)"
-        );
-        return FAILED;
+    let pane = match env(PANE_VAR) {
+        None => {
+            let _ = writeln!(
+                err,
+                "tiili: not inside a tiili pane ({PANE_VAR} is not set)"
+            );
+            return FAILED;
+        }
+        Some(value) => match value.to_str().and_then(|p| p.parse().ok()) {
+            Some(pane) => pane,
+            None => {
+                let _ = writeln!(
+                    err,
+                    "tiili: not inside a tiili pane ({PANE_VAR} is not a pane id)"
+                );
+                return FAILED;
+            }
+        },
     };
     let token = env(TOKEN_VAR)
         .map(|t| t.to_string_lossy().into_owned())
@@ -92,7 +104,12 @@ pub fn run(
         },
     };
     let reply = ask(Path::new(&socket), &request_line(&token, pane, &op))
-        .map_err(|e| format!("could not reach tiili at {}: {e}", socket.to_string_lossy()))
+        .map_err(|e| {
+            format!(
+                "could not reach tiili at {}: {e} (is the tiili app that opened this pane still running?)",
+                socket.to_string_lossy()
+            )
+        })
         .and_then(|line| parse_reply(&line));
     match reply {
         Ok(Reply::Opened(id)) => {
@@ -196,12 +213,19 @@ mod tests {
     fn outside_tiili_and_missing_command_fail_without_a_request() {
         let socket_only = |name: &str| (name == SOCKET_VAR).then(|| OsString::from("/nowhere"));
         let nothing = |_: &str| None;
+        let bad_pane = |name: &str| match name {
+            SOCKET_VAR => Some(OsString::from("/nowhere")),
+            PANE_VAR => Some(OsString::from("abc")),
+            _ => None,
+        };
         type Env = fn(&str) -> Option<OsString>;
         let cases: &[(&[&str], Env, i32)] = &[
             (&["open", "--", "ls"], nothing, FAILED),
             (&["list"], nothing, FAILED),
             // TIILI_PANE missing too.
             (&["list"], socket_only, FAILED),
+            // TIILI_PANE set but not a pane id.
+            (&["list"], bad_pane, FAILED),
             (&["open"], nothing, USAGE_ERROR),
             (&["open", "--"], socket_only, USAGE_ERROR),
             (&["list", "extra"], socket_only, USAGE_ERROR),

@@ -1,7 +1,7 @@
 //! The app's side of the control channel (see [`crate::control_server`]): an open asks the caller's window for a
 //! pane through `pane-open-request` and waits for its `pane_open_done`; a list is answered from the window's sessions
-//! and their latest reports. Setup starts the endpoint, tells every pane about it and puts `tiili` in the app's bin
-//! folder.
+//! and their latest reports, in the grid order the window reports through `pane_order_set`. Setup starts the
+//! endpoint, tells every pane about it and puts `tiili` in the app's bin folder.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,9 +10,9 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
-use crate::control::{place_name, PaneInfo};
+use crate::control::{grid_order, place_name, PaneInfo};
 use crate::control_server::{ControlServer, Handler};
 use crate::pty::{ControlEnv, SessionId, SessionRegistry};
 use crate::windows::WindowSessions;
@@ -82,6 +82,38 @@ impl PaneTitles {
         if let Ok(mut map) = self.0.lock() {
             map.remove(&id);
         }
+    }
+}
+
+/// Each window's sessions in grid order, as its frontend last reported them, by window label.
+#[derive(Default)]
+pub struct PaneOrders(Mutex<HashMap<String, Vec<SessionId>>>);
+
+impl PaneOrders {
+    fn get(&self, label: &str) -> Vec<SessionId> {
+        self.0
+            .lock()
+            .ok()
+            .and_then(|map| map.get(label).cloned())
+            .unwrap_or_default()
+    }
+
+    pub fn forget(&self, label: &str) {
+        if let Ok(mut map) = self.0.lock() {
+            map.remove(label);
+        }
+    }
+}
+
+/// The window reports its panes' sessions in grid order, whenever its grid or a pane's session changes.
+#[tauri::command]
+pub fn pane_order_set(
+    window: WebviewWindow,
+    orders: State<'_, PaneOrders>,
+    sessions: Vec<SessionId>,
+) {
+    if let Ok(mut map) = orders.0.lock() {
+        map.insert(window.label().to_string(), sessions);
     }
 }
 
@@ -157,27 +189,27 @@ impl Handler for AppHandler {
             self.0.state::<SessionReports>(),
             self.0.state::<PaneTitles>(),
         );
-        Ok(self
-            .0
-            .state::<WindowSessions>()
-            .sessions(&label)
-            .into_iter()
-            .map(|id| {
-                let (at, _) = reports.latest(id);
-                let cwd = at.as_ref().map(|a| a.cwd.clone()).unwrap_or_default();
-                let title = titles.get(id).unwrap_or_else(|| match &at {
-                    Some(at) => place_name(
-                        &at.cwd,
-                        at.repo
-                            .as_ref()
-                            .map(|r| (r.name.as_str(), r.worktree.as_deref())),
-                        at.host.as_deref(),
-                    ),
-                    None => String::new(),
-                });
-                PaneInfo { id, cwd, title }
-            })
-            .collect())
+        let grid = self.0.state::<PaneOrders>().get(&label);
+        Ok(
+            grid_order(self.0.state::<WindowSessions>().sessions(&label), &grid)
+                .into_iter()
+                .map(|id| {
+                    let (at, _) = reports.latest(id);
+                    let cwd = at.as_ref().map(|a| a.cwd.clone()).unwrap_or_default();
+                    let title = titles.get(id).unwrap_or_else(|| match &at {
+                        Some(at) => place_name(
+                            &at.cwd,
+                            at.repo
+                                .as_ref()
+                                .map(|r| (r.name.as_str(), r.worktree.as_deref())),
+                            at.host.as_deref(),
+                        ),
+                        None => String::new(),
+                    });
+                    PaneInfo { id, cwd, title }
+                })
+                .collect(),
+        )
     }
 }
 

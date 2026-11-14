@@ -29,6 +29,8 @@ export interface PaneOpenRequest {
 export interface PaneControl {
   /** Answers request `requestId`: the session of the pane it opened, else why it could not. */
   done(requestId: number, result: { pane: SessionId } | { error: string }): Promise<void>;
+  /** Tells the app this window's sessions in grid order (left to right, top to bottom), which `tiili list` follows. */
+  setOrder(sessions: SessionId[]): Promise<void>;
 }
 
 /** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
