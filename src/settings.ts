@@ -54,6 +54,8 @@ export interface BehaviourSettings {
   hoverHighlight: boolean;
   /** The brick-laying tiili splash plays when tiili opens. */
   startupSplash: boolean;
+  /** Lines of history each terminal keeps; applies live to open panes. */
+  scrollback: number;
 }
 
 export interface InactiveSettings {
@@ -96,6 +98,9 @@ export interface AttentionSettings {
   badge: boolean;
   bounce: BounceMode;
 }
+
+/** Allowed range of the scrollback lines a terminal keeps. */
+export const SCROLLBACK_RANGE = { min: 1000, max: 100000, step: 1 } as const;
 
 /** Allowed range of the inactive opacity. */
 export const INACTIVE_OPACITY = { min: 0.3, max: 1, step: 0.01 } as const;
@@ -140,7 +145,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true, startupSplash: true },
+  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
@@ -229,6 +234,7 @@ export function normalize(value: unknown): Settings {
         typeof behaviour.startupSplash === "boolean"
           ? behaviour.startupSplash
           : DEFAULT_SETTINGS.behaviour.startupSplash,
+      scrollback: number(behaviour.scrollback, DEFAULT_SETTINGS.behaviour.scrollback, SCROLLBACK_RANGE),
     },
     inactive: {
       opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
