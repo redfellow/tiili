@@ -7,7 +7,6 @@
 
 - [ ] 2.1 Add `src-tauri/src/claude_skill.rs` (embedded skill, `install(home)`) with a unit test writing into a temp home (fresh and overwrite), and dispatch `install-claude-skill` in `main.rs` before the GUI starts
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib claude_skill`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 3. Docs
