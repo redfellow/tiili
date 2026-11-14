@@ -42,7 +42,7 @@ Every shell tiili spawns SHALL have `TERM=xterm-256color`, `COLORTERM=truecolor`
 - **THEN** `truecolor` is shown
 
 ### Requirement: Prompt shell integration
-When a prompt other than Off is chosen, tiili SHALL start zsh, bash and PowerShell so that the user's own startup files still load first and the chosen prompt is set only when those files left the shell's default prompt. Other shells, and every shell with Off, SHALL start with the same program and arguments as without the integration.
+When a prompt other than Off is chosen, tiili SHALL start zsh, bash and PowerShell so that the user's own startup files still load first and the chosen prompt is set only when those files left the shell's default prompt. These shells SHALL also report their working folder with OSC 7, naming this machine's hostname, before every prompt, whichever prompt is shown. Other shells, and every shell with Off, SHALL start with the same program and arguments as without the integration.
 
 #### Scenario: Default zsh gets the chosen prompt
 - **WHEN** Classic is chosen and a zsh whose config sets no PROMPT starts
@@ -51,6 +51,10 @@ When a prompt other than Off is chosen, tiili SHALL start zsh, bash and PowerShe
 #### Scenario: User's own prompt wins
 - **WHEN** Classic is chosen and the user's `.zshrc` sets PROMPT (or `.bashrc` sets PS1, or the PowerShell profile defines `prompt`)
 - **THEN** the shell shows the user's prompt
+
+#### Scenario: Folder reported at every prompt
+- **WHEN** Classic is chosen and the user runs `cd /tmp` in zsh, bash or PowerShell, including one whose own config set the prompt
+- **THEN** the shell sends OSC 7 for `/tmp` (or the Windows folder) before its next prompt, and the user's prompt and existing prompt hooks still run
 
 ### Requirement: Session environment in AppImage shells
 When tiili runs from a Linux AppImage, every shell it spawns SHALL get no environment entries pointing at or inside the AppImage mount: such entries SHALL be dropped from colon-separated variables (removing a variable left empty), variables whose single value is inside the mount SHALL be removed, `APPIMAGE`, `APPDIR`, `ARGV0` and `OWD` SHALL be removed, and `GDK_BACKEND` SHALL be removed when it is `x11`. Outside an AppImage the shell environment SHALL be unchanged.
