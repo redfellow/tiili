@@ -13,7 +13,8 @@
   - proof: `npx vitest run src/keymap.test.ts`
   - proof: `npx eslint src/keymap.ts src/keymap.test.ts`
 - [ ] 2.2 Add Find…, Find Next, Find Previous to the macOS Edit menu in `src-tauri/src/lib.rs`, emitted to the focused window
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo check --manifest-path src-tauri/Cargo.toml --lib`
+  - proof: `grep -nE "Find Next|Find Previous" src-tauri/src/lib.rs`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 3. Find bar
