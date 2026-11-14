@@ -1,0 +1,18 @@
+format: 1
+slug: app-version-number-visible-on-splash-scr
+title: App version number visible on splash screen and in settings
+x-harvaaja-card: f99ec928-8249-479d-a790-36cb794183d7
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds a new visible contract (version shown on splash and in
+    settings); no spec covers the splash and settings spec has no version
+    requirement; no active changes.
+  citations:
+    - openspec/specs/settings/spec.md
+    - src/splash.ts:145
+    - src/settingsDialog.ts:509
+    - package.json:4
+  revision: a4d4bbb3-0689-44eb-abfe-61e43d9fd0d9
