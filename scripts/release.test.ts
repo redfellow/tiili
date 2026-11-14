@@ -75,6 +75,16 @@ describe("release", () => {
     expect(() => setCargoLockVersion('[[package]]\nname = "serde"\nversion = "1.0.0"\n', "0.3.1")).toThrow();
   });
 
+  it("Stamped version: the Windows runner's CRLF checkout stamps the same way", () => {
+    const crlf = (text: string) => text.replace(/\n/g, "\r\n");
+    const lock = crlf('[[package]]\nname = "tiili"\nversion = "0.2.0"\ndependencies = [\n "serde",\n]\n');
+    expect(setCargoLockVersion(lock, "0.3.0")).toBe(lock.replace('"0.2.0"', '"0.3.0"'));
+    const toml = crlf('[package]\nname = "tiili"\nversion = "0.2.0"\n\n[dependencies]\nserde = "1"\n');
+    expect(setCargoVersion(toml, "0.3.0")).toBe(toml.replace('"0.2.0"', '"0.3.0"'));
+    const json = crlf('{\n  "name": "tiili",\n  "version": "0.2.0"\n}\n');
+    expect(setJsonVersion(json, "0.3.0")).toBe(json.replace('"0.2.0"', '"0.3.0"'));
+  });
+
   it.each([
     [42_000, "0:42"],
     [446_000, "7:26"],
