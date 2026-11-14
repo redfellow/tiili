@@ -26,7 +26,7 @@
 - [x] 3.1 Add `scripts/updater-manifest.mjs` (+ `.d.mts`) that, given the tag, a folder of `.sig` files and a notes file, prints `latest.json` (version without `v`, notes, `pub_date`, platforms darwin-aarch64 / windows-x86_64 / linux-x86_64 each with url `https://github.com/redfellow/tiili/releases/download/<tag>/<file>` and the signature text), failing when a platform's signature is missing; test in `scripts/updater-manifest.test.ts` (fast tier).
   - proof: `npx vitest run scripts/updater-manifest.test.ts`
   - proof: `npx eslint scripts/updater-manifest.mjs scripts/updater-manifest.test.ts`
-- [ ] 3.2 (triage) Sign updater bundles, upload them with their signatures, and add the manifest job.
+- [x] 3.2 (triage) Sign updater bundles, upload them with their signatures, and add the manifest job.
   - file: .github/workflows/release.yml
   - content:
   ```yaml
