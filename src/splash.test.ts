@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { isLight, mix, PACE, SKIP_PACE, TIMELINE, toHex } from "./splash";
+import { isLight, localDay, mix, PACE, SKIP_PACE, splashDue, TIMELINE, toHex } from "./splash";
 
 describe("splash colours", () => {
   it.each([
@@ -44,5 +44,26 @@ describe("splash timeline", () => {
     expect(real).toBeGreaterThan(6);
     expect(real).toBeLessThan(8);
     expect((TIMELINE.diveDur + TIMELINE.fade) / SKIP_PACE).toBeLessThan(0.6);
+  });
+});
+
+describe("splash once a day", () => {
+  const noon = new Date(2026, 10, 14, 12, 0, 0);
+  it.each([
+    ["nothing is stored", null, noon, true],
+    ["an earlier day is stored", "2026-11-13", noon, true],
+    ["today is stored", "2026-11-14", noon, false],
+    ["a later day is stored", "2026-11-15", noon, true],
+    ["garbage is stored", "yesterday", noon, true],
+    ["an empty string is stored", "", noon, true],
+    ["today is stored just after local midnight", "2026-11-14", new Date(2026, 10, 14, 0, 0, 1), false],
+    ["yesterday is stored just after local midnight", "2026-11-13", new Date(2026, 10, 14, 0, 0, 1), true],
+    ["today is stored just before local midnight", "2026-11-14", new Date(2026, 10, 14, 23, 59, 59), false],
+  ])("is due when %s: %s", (_name, stored, now, due) => {
+    expect(splashDue(stored, now)).toBe(due);
+  });
+
+  it("writes the local day with zero padding", () => {
+    expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
   });
 });
