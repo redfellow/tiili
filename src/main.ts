@@ -172,7 +172,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       onClosePane: thenRefocus(() => panes.act({ type: "close" })),
       onResetLayout: thenRefocus(() => panes.actLayout("reset")),
       onSettings: openSettings,
-      attentionCount: attention !== undefined,
+      onNextAttention: attention ? () => attention.next().catch(report) : undefined,
     });
     // The count covers every window's marked panes.
     if (attention) {
