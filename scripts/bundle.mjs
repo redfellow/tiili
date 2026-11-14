@@ -18,7 +18,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ARGS_BY_PLATFORM = {
-  darwin: ["--target", "aarch64-apple-darwin", "--bundles", "dmg"],
+  // "app" as well: the updater bundle (.app.tar.gz + .sig) is made only from the app target, not the .dmg.
+  darwin: ["--target", "aarch64-apple-darwin", "--bundles", "app,dmg"],
   win32: ["--bundles", "nsis"],
   linux: ["--bundles", "appimage,deb"],
 };

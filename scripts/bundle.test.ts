@@ -11,7 +11,7 @@ describe("bundle", () => {
     ["an empty key counts as missing", "win32", [], { TAURI_SIGNING_PRIVATE_KEY: "" },
       ["tauri", "build", "--bundles", "nsis", ...NO_UPDATER, "--", "--no-default-features"]],
     ["with the key the config's updater bundles are made", "darwin", [], { TAURI_SIGNING_PRIVATE_KEY: "key" },
-      ["tauri", "build", "--target", "aarch64-apple-darwin", "--bundles", "dmg", "--", "--no-default-features"]],
+      ["tauri", "build", "--target", "aarch64-apple-darwin", "--bundles", "app,dmg", "--", "--no-default-features"]],
     ["extra arguments after -- keep their cargo arguments", "linux", ["--verbose", "--", "--locked"],
       { TAURI_SIGNING_PRIVATE_KEY: "key" },
       ["tauri", "build", "--bundles", "appimage,deb", "--verbose", "--", "--locked", "--no-default-features"]],
