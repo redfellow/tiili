@@ -4,11 +4,11 @@ import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } 
 import {
   APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY,
   DEFAULT_SETTINGS, FONT_RANGES, fontFamilyList, INACTIVE_OPACITY, normalize, NOTIFY_MODES, type NotifyMode,
-  type PromptId, type Settings,
+  type PromptId, SCROLLBACK_RANGE, type Settings,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
-import { createSettingsSession, same } from "./settingsSession";
+import { createSettingsSession, same, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION } from "./version";
 
@@ -578,6 +578,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
+  const scrollback = numberInput("scrollback", SCROLLBACK_RANGE);
+  scrollback.setAttribute("aria-label", "Scrollback lines");
   const updatesAuto = element("input", { type: "checkbox", name: "updatesAutoCheck" });
   const appIcon = segmented("Dock icon", APP_ICONS.map((value) => ({ value, label: APP_ICON_LABELS[value] })), changed);
   const { place, asks } = APP_ICON_PLACES[options.platform];
@@ -701,7 +703,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           `Font size, line height and (slightly) letter spacing shrink as a pane gets smaller than the window, down ` +
           `to ${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks ` +
           "faster.")),
-      row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse"))),
+      row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse")),
+      row("Scrollback lines", scrollback)),
     section("Attention",
       "A pane whose program rings the bell or sends a notification gets a brick on its title until you look at it. " +
       `${options.platform === "macos" ? "⌘J" : "Ctrl+Shift+J"} goes to the oldest one.`,
@@ -800,6 +803,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     inactiveDesaturate.checked = settings.inactive.desaturate;
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
     startupSplash.checked = settings.behaviour.startupSplash;
+    scrollback.value = String(settings.behaviour.scrollback);
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
     notify.set(settings.attention.notify);
@@ -827,7 +831,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     cursor: { style: cursorStyle.value(), blink: cursorBlink.checked },
     tiling: { layout: tiling.value() },
     responsive: { enabled: responsiveOn.checked, strength: responsiveStrength.input.valueAsNumber },
-    behaviour: { hoverHighlight: hoverHighlight.checked, startupSplash: startupSplash.checked },
+    behaviour: {
+      hoverHighlight: hoverHighlight.checked,
+      startupSplash: startupSplash.checked,
+      scrollback: scrollback.valueAsNumber,
+    },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
     appIcon: appIcon.value(),
     prompt: prompt.value(),
@@ -890,6 +898,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   /** Save: write the previewed settings and close; on failure stay open with the error. */
   const commit = async () => {
     if (saving) return;
+    // A scrollback still being typed when Save is clicked is saved too.
+    changed();
     lock(true);
     const written = session.draft;
     try {
@@ -904,8 +914,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     }
   };
 
-  // Apply while the user types; once a field is left, show the value that was actually applied.
-  form.addEventListener("input", changed);
+  // Apply while the user types, except a scrollback being typed; once a field is left, apply it all and show the
+  // value that was actually applied.
+  form.addEventListener("input", () => change(whileTyping(read(), session.draft)));
   form.addEventListener("change", () => {
     changed();
     show(session.draft);

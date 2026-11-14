@@ -113,6 +113,9 @@ export class Panes {
         this.panes.forEach((pane) => pane.terminal?.releaseSize(changed.has(pane.id)));
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
+      // Terminals scale with their moving panes and refit once they are in place, so each shell sees one size change.
+      motionStart: () => this.panes.forEach((pane) => pane.terminal?.holdSize()),
+      motionEnd: () => this.panes.forEach((pane) => pane.terminal?.releaseSize(true)),
     });
     this.layout = emptyLayout(settings().tiling.layout);
     this.styleRoot(settings());
@@ -558,7 +561,7 @@ export class Panes {
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
     this.layout = removePane(this.layout, pane.id);
-    pane.element.remove();
+    // The view takes the pane's element out once it has faded out.
     this.render();
     if (this.panes.length === 0) {
       this.focused = -1;
