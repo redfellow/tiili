@@ -1,8 +1,8 @@
 //! tiili's running app icon: the Dock icon on macOS, the window and taskbar icon elsewhere.
 //!
 //! The icon follows the OS light or dark mode. On macOS the user can instead pin it to the light or the dark icon
-//! (the `appIcon` setting); the frontend sends that choice with `app_icon_set`. The installed app bundle keeps
-//! its own static icon, which is what the Dock shows while tiili is not running.
+//! (the `appIcon` setting); the frontend sends that choice with `app_icon_set`. While tiili is not running, the Dock
+//! shows the bundle's asset catalog icon (src-tauri/icons/Assets.car), which follows the OS appearance on its own.
 
 use std::sync::Mutex;
 

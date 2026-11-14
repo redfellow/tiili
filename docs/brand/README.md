@@ -28,14 +28,14 @@ carries a `>_` prompt.
 | Bricks | tiili `#A4472B` | tiili `#A4472B` |
 | Focus brick | klinkkeri `#6B2A1E` | savi `#C9764F` |
 | `>_` prompt | white `#FFFFFF` | near-black `#111617` |
-| App icon tile | kalkki `#F6F1E9` | koski `#182023` |
+| App icon tile | near-black `#111617` | near-black `#111617` |
 
 - Below 64 px the mark leaves the `>_` off (`mark-*-small.svg`); the brick is too small to hold it.
-- The app icon is a close-up of the mark: the focus brick, with a taller course, spans the tile's full width, and only
-  the inner edges of the courses above and below show, the one above nudged left and the one below right. The `>_` sits
-  at the left, where a prompt sits in a terminal. The bricks are pressed: a lit top edge, a shaded bottom edge, a
-  shadow under the focus brick and the `>_` pressed into it. Being a close-up, it keeps the `>_` at every size;
-  `icon-*-small.svg` (32 px and below) is the same drawing without the light and shadow.
+- The app icon is one wide brick, the focus brick, centred on a near-black tile in both appearances, with clear black
+  space around it; it spans about 70% of the tile's width. The `>_` sits at the brick's left, where a prompt sits in a
+  terminal, and shows at every size. The embossing is faint: a lightly lit top edge, a lightly shaded bottom edge and a
+  soft shadow under the brick; the `>_` is not pressed in. `icon-*-small.svg` (32 px and below) is the same drawing
+  without the light and shadow.
 - The app icon tile has a 22.5% corner radius.
 - Next to the wordmark the mark stands free, at 0.82× the wordmark's font size, 0.32 em apart.
 
@@ -68,7 +68,7 @@ Core colours, named after the materials. All values also live in [`tiili.css`](t
 | klinkkeri | `#6B2A1E` | Pressed states, focus brick on light |
 | savi | `#C9764F` | Accent on dark, focus brick on dark |
 | laasti | `#E8DECD` | Mortar, light surfaces |
-| kalkki | `#F6F1E9` | Light background, icon tile |
+| kalkki | `#F6F1E9` | Light background |
 | graniitti | `#8D877D` | Muted marks |
 | koski | `#182023` | Terminal background, dark surface |
 | rauta | `#3A3F45` | Iron, dark project tint |

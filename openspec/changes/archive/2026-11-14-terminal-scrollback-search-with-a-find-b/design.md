@@ -1,0 +1,9 @@
+## Approach
+- `src/search.ts` (new): pure helpers — `matchCountLabel(index, total, limitReached)` → `"3/17"`, `"0/0"`, `"1000+"`; `validRegex(q)`; `blendHex(fg, bg, alpha)` → `#RRGGBB`; `searchDecorations(tokens)` building the addon's `ISearchDecorationOptions` (active = `--accent`, others = brick blended into `--term-bg`, ruler colours alike). Unit-tested.
+- `src/findBar.ts` (new): DOM overlay per pane, absolutely positioned inside the pane's terminal host (below `.pane-title`, so the xterm element and PTY size are untouched); holds query, options and open state for that pane. Input runs `findNext(q, {incremental:true, decorations})`; Enter/Shift+Enter next/previous; Esc calls `clearDecorations()`, hides the bar, focuses `term`. An invalid regex (checked with `new RegExp` in try/catch before calling the addon) sets `aria-invalid` and an error class and skips the search. `onDidChangeResults` drives the count.
+- `src/terminal.ts`: load `SearchAddon` (needs `allowProposedApi`), add `selectionBackground` to `terminalTheme` (`src/theme.ts`), and on theme refresh recompute decorations and re-run the open search.
+- `src/keymap.ts`: `findAction(event, platform)` → `"find" | "next" | "previous" | null` (macOS ⌘F/⌘G/⇧⌘G; others Ctrl+Shift+F, F3, Shift+F3; plain Ctrl+F → null). `src/panes.ts` dispatches like zoom: terminal panes get the bar, Heynote panes route ⌘F to Heynote's search; on macOS the keys come from the menu (`viaMenu`).
+- `src-tauri/src/lib.rs`: Edit menu adds a separator and items with ids `find`, `findNext`, `findPrevious` emitted on the existing clipboard-menu event to the focused window; the frontend handles the new payloads.
+- Prefill: on open, if `term.getSelection()` is non-empty and has no newline it replaces the query.
+
+Why: the addon already does incremental search, decorations, ruler marks and the 1000 limit; an overlay avoids any terminal resize.

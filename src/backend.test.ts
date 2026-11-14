@@ -43,6 +43,39 @@ describe("Tauri backend", () => {
     expect(command).toBe("pty_spawn");
     expect(args).toMatchObject({ rows: 24, cols: 80, cwd: "/tmp", prompt });
   });
+
+  const launches: [string, Parameters<Backend["spawn"]>[5], Record<string, unknown>][] = [
+    ["Open a pane (a shell): no command", undefined, { command: null, path: null }],
+    ["Open a pane: the command, no caller PATH", { command: ["top"] }, { command: ["top"], path: null }],
+    [
+      "Command found on the caller's PATH: the command and that PATH",
+      { command: ["tail", "-f", "x.log"], path: "/opt/tools:/usr/bin" },
+      { command: ["tail", "-f", "x.log"], path: "/opt/tools:/usr/bin" },
+    ],
+  ];
+  it.each(launches)("%s", async (_name, launch, passed) => {
+    invoke.mockClear();
+    await tauriBackend().spawn(24, 80, "/tmp", "off", () => undefined, launch);
+    expect(invoke.mock.calls[0]).toEqual(["pty_spawn", expect.objectContaining({ cwd: "/tmp", ...passed })]);
+  });
+});
+
+describe("Tauri backend pane control", () => {
+  const cases: [string, { pane: number } | { error: string }, Record<string, unknown>][] = [
+    ["Open a pane: the window answers with its session", { pane: 7 }, { requestId: 3, pane: 7, error: null }],
+    ["A pane that cannot start: the window answers why", { error: "no such program" }, { requestId: 3, pane: null, error: "no such program" }],
+  ];
+  it.each(cases)("%s", async (_name, result, args) => {
+    invoke.mockClear();
+    await tauriBackend().paneControl?.done(3, result);
+    expect(invoke.mock.calls).toEqual([["pane_open_done", args]]);
+  });
+
+  it("List panes: the window reports its sessions in grid order", async () => {
+    invoke.mockClear();
+    await tauriBackend().paneControl?.setOrder([4, 2, 7]);
+    expect(invoke.mock.calls).toEqual([["pane_order_set", { sessions: [4, 2, 7] }]]);
+  });
 });
 
 describe("Tauri backend prompt choice", () => {
@@ -50,6 +83,20 @@ describe("Tauri backend prompt choice", () => {
     invoke.mockClear();
     await tauriBackend().setPrompt(prompt);
     expect(invoke.mock.calls).toEqual([["pty_set_prompt", { prompt }]]);
+  });
+});
+
+describe("Tauri backend links: each goes to its core command, which checks it", () => {
+  const cases: [string, (backend: Backend) => Promise<unknown>, string, unknown][] = [
+    ["openLink", (b) => b.openLink("vscode://x", true), "link_open", { uri: "vscode://x", confirmed: true }],
+    ["resolvePaths", (b) => b.resolvePaths(3, ["a.ts"]), "path_resolve", { paneId: 3, candidates: ["a.ts"] }],
+    ["openPath", (b) => b.openPath("/tmp/a.ts"), "path_open", { abs: "/tmp/a.ts" }],
+    ["revealPath", (b) => b.revealPath("/tmp/a.ts"), "path_reveal", { abs: "/tmp/a.ts" }],
+  ];
+  it.each(cases)("%s", async (_name, call, command, args) => {
+    invoke.mockClear();
+    await call(tauriBackend());
+    expect(invoke.mock.calls).toEqual([[command, args]]);
   });
 });
 

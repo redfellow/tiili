@@ -84,6 +84,23 @@ The builds are not signed yet, so the first launch takes one extra step:
 On Windows the name chip follows `cd` only when your shell reports its folder: see
 [Windows: let the chip follow `cd`](docs/windows-cd.md).
 
+## Coding agents
+
+tiili comes with a [Claude Code](https://claude.com/claude-code) skill, `tiili-tiles`, that fans work out into
+tiles: one terminal per task, each running its own Claude session. Its first recipe reviews pull requests side by
+side: ask Claude to review PRs 12 and 15 (or just "the open PRs" for the three most recent), and each gets its own
+git worktree and tile. It needs [`gh`](https://cli.github.com) (signed in with `gh auth login`), `claude` and
+`tiili` on your PATH, and Claude Code has to run inside a tiili pane: `tiili open` works only from one.
+
+Install it with:
+
+```sh
+tiili install-claude-skill
+```
+
+or copy [`integrations/claude/skills/tiili-tiles/SKILL.md`](integrations/claude/skills/tiili-tiles/SKILL.md) to
+`~/.claude/skills/tiili-tiles/SKILL.md`.
+
 ## How it's made
 
 tiili is planned, built and reviewed by coding agents on härvääjä, a board that runs each idea as a card through an [OpenSpec](https://github.com/Fission-AI/OpenSpec) change: plan,

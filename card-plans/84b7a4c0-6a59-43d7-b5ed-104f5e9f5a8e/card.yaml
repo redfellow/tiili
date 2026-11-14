@@ -1,0 +1,17 @@
+format: 1
+slug: top-menu-bar-should-probably-use-slightl
+title: Top menu bar should probably use slightly more vertical space
+x-harvaaja-card: 84b7a4c0-6a59-43d7-b5ed-104f5e9f5a8e
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: The window-top-bar spec requires an overlay bar beside the native
+    window buttons but fixes no height; making it taller with centred buttons
+    refines the existing intent.
+  citations:
+    - "openspec/specs/window-top-bar/spec.md: Requirement: Window top bar"
+    - src/styles.css .top-bar[data-overlay] height 28px
+    - src-tauri/tauri.conf.json titleBarStyle Overlay
+  revision: 43d5330b-ad5c-4b4a-b9c5-dd4c00e29390

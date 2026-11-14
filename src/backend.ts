@@ -1,10 +1,38 @@
+import type { AttentionMark } from "./attention";
 import type { NoteStore } from "./heynoteStore";
+import type { ResolvedPath } from "./links";
 import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon, PromptId, Settings } from "./settings";
 import type { WindowEntry } from "./windowMenu";
 
 /** Identifies one shell session of a backend. */
 export type SessionId = number;
+
+/** A program a pane runs directly instead of a shell, found on `path` when given, else on the app's own `PATH`. */
+export interface PaneLaunch {
+  command: string[];
+  path?: string;
+}
+
+/**
+ * The window is asked for a pane by `tiili open`: one running `command` in `cwd` (home folder when null), its chip
+ * reading `title` when given. The window answers through {@link PaneControl.done} with `requestId`.
+ */
+export interface PaneOpenRequest {
+  requestId: number;
+  cwd: string | null;
+  title: string | null;
+  command: string[];
+  path: string | null;
+}
+
+/** Answering the `tiili` command line, where the backend runs it (the Tauri app). */
+export interface PaneControl {
+  /** Answers request `requestId`: the session of the pane it opened, else why it could not. */
+  done(requestId: number, result: { pane: SessionId } | { error: string }): Promise<void>;
+  /** Tells the app this window's sessions in grid order (left to right, top to bottom), which `tiili list` follows. */
+  setOrder(sessions: SessionId[]): Promise<void>;
+}
 
 /** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
 export type MenuItem =
@@ -36,6 +64,21 @@ export interface PaneMoves {
   take(token: string): Promise<MovePayload | undefined>;
 }
 
+/** Panes that need the user, kept app-wide by session so a mark follows its pane to another window. */
+export interface PaneAttention {
+  /**
+   * Marks session `id` as needing the user, with `message` when the shell sent one; `title` is its pane's chip text,
+   * which a desktop notification shows. Marking a marked session again only adds a message it lacked.
+   */
+  mark(id: SessionId, message: string | undefined, title: string): Promise<void>;
+  /** Clears session `id`'s mark, if it has one. */
+  clear(id: SessionId): Promise<void>;
+  /** Brings the window of the oldest marked pane to the front and has it focus that pane, which clears its mark. */
+  next(): Promise<void>;
+  /** Every marked session, oldest first. */
+  list(): Promise<AttentionMark[]>;
+}
+
 /** Settings in a window of their own, where the backend can open OS windows. */
 export interface SettingsWindows {
   /** Opens this window's settings window centred over it, or brings it to the front when it is open already. */
@@ -50,10 +93,12 @@ export interface SettingsWindows {
  * Events the app sends this window: native menu items (when this window is focused), the app menu's Settings…, a
  * shell's working directory report and what runs in a pane (for this window's shells), settings another window
  * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label), a
- * pane arriving from another window, settings this window's settings window previews and that window having closed.
+ * pane arriving from another window, settings this window's settings window previews and that window having closed,
+ * the panes that need the user (every window hears these), the ask to focus one of this window's marked panes and
+ * `tiili open` asking this window for a pane.
  */
 export interface AppEvents {
-  clipboard: "copy" | "paste" | "selectAll";
+  clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
   pane: "new" | "close" | "moveToNewWindow";
   "new-window": undefined;
   "move-to-window": string;
@@ -64,6 +109,9 @@ export interface AppEvents {
   "settings-changed": unknown;
   "settings-preview": unknown;
   "settings-closed": undefined;
+  "attention-changed": { marks: AttentionMark[] };
+  "attention-focus": SessionId;
+  "pane-open-request": PaneOpenRequest;
 }
 
 /**
@@ -75,7 +123,8 @@ export interface Backend {
   readonly nativeMenus: boolean;
   /**
    * Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own
-   * config leaves the shell's default one; its output goes to `onOutput`.
+   * config leaves the shell's default one; its output goes to `onOutput`. With `launch` the session runs that
+   * program instead of a shell, where the backend can (the dev server always starts a shell).
    */
   spawn(
     rows: number,
@@ -83,6 +132,7 @@ export interface Backend {
     cwd: string | undefined,
     prompt: PromptId,
     onOutput: (bytes: Uint8Array) => void,
+    launch?: PaneLaunch,
   ): Promise<SessionId>;
   /**
    * Makes `prompt` the current choice for new shells and the open local zsh, bash and PowerShell shells, where their
@@ -101,6 +151,20 @@ export interface Backend {
   onExit(callback: (id: SessionId, code: number) => void): Promise<() => void>;
   readClipboard(): Promise<string>;
   writeClipboard(text: string): Promise<void>;
+  /**
+   * Opens `uri` in the system's handler for its scheme. The core refuses forbidden schemes, and schemes other than
+   * `http`, `https` and `mailto` unless `confirmed` (the user agreed in tiili's dialog).
+   */
+  openLink(uri: string, confirmed: boolean): Promise<void>;
+  /**
+   * The existing file or folder each of `candidates` names in session `id`'s current folder, in order; null where
+   * none does, and for every candidate in a remote or WSL pane.
+   */
+  resolvePaths(id: SessionId, candidates: string[]): Promise<(ResolvedPath | null)[]>;
+  /** Opens the file at absolute `abs` in its default app, or the folder in the file manager; refuses launchers. */
+  openPath(abs: string): Promise<void>;
+  /** Shows the file or folder at absolute `abs` selected in the file manager. */
+  revealPath(abs: string): Promise<void>;
   /** Builds the right-click menu once; the returned function shows it for a `contextmenu` event. */
   contextMenu(items: MenuItem[]): Promise<(event: MouseEvent) => Promise<void>>;
   /** Calls `callback` when a native menu sends `name`; does nothing where there are no native menus. */
@@ -120,8 +184,12 @@ export interface Backend {
   newWindow(cwd: string | undefined): Promise<void>;
   /** Moving panes between windows; absent where there is one window only (the dev server). */
   readonly moves?: PaneMoves;
+  /** Marking panes that need the user; absent where nothing tracks them (the dev server). */
+  readonly attention?: PaneAttention;
   /** Settings in their own OS window; absent where there is one window only (the dev server shows them in the page). */
   readonly settingsWindows?: SettingsWindows;
+  /** Answering `tiili open`; absent where nothing runs the command line (the dev server). */
+  readonly paneControl?: PaneControl;
 }
 
 export type BackendKind = "tauri" | "dev";

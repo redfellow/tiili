@@ -1,8 +1,10 @@
 /**
  * Shell snippets for a remote machine's startup file. At every prompt each one reports the folder with OSC 7 and the
- * git root (empty outside a repository) as the `tiili_repo` user variable (`OSC 1337 ; SetUserVar`, base64), so a pane
- * that ssh'd there shows that machine's folder and repository. `base64` output has its newlines removed because GNU
- * wraps long values and BSD doesn't.
+ * repository's root (empty outside a repository) as the `tiili_repo` user variable (`OSC 1337 ; SetUserVar`,
+ * base64), so a pane that ssh'd there shows that machine's folder and repository. The root is the main worktree's
+ * (the first entry of the porcelain worktree list), so a linked worktree reports its repository, falling back to
+ * `git rev-parse --show-toplevel` where git can't list worktrees. `base64` output has its newlines removed because
+ * GNU wraps long values and BSD doesn't.
  */
 
 export type RemoteShell = "bash" | "zsh" | "fish";
@@ -18,7 +20,9 @@ const BASH = [
   "      *) printf -v c '%d' \"'$c\"; printf -v c '%%%02X' $(( c & 255 )); enc+=$c ;;",
   "    esac",
   "  done",
-  "  root=$(git rev-parse --show-toplevel 2>/dev/null | tr -d '\\n' | base64 | tr -d '\\n')",
+  "  root=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')",
+  "  [ -n \"$root\" ] || root=$(git rev-parse --show-toplevel 2>/dev/null)",
+  "  root=$(printf '%s' \"$root\" | base64 | tr -d '\\n')",
   "  printf '\\033]7;file://%s%s\\007\\033]1337;SetUserVar=tiili_repo=%s\\007' \"$HOSTNAME\" \"$enc\" \"$root\"",
   "  return $s",
   "}",
@@ -41,7 +45,9 @@ const ZSH = [
   "      *) printf -v hex '%%%02X' \"'$c\"; enc+=$hex ;;",
   "    esac",
   "  done",
-  "  root=$(git rev-parse --show-toplevel 2>/dev/null | tr -d '\\n' | base64 | tr -d '\\n')",
+  "  root=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')",
+  "  [ -n \"$root\" ] || root=$(git rev-parse --show-toplevel 2>/dev/null)",
+  "  root=$(printf '%s' \"$root\" | base64 | tr -d '\\n')",
   "  printf '\\033]7;file://%s%s\\007\\033]1337;SetUserVar=tiili_repo=%s\\007' \"$HOST\" \"$enc\" \"$root\"",
   "}",
   "autoload -Uz add-zsh-hook",
@@ -51,7 +57,8 @@ const ZSH = [
 const FISH = [
   "# tiili: report this folder and its git repository at every prompt",
   "function _tiili_report --on-event fish_prompt",
-  "    set -l root (git rev-parse --show-toplevel 2>/dev/null)",
+  "    set -l root (git worktree list --porcelain 2>/dev/null | string replace -rf '^worktree ' '' | head -n 1)",
+  "    test -n \"$root\"; or set root (git rev-parse --show-toplevel 2>/dev/null)",
   "    if command -q base64",
   "        set root (printf '%s' \"$root\" | base64 | tr -d '\\n')",
   "    else",

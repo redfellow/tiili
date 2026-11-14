@@ -101,6 +101,15 @@ impl WindowSessions {
         self.add(to, id);
     }
 
+    /// Window `label`'s sessions, in the order they joined it.
+    pub fn sessions(&self, label: &str) -> Vec<SessionId> {
+        self.0
+            .lock()
+            .ok()
+            .and_then(|map| map.get(label).cloned())
+            .unwrap_or_default()
+    }
+
     /// Window `label`'s remaining sessions, which then belong to no window.
     pub fn take(&self, label: &str) -> Vec<SessionId> {
         self.0
@@ -548,6 +557,28 @@ mod tests {
                 "{json}"
             );
         }
+    }
+
+    #[test]
+    fn move_a_full_scrollback_all_its_lines_arrive() {
+        // The setting's cap: 100 000 lines of 200 columns, about 20 MB.
+        let line = format!("{}\r\n", "x".repeat(200));
+        let scrollback = line.repeat(100_000);
+        let payload = MovePayload::Terminal {
+            session: 7,
+            scrollback: scrollback.clone(),
+            zoom: 0.0,
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        let back = serde_json::from_str::<MovePayload>(&json).unwrap();
+        let MovePayload::Terminal {
+            scrollback: got, ..
+        } = &back
+        else {
+            panic!("not a terminal payload");
+        };
+        assert_eq!(got.matches("\r\n").count(), 100_000);
+        assert_eq!(back, payload);
     }
 
     #[test]
