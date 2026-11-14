@@ -4,7 +4,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
-import type { Backend, SessionId } from "./backend";
+import type { Backend, PaneLaunch, SessionId } from "./backend";
 import { createFindBar, type FindBar } from "./findBar";
 import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
@@ -143,7 +143,9 @@ export function refreshTheme(term: Terminal): void {
  * `onExit` is called when a shell exits. With `adopt` the terminal starts no shell: it shows the adopted scrollback,
  * then takes over that running session, whose output kept during the move follows, and resizes it so full-screen
  * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
- * shell sends, with its message made safe; an adopted scrollback rings nothing.
+ * shell sends, with its message made safe; an adopted scrollback rings nothing. With `launch` the session runs that
+ * program instead of a shell, and a failure to start it rejects (after freeing the terminal) instead of being written
+ * into the terminal.
  */
 export async function openTerminal(
   backend: Backend,
@@ -155,6 +157,7 @@ export async function openTerminal(
   onExit: () => void = () => {},
   adopt?: AdoptedSession,
   onSignal: (signal: AttentionSignal) => void = () => {},
+  launch?: PaneLaunch,
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -229,7 +232,7 @@ export async function openTerminal(
   );
 
   const spawn = async (dir?: string) => {
-    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes));
+    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes), launch);
     running = true;
     onSession(session);
   };
@@ -280,9 +283,6 @@ export async function openTerminal(
     await backend.resize(id, term.rows, term.cols);
   };
 
-  if (adopt) await take(adopt).catch(reportError);
-  else await spawn(cwd).catch(reportError);
-
   const free = () => {
     observer.disconnect();
     reporter.cancel();
@@ -295,6 +295,14 @@ export async function openTerminal(
     find.dispose();
     term.dispose();
   };
+
+  if (adopt) await take(adopt).catch(reportError);
+  else if (launch) {
+    await spawn(cwd).catch((error: unknown) => {
+      free();
+      throw error;
+    });
+  } else await spawn(cwd).catch(reportError);
 
   return {
     term,

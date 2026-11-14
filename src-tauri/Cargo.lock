@@ -4738,6 +4738,7 @@ dependencies = [
 name = "tiili"
 version = "0.2.0"
 dependencies = [
+ "getrandom 0.3.4",
  "libc",
  "libproc",
  "objc2",
@@ -4755,6 +4756,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tungstenite",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

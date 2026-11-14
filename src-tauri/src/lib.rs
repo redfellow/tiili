@@ -2,7 +2,11 @@ pub mod app_icon;
 pub mod appimage_env;
 pub mod attention;
 pub mod bridge;
+pub mod cli;
 pub mod command;
+pub mod control;
+mod control_app;
+pub mod control_server;
 pub mod cwd;
 pub mod links;
 pub mod notes;
@@ -24,7 +28,7 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
-use pty::{SessionId, SessionRegistry};
+use pty::{PaneCommand, SessionId, SessionRegistry};
 use sink::SessionSinks;
 use tints::Tints;
 use windows::WindowSessions;
@@ -161,11 +165,13 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
     app.state::<SessionReports>().forget(id);
+    app.state::<control_app::PaneTitles>().forget(id);
     attention::forget(app, id);
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
-/// in Settings (`off` when absent) and returns its session id; its output streams over `on_output`, a
+/// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
+/// the `tiili open` that asked for it, when given), and returns its session id; its output streams over `on_output`, a
 /// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
 /// `pane-command` events, sent only to the window it belongs to: the one that started it, until its pane moves.
 #[allow(clippy::too_many_arguments)]
@@ -178,8 +184,16 @@ fn pty_spawn(
     cols: u16,
     cwd: Option<String>,
     prompt: Option<String>,
+    command: Option<Vec<String>>,
+    path: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
+    let command = command
+        .filter(|argv| !argv.is_empty())
+        .map(|argv| PaneCommand {
+            argv,
+            path: path.map(Into::into),
+        });
     let label = window.label().to_string();
     let (cwd_app, cwd_label) = (app.clone(), label.clone());
     let (command_app, command_label) = (app.clone(), label.clone());
@@ -192,6 +206,7 @@ fn pty_spawn(
         .spawn_tracked(
             cwd.as_deref().map(Path::new),
             prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
+            command.as_ref(),
             rows,
             cols,
             Box::new(move |_id, data| {
@@ -300,9 +315,11 @@ fn pty_set_prompt(sessions: State<'_, SessionRegistry>, prompt: String) -> Resul
 
 /// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
+    app.state::<control_app::PaneOrders>().forget(label);
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
+        app.state::<control_app::PaneTitles>().forget(id);
         attention::forget(app, id);
         let _ = registry.close(id);
     }
@@ -513,6 +530,10 @@ pub fn run() {
         .manage(SessionReports::default())
         .manage(MoveMenu::default())
         .manage(attention::Attention::default())
+        .manage(control_app::PendingOpens::default())
+        .manage(control_app::PaneTitles::default())
+        .manage(control_app::ControlState::default())
+        .manage(control_app::PaneOrders::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
@@ -529,6 +550,7 @@ pub fn run() {
         })
         .setup(|app| {
             app_icon::apply(app.handle());
+            control_app::start(app.handle());
             {
                 use tauri_plugin_notification::NotificationExt;
                 let handle = app.handle().clone();
@@ -599,11 +621,18 @@ pub fn run() {
             attention::attention_clear,
             attention::attention_list,
             attention::attention_next,
+            control_app::pane_open_done,
+            control_app::pane_order_set,
             links::link_open,
             links::path_resolve,
             links::path_open,
             links::path_reveal
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tiili");
+        .build(tauri::generate_context!())
+        .expect("error while building tiili")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                control_app::stop(app);
+            }
+        });
 }

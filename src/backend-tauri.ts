@@ -34,10 +34,18 @@ export function tauriBackend(): Backend {
   let listening: Promise<unknown> | undefined;
   return {
     nativeMenus: currentPlatform() === "macos",
-    spawn: (rows, cols, cwd, prompt, onOutput) => {
+    spawn: (rows, cols, cwd, prompt, onOutput, launch) => {
       const output = new Channel<number[]>();
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
-      return invoke<number>("pty_spawn", { rows, cols, cwd, prompt, onOutput: output });
+      return invoke<number>("pty_spawn", {
+        rows,
+        cols,
+        cwd,
+        prompt,
+        onOutput: output,
+        command: launch?.command ?? null,
+        path: launch?.path ?? null,
+      });
     },
     setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
     write: (id, data) => invoke("pty_write", { id, data }),
@@ -105,6 +113,15 @@ export function tauriBackend(): Backend {
       onCloseRequested: async (handler) => {
         await getCurrentWindow().onCloseRequested(() => handler());
       },
+    },
+    paneControl: {
+      done: (requestId, result) =>
+        invoke("pane_open_done", {
+          requestId,
+          pane: "pane" in result ? result.pane : null,
+          error: "error" in result ? result.error : null,
+        }),
+      setOrder: (sessions) => invoke("pane_order_set", { sessions }),
     },
   };
 }

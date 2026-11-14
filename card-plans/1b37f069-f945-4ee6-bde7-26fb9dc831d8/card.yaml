@@ -1,0 +1,18 @@
+format: 1
+slug: tiili-cli-to-open-tiles-from-inside-a-pa
+title: "tiili CLI to open tiles from inside a pane: `tiili open [--cwd DIR]
+  [--title T] -- CMD ARGS...` adds a new pane to th..."
+x-harvaaja-card: 1b37f069-f945-4ee6-bde7-26fb9dc831d8
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds a new observable contract (pane-control capability: socket,
+    token, CLI open/list); no existing change covers it."
+  citations:
+    - openspec/specs/pane-tiling/spec.md
+    - openspec/specs/terminal-session/spec.md
+    - src-tauri/src/bridge.rs
+    - src-tauri/src/lib.rs
+  revision: 6d85c8da-bfee-43d9-8d52-9ad2181f46d2
