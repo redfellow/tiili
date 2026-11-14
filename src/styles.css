@@ -456,7 +456,6 @@ body.settings-window {
 }
 
 .settings-version {
-  margin-right: auto;
   color: var(--muted);
   font: 12px/1.4 var(--font-mono);
 }
