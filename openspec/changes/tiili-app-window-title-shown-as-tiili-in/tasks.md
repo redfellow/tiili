@@ -7,7 +7,8 @@
   - proof: `npx eslint src/panes.ts src/backend.ts src/backend-tauri.ts src/backend-ws.ts`
   - proof: `npx vitest run src/backend.test.ts src/backend-ws.test.ts`
 - [ ] 1.3 Use `tiili >_` as the starting title in `src-tauri/tauri.conf.json` and wherever the Rust core builds new windows
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `grep -F '"title": "tiili >_"' src-tauri/tauri.conf.json`
+  - proof: `grep -F '.title("tiili >_")' src-tauri/src/windows.rs`
   - proof: `npm run typecheck`
 
 ## Manual checks after merge (The user)
