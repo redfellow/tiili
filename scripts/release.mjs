@@ -1,34 +1,33 @@
-// Cuts a tiili release in one command: `npm run release <patch|minor|major|x.y.z>`.
+// Releases what is on main now, in one command: `npm run release <patch|minor|major|x.y.z>`.
 //
-// It never commits in this checkout, never switches its branch and never pushes to main: main only receives
-// promotions from härvääjä's integration branch (hv/main), so the release goes the same way as every other change.
+// No commit is made. The version is the highest vX.Y.Z tag on GitHub bumped by the argument (or the version given),
+// and the release workflow stamps it into package.json, Cargo.toml and Cargo.lock from the tag before it builds
+// (scripts/stamp-version.mjs). So the command never commits, never switches this checkout's branch, never touches
+// hv/main and does not need a pull:
 //
-//   1. Bump: in a throwaway worktree of origin/hv/main, set the version in package.json, package-lock.json,
-//      src-tauri/Cargo.toml and src-tauri/Cargo.lock, commit `Release vX.Y.Z` on release/vX.Y.Z and send it through
-//      `hv fast-lane`. Waits until hv/main has the new version.
-//   2. Release: promote hv/main to main (the board's Release, merging by itself once its checks pass). This also
-//      carries everything else waiting on hv/main. Waits until main has the new version.
-//   3. Tag: tag main's commit vX.Y.Z and push only the tag. That starts .github/workflows/release.yml, which builds
-//      the installers into a draft GitHub Release.
-//   4. Publish: wait for that workflow, then publish the draft as the latest release. The website and the README badge
-//      read the latest release from GitHub, so they follow on their own.
+//   1. Tag origin/main's commit vX.Y.Z and push only the tag. That starts .github/workflows/release.yml, which writes
+//      the notes from the promotions since the previous tag (scripts/release-notes.mjs) and builds the installers into
+//      a draft GitHub Release.
+//   2. Follow that workflow with a live view of each platform's build, then publish the draft as the latest release.
+//      The website and the README badge read the latest release from GitHub, so they follow on their own.
 //
-// It first runs origin/hv/main's copy of itself when this one differs, so a checkout that is behind needs no pull.
-// Each step checks whether it is already done, so running the same command again after a stop or a failure carries on
-// where it left off. With no argument it only finishes a release whose tag exists but whose draft is not published.
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+// It runs origin/main's copy of itself when this one differs, so a checkout that is behind releases with the current
+// flow. Each step checks whether it is already done: running the same command again after a stop or a failure carries
+// on where it left off, and an unpublished release is finished before a new one is cut.
+import { execFile, execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 export const KINDS = ["patch", "minor", "major"];
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
-const POLL_MS = 15_000;
-let started = false;
-const INTEGRATION = "hv/main";
 const MAIN = "main";
+const WORKFLOW = "release.yml";
+const LATEST_ENV = "TIILI_RELEASE_LATEST";
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export function bumpVersion(version, kind) {
   const match = SEMVER.exec(version);
@@ -100,44 +99,121 @@ export function setCargoVersion(text, version) {
   throw new Error("Cargo.toml has no [package] version line.");
 }
 
+// Rewrites the version of Cargo.lock's own `tiili` package entry; other packages stay.
+export function setCargoLockVersion(text, version) {
+  const next = text.replace(/(\[\[package\]\]\nname = "tiili"\nversion = ")[^"]*(")/, `$1${version}$2`);
+  if (next === text && !text.includes(`name = "tiili"\nversion = "${version}"`)) {
+    throw new Error('Cargo.lock has no [[package]] entry for "tiili".');
+  }
+  return next;
+}
+
+/** 0:42, 7:26 or 1:02:05 for a number of milliseconds. */
+export function formatDuration(ms) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+const PLATFORM = { macos: "macOS", windows: "Windows", ubuntu: "Linux" };
+
+/** One line of the build view for a workflow job from `gh run view --json jobs`; `frame` is the spinner frame. */
+export function describeJob(job, frame) {
+  const os = /\((\w+)-/.exec(job.name)?.[1];
+  const name = (PLATFORM[os] ?? job.name).padEnd(8);
+  if (job.status === "completed") {
+    const took = job.startedAt && job.completedAt ? `  ${formatDuration(Date.parse(job.completedAt) - Date.parse(job.startedAt))}` : "";
+    if (job.conclusion === "success") return `✓ ${name}done${took}`;
+    if (job.conclusion === "skipped") return `– ${name}skipped`;
+    return `✗ ${name}${job.conclusion ?? "failed"}${took}`;
+  }
+  if (job.status !== "in_progress") return `· ${name}waiting for a runner`;
+  const steps = job.steps ?? [];
+  const current = steps.find((s) => s.status === "in_progress") ?? steps.find((s) => s.status !== "completed");
+  const done = steps.filter((s) => s.status === "completed").length;
+  const label = current ? current.name.replace(/^Run /, "") : "starting";
+  return `${frame} ${name}${label}  (step ${Math.min(done + 1, steps.length || 1)}/${steps.length || "?"})`;
+}
+
 // --- side effects -------------------------------------------------------------------------------------------------
 
+let rootDir;
 // The repository the command runs in (npm runs scripts from the package root), not the script's folder: the script
-// may be a fresh copy from origin/hv/main in a temporary folder.
-const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-const SELF = fileURLToPath(import.meta.url);
-const LATEST_ENV = "TIILI_RELEASE_LATEST";
-
-function out(command, args, cwd = ROOT) {
-  return execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+// may be a fresh copy from origin/main in a temporary folder.
+function root() {
+  rootDir ??= execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  return rootDir;
 }
 
-function run(command, args, cwd = ROOT) {
-  execFileSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+const execFileAsync = promisify(execFile);
+
+function out(command, args) {
+  return execFileSync(command, args, { cwd: root(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function tryOut(command, args, cwd = ROOT) {
+function tryOut(command, args) {
   try {
-    return out(command, args, cwd);
+    return out(command, args);
   } catch {
     return undefined;
   }
 }
 
-function sleep(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+async function outAsync(command, args) {
+  return (await execFileAsync(command, args, { cwd: root(), encoding: "utf8" })).stdout.trim();
 }
+
+function run(command, args) {
+  execFileSync(command, args, { cwd: root(), stdio: "inherit", shell: process.platform === "win32" });
+}
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 function step(text) {
   console.log(`\n▸ ${text}`);
 }
 
-function fetchOrigin() {
-  out("git", ["fetch", "--quiet", "--tags", "origin", MAIN, INTEGRATION]);
+/**
+ * A block of status lines redrawn in place on a terminal, with a spinner frame ticking every 100 ms. Off a terminal
+ * (a log file, CI) it prints each line only when its text changes.
+ */
+function liveView(render) {
+  const tty = process.stdout.isTTY;
+  let frame = 0;
+  let drawn = 0;
+  let printed = [];
+  const draw = () => {
+    const lines = render(SPINNER[frame % SPINNER.length]);
+    if (tty) {
+      let text = drawn ? `\x1b[${drawn}A` : "";
+      for (const line of lines) text += `\r\x1b[2K  ${line}\n`;
+      process.stdout.write(text);
+      drawn = lines.length;
+    } else {
+      // Compared without the spinner and the clock, so a line prints again only when its text really changes.
+      const shown = lines.map((line) => line.replace(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g, "…"));
+      const plain = shown.map((line) => line.replace(/\d+:\d\d(:\d\d)?/g, ""));
+      plain.forEach((line, i) => {
+        if (line !== printed[i]) console.log(`  ${shown[i]}`);
+      });
+      printed = plain;
+    }
+    frame++;
+  };
+  draw();
+  const timer = tty ? setInterval(draw, 100) : setInterval(draw, 5000);
+  return {
+    stop() {
+      clearInterval(timer);
+      draw();
+    },
+  };
 }
 
-function versionOn(branch) {
-  return JSON.parse(out("git", ["show", `origin/${branch}:package.json`])).version;
+function fetchOrigin() {
+  out("git", ["fetch", "--quiet", "--tags", "--force", "origin", MAIN]);
 }
 
 function remoteTags() {
@@ -152,153 +228,21 @@ function releaseState(tag) {
   return json ? JSON.parse(json) : undefined;
 }
 
-/** Polls `done` until it returns true, printing `status()` whenever it changes. */
-function waitFor(what, done, status = () => undefined) {
-  let last;
-  for (;;) {
-    fetchOrigin();
-    if (done()) return;
-    const now = status() ?? `waiting for ${what}`;
-    if (now !== last) console.log(`  ${now}`);
-    last = now;
-    sleep(POLL_MS);
-  }
-}
-
-function cardStatus(branch) {
-  const line = tryOut("hv", ["card", branch])?.split("\n")[0];
-  if (!line) return undefined;
-  const parts = line.split(" · ");
-  const waiting = parts.find((part) => part.startsWith("waiting on "));
-  return `fast-lane card ${parts[1]}${waiting ? `, ${waiting}` : ""}`;
-}
-
-function bump(version) {
-  const tag = `v${version}`;
-  const branch = `release/${tag}`;
-  if (compareVersions(versionOn(INTEGRATION), version) >= 0) {
-    console.log(`  ${INTEGRATION} already has ${versionOn(INTEGRATION)}`);
-    return;
-  }
-  if (cardStatus(branch) === undefined) {
-    const dir = mkdtempSync(join(tmpdir(), "tiili-release-"));
-    const tree = join(dir, "tree");
-    out("git", ["worktree", "add", "--quiet", "--no-track", "-b", branch, tree, `origin/${INTEGRATION}`]);
-    try {
-      const edit = (file, change) => writeFileSync(join(tree, file), change(readFileSync(join(tree, file), "utf8")));
-      edit("package.json", (text) => setJsonVersion(text, version));
-      edit("src-tauri/tauri.conf.json", (text) => setJsonVersion(text, version));
-      edit("src-tauri/Cargo.toml", (text) => setCargoVersion(text, version));
-      run("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], tree);
-      if (existsSync(join(tree, "src-tauri", "Cargo.lock"))) {
-        run("cargo", ["update", "--quiet", "-p", "tiili", "--manifest-path", "src-tauri/Cargo.toml"], tree);
-      }
-      out("git", ["commit", "--quiet", "--all", "-m", `Release ${tag}`], tree);
-      run("hv", ["fast-lane", branch, "--title", `Release ${tag}`], tree);
-    } finally {
-      out("git", ["worktree", "remove", "--force", tree]);
-      tryOut("git", ["branch", "-D", branch]);
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-  waitFor(
-    `${branch} to merge into ${INTEGRATION}`,
-    () => versionOn(INTEGRATION) === version,
-    () => cardStatus(branch),
-  );
-}
-
-function hvApi() {
-  const home = process.env.HV_HOME ?? join(homedir(), "Library", "Application Support", "harvaaja");
-  const configFile = join(home, "config.json");
-  const config = existsSync(configFile) ? JSON.parse(readFileSync(configFile, "utf8")) : {};
-  const token = readFileSync(join(home, "owner.credential"), "utf8").trim();
-  const base = `http://127.0.0.1:${config.port ?? 7317}/api/v2`;
-  return async (name, input) => {
-    const response = await fetch(`${base}/commands/${name}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "x-harvaaja-client": "tiili-release",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(input),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`hv ${name}: ${body?.error?.message ?? response.status}`);
-    return body;
-  };
-}
-
-async function promote(version) {
-  if (versionOn(MAIN) === version) {
-    console.log(`  ${MAIN} already has ${version}`);
-    return;
-  }
-  const ahead = out("git", ["log", "--oneline", "--no-merges", `origin/${MAIN}..origin/${INTEGRATION}`]);
-  console.log(`  ${INTEGRATION} carries along:\n${ahead.replace(/^/gm, "    ")}`);
-  const workspaceId = JSON.parse(out("hv", ["here", "--json"])).workspace.id;
-  await hvApi()("promote", { workspaceId, merge: "auto" });
-  waitFor(
-    `the promotion pull request to merge into ${MAIN}`,
-    () => versionOn(MAIN) === version,
-    () => {
-      const pr = tryOut("gh", [
-        "pr", "list", "--base", MAIN, "--search", "Promote hv/main to main in:title",
-        "--json", "url", "--jq", ".[0].url",
-      ]);
-      return pr ? `waiting for ${pr} to merge (it merges by itself once its checks pass)` : undefined;
-    },
-  );
-}
-
-function tagMain(version) {
-  const tag = `v${version}`;
-  if (remoteTags().includes(tag)) {
-    console.log(`  ${tag} is already on origin`);
-    return;
-  }
-  if (versionOn(MAIN) !== version) throw new Error(`${MAIN} has ${versionOn(MAIN)}, not ${version}; not tagging.`);
-  const commit = out("git", ["rev-parse", `origin/${MAIN}`]);
-  // Only a tag is made and pushed; the checkout's branch and HEAD stay as they are.
-  if (!tryOut("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`])) {
-    out("git", ["tag", "-a", tag, commit, "-m", `Release ${tag}`]);
-  }
-  out("git", ["push", "--quiet", "origin", `refs/tags/${tag}`]);
-  console.log(`  pushed ${tag} at ${commit.slice(0, 7)}`);
-}
-
-function buildAndPublish(version) {
-  const tag = `v${version}`;
-  let runId;
-  waitFor(`the release workflow for ${tag} to start`, () => {
-    runId = tryOut("gh", [
-      "run", "list", "--workflow", "release.yml", "--branch", tag, "--limit", "1",
-      "--json", "databaseId", "--jq", ".[0].databaseId",
-    ]);
-    return Boolean(runId);
-  });
-  run("gh", ["run", "watch", runId, "--exit-status", "--interval", "30"]);
-  run("gh", ["release", "edit", tag, "--draft=false", "--latest"]);
-  console.log(`\nReleased ${tag}: ${releaseState(tag)?.url ?? ""}`);
-  console.log("The website and the README badge pick it up as the latest release.");
-}
-
 /**
- * Runs origin/hv/main's copy of this script instead of this one when they differ, so a checkout that is behind still
+ * Runs origin/main's copy of this script instead of this one when they differ, so a checkout that is behind still
  * releases with the newest flow and never needs a pull first. True when the newer copy ran.
  */
 function runLatest() {
   if (process.env[LATEST_ENV]) return false;
-  const latest = tryOut("git", ["show", `origin/${INTEGRATION}:scripts/release.mjs`]);
-  if (!latest || latest === readFileSync(SELF, "utf8").trim()) return false;
+  const latest = tryOut("git", ["show", `origin/${MAIN}:scripts/release.mjs`]);
+  if (!latest || latest === readFileSync(fileURLToPath(import.meta.url), "utf8").trim()) return false;
   const dir = mkdtempSync(join(tmpdir(), "tiili-release-script-"));
   const script = join(dir, "release.mjs");
   writeFileSync(script, `${latest}\n`);
-  console.log(`Using the newest release script from origin/${INTEGRATION}.`);
+  console.log(`Using the newest release script from origin/${MAIN}.`);
   try {
     execFileSync(process.execPath, [script, ...process.argv.slice(2)], {
-      cwd: ROOT,
+      cwd: root(),
       stdio: "inherit",
       env: { ...process.env, [LATEST_ENV]: "1" },
     });
@@ -309,6 +253,96 @@ function runLatest() {
   }
   return true;
 }
+
+function tagMain(version, latest) {
+  const tag = `v${version}`;
+  if (remoteTags().includes(tag)) {
+    console.log(`  ${tag} is already on origin`);
+    return;
+  }
+  const missing = ["scripts/stamp-version.mjs", "scripts/release-notes.mjs"].filter(
+    (file) => tryOut("git", ["cat-file", "-e", `origin/${MAIN}:${file}`]) === undefined,
+  );
+  if (missing.length) {
+    throw new Error(
+      `${MAIN}'s release workflow is older than this release flow (no ${missing.join(", ")}); press Release on the board once to bring it to ${MAIN}.`,
+    );
+  }
+  const commit = out("git", ["rev-parse", `origin/${MAIN}`]);
+  if (latest !== "0.0.0") {
+    const since = out("git", ["log", "--oneline", "--no-merges", `v${latest}..${commit}`]);
+    if (!since) throw new Error(`nothing is new on ${MAIN} since v${latest}.`);
+    const lines = since.split("\n");
+    console.log(`  ${lines.length} commit${lines.length === 1 ? "" : "s"} since v${latest}:`);
+    for (const line of lines.slice(0, 15)) console.log(`    ${line}`);
+    if (lines.length > 15) console.log(`    … and ${lines.length - 15} more`);
+  }
+  // Only a tag is made and pushed; the checkout's branch and HEAD stay as they are.
+  if (!tryOut("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`])) {
+    out("git", ["tag", "-a", tag, commit, "-m", `Release ${tag}`]);
+  }
+  out("git", ["push", "--quiet", "origin", `refs/tags/${tag}`]);
+  console.log(`  pushed ${tag} at ${commit.slice(0, 7)}`);
+}
+
+/** How long the last successful release workflow took, for the estimate; undefined when there is none. */
+function lastDuration() {
+  const json = tryOut("gh", [
+    "run", "list", "--workflow", WORKFLOW, "--status", "success", "--limit", "1", "--json", "startedAt,updatedAt",
+  ]);
+  const last = json ? JSON.parse(json)[0] : undefined;
+  return last ? Date.parse(last.updatedAt) - Date.parse(last.startedAt) : undefined;
+}
+
+async function followBuild(tag) {
+  const estimate = lastDuration();
+  const startedWaiting = Date.now();
+  let runId;
+  let state = { status: "queued", jobs: [] };
+  const view = liveView((frame) => {
+    const started = state.startedAt ? Date.parse(state.startedAt) : startedWaiting;
+    const elapsed = formatDuration(Date.now() - started);
+    const of = estimate ? ` of about ${formatDuration(estimate)}` : "";
+    if (!runId) return [`${frame} waiting for GitHub to start the release workflow  ${elapsed}`];
+    const jobs = state.jobs.filter((job) => job.name !== "draft" || job.status !== "completed" || job.conclusion !== "success");
+    return [`${frame} building ${tag}  ${elapsed}${of}`, ...jobs.map((job) => `  ${describeJob(job, frame)}`)];
+  });
+  try {
+    for (;;) {
+      if (!runId) {
+        const id = await outAsync("gh", [
+          "run", "list", "--workflow", WORKFLOW, "--branch", tag, "--limit", "1", "--json", "databaseId", "--jq", ".[0].databaseId",
+        ]).catch(() => "");
+        if (id) runId = id;
+      }
+      if (runId) {
+        const json = await outAsync("gh", ["run", "view", runId, "--json", "status,conclusion,startedAt,jobs,url"]).catch(() => "");
+        if (json) state = JSON.parse(json);
+        if (state.status === "completed") break;
+      }
+      await sleep(5000);
+    }
+  } finally {
+    view.stop();
+  }
+  if (state.conclusion !== "success") {
+    const failed = state.jobs.filter((job) => job.conclusion && !["success", "skipped"].includes(job.conclusion));
+    throw new Error(
+      `the release workflow ended ${state.conclusion}${failed.length ? ` in ${failed.map((job) => job.name).join(", ")}` : ""}.\n` +
+        `  See ${state.url} or run: gh run view ${runId} --log-failed`,
+    );
+  }
+}
+
+async function buildAndPublish(version) {
+  const tag = `v${version}`;
+  if (releaseState(tag)?.isDraft !== false) await followBuild(tag);
+  run("gh", ["release", "edit", tag, "--draft=false", "--latest"]);
+  console.log(`\nReleased ${tag}: ${releaseState(tag)?.url ?? ""}`);
+  console.log("The website and the README badge pick it up as the latest release.");
+}
+
+let started = false;
 
 async function main() {
   const arg = process.argv[2];
@@ -328,26 +362,16 @@ async function main() {
   if (resume) {
     console.log(`v${version} is tagged but not published yet: finishing it first.`);
   } else {
-    const integration = versionOn(INTEGRATION);
-    if (compareVersions(integration, latest) > 0 && integration !== version) {
-      throw new Error(
-        `${INTEGRATION} already has ${integration}, not ${version}; release that one with: npm run release ${integration}`,
-      );
-    }
-    console.log(`Releasing v${version} (latest is v${latest}).`);
-    step(`Bump the version on ${INTEGRATION} through the fast lane`);
-    bump(version);
-    step(`Release: promote ${INTEGRATION} to ${MAIN}`);
-    await promote(version);
+    console.log(`Releasing v${version} from ${MAIN} (latest is v${latest}).`);
     step(`Tag ${MAIN} v${version}`);
-    tagMain(version);
+    tagMain(version, latest);
   }
-  step("Build the installers and publish the release");
-  buildAndPublish(version);
+  step("Build the installers");
+  await buildAndPublish(version);
 }
 
 // realpath on both sides: on macOS the temporary folder is reached through the /var -> /private/var link.
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(SELF)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   main().catch((error) => {
     console.error(`\nnpm run release: ${error instanceof Error ? error.message : error}`);
     if (started) console.error("Run the same command again to carry on from where it stopped.");

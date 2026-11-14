@@ -73,6 +73,7 @@ export function tauriBackend(): Backend {
         return notesChanged.subscribe(listener);
       },
     },
+    setTitle: (title) => getCurrentWindow().setTitle(title),
     closeWindow: () => getCurrentWindow().close(),
     newWindow: (cwd) => invoke("window_new", { cwd }),
     moves: {

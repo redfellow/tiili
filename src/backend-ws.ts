@@ -166,6 +166,7 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     setAppIcon: async () => undefined,
     // The dev server has no files of its own for notes: the browser keeps them.
     notes: localNoteStore(localStorage),
+    setTitle: async () => undefined,
     closeWindow: async () => undefined,
     // The dev server is one browser page: no other windows, so no pane moves and no settings window; settings show
     // in the page instead.
