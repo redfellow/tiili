@@ -46,7 +46,7 @@ pub fn scrub(appdir: Option<&str>, env: impl Iterator<Item = (String, String)>) 
                 .copied()
                 .filter(|entry| !inside(appdir, entry))
                 .collect();
-            if kept.is_empty() {
+            if kept.iter().all(|entry| entry.is_empty()) {
                 edits.push(EnvEdit::Remove(key));
             } else if kept.len() < entries.len() {
                 edits.push(EnvEdit::Set(key, kept.join(":")));
@@ -173,6 +173,18 @@ mod tests {
                 Some(APPDIR),
                 vec![("XDG_DATA_DIRS", "/tmp/.mount_ABC/usr/share::/usr/share")],
                 vec![set("XDG_DATA_DIRS", ":/usr/share")],
+            ),
+            (
+                "LD_LIBRARY_PATH left with only an empty entry is removed",
+                Some(APPDIR),
+                vec![("LD_LIBRARY_PATH", "/tmp/.mount_ABC/usr/lib/:")],
+                vec![remove("LD_LIBRARY_PATH")],
+            ),
+            (
+                "trailing empty entry is kept beside a surviving one",
+                Some(APPDIR),
+                vec![("XDG_DATA_DIRS", "/tmp/.mount_ABC/usr/share/:/usr/share:")],
+                vec![set("XDG_DATA_DIRS", "/usr/share:")],
             ),
             (
                 "trailing slash on APPDIR still matches",
