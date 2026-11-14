@@ -175,7 +175,7 @@ The user SHALL be able to choose the shell prompt tiili gives its shells: Off (t
 - **THEN** the pane's prompt redraws as the Tiili prompt without anything typed into the shell
 
 #### Scenario: Other shells switch at next prompt
-- **WHEN** a bash pane started with Off is running a command and the user saves Tiili
+- **WHEN** a bash or PowerShell pane started with Off is running a command and the user saves Tiili
 - **THEN** the pane switches to the Tiili prompt at its next prompt, and nothing is typed into the shell
 
 #### Scenario: Own prompt wins
