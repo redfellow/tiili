@@ -4,6 +4,7 @@ pub mod attention;
 pub mod bridge;
 pub mod command;
 pub mod cwd;
+pub mod links;
 pub mod notes;
 pub mod pty;
 pub mod repo;
@@ -138,6 +139,12 @@ impl SessionReports {
             map.remove(&id);
         }
     }
+}
+
+/// Session `id`'s latest reported folder and the host it is on (`None` when local), once a report has arrived.
+pub(crate) fn pane_place(app: &AppHandle, id: SessionId) -> Option<(String, Option<String>)> {
+    let (cwd, _) = app.state::<SessionReports>().latest(id);
+    cwd.map(|event| (event.cwd, event.host))
 }
 
 /// The window session `id`'s events go to: the one it belongs to now, or `spawner` (the window that started it)
@@ -591,7 +598,11 @@ pub fn run() {
             attention::attention_mark,
             attention::attention_clear,
             attention::attention_list,
-            attention::attention_next
+            attention::attention_next,
+            links::link_open,
+            links::path_resolve,
+            links::path_open,
+            links::path_reveal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");

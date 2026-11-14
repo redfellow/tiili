@@ -48,6 +48,10 @@ export function tauriBackend(): Backend {
       listen<{ id: number; code: number }>("pty-exit", (event) => callback(event.payload.id, event.payload.code)),
     readClipboard: () => readText(),
     writeClipboard: (text) => writeText(text),
+    openLink: (uri, confirmed) => invoke("link_open", { uri, confirmed }),
+    resolvePaths: (id, candidates) => invoke("path_resolve", { paneId: id, candidates }),
+    openPath: (abs) => invoke("path_open", { abs }),
+    revealPath: (abs) => invoke("path_reveal", { abs }),
     contextMenu: async (items) => {
       const menu = await Menu.new({ items: nativeItems(items) });
       return async (event) => {
