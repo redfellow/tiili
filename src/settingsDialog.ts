@@ -686,7 +686,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           "Once a day, when tiili opens, it asks GitHub for the latest version: one anonymous request."))),
     section("Remote shells",
       "Add the snippet for your shell to a remote machine's shell startup file, and a pane that connects there " +
-      "shows that machine's folder and repository. tmux and screen on the remote machine hide it.",
+      "shows that machine's folder and repository. tmux and screen on the remote machine hide it. A snippet " +
+      "added before tiili grouped git worktrees under their repository needs replacing with this one.",
       element("div", { className: "settings-snippet-head" }, shell.el, copy),
       snippet),
   ];
