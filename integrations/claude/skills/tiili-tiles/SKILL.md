@@ -18,11 +18,14 @@ command -v gh
 command -v claude
 command -v tiili
 gh auth status
+[ -n "$TIILI_SOCKET" ]
 ```
 
 - If `gh`, `claude` or `tiili` is not on PATH, say plainly which one is missing (for example "`tiili` is not on
   PATH: install tiili and make sure its command is on PATH").
 - If `gh auth status` fails, say that `gh` is not signed in and that `gh auth login` fixes it.
+- If `TIILI_SOCKET` is unset (`[ -n "$TIILI_SOCKET" ]` fails), say that `tiili open` only works from inside a tiili
+  pane, so Claude Code has to run in a tiili pane for this skill to open tiles.
 
 If any check fails, stop here and open no tiles.
 

@@ -170,8 +170,8 @@ fn connect(endpoint: &Path) -> io::Result<std::fs::File> {
 }
 
 /// A release build on Windows is a GUI program with no console of its own: its output goes to the console of the
-/// shell that ran it, unless it was redirected.
-fn attach_console() {
+/// shell that ran it, unless it was redirected. Every `tiili <subcommand>` path calls this before writing output.
+pub fn attach_console() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Console::{

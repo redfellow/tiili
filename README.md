@@ -90,7 +90,7 @@ tiili comes with a [Claude Code](https://claude.com/claude-code) skill, `tiili-t
 tiles: one terminal per task, each running its own Claude session. Its first recipe reviews pull requests side by
 side: ask Claude to review PRs 12 and 15 (or just "the open PRs" for the three most recent), and each gets its own
 git worktree and tile. It needs [`gh`](https://cli.github.com) (signed in with `gh auth login`), `claude` and
-`tiili` on your PATH.
+`tiili` on your PATH, and Claude Code has to run inside a tiili pane: `tiili open` works only from one.
 
 Install it with:
 

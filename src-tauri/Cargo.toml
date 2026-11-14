@@ -50,8 +50,8 @@ required-features = ["dev-bridge"]
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# The control channel's named pipe, the CLI's console (src/control_server.rs, src/cli.rs), and attaching
-# `tiili <subcommand>` to the calling console (src/main.rs): release builds are GUI-subsystem apps, which start without one.
+# The control channel's named pipe and the console of `tiili <subcommand>` (src/control_server.rs, src/cli.rs):
+# release builds are GUI-subsystem apps, which start without one.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Console", "Win32_System_IO", "Win32_System_Threading"] }
 
