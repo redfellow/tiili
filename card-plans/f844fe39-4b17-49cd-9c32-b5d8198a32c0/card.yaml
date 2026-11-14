@@ -6,3 +6,12 @@ x-harvaaja-card: f844fe39-4b17-49cd-9c32-b5d8198a32c0
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds a new observable capability (in-app updates), new settings, and
+    changes the release build contract; no active change covers it.
+  citations:
+    - openspec/specs/settings/spec.md#Settings tab contents
+    - openspec/specs/packaging/spec.md#Release build on tag
+    - openspec/changes is empty apart from archive
+  revision: 91958d0b-24c3-42a7-b1b3-8f638bb3237f
