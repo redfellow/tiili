@@ -639,14 +639,14 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     ask(false, true);
   });
   keepSettings.addEventListener("click", () => ask(false, true));
-  // Esc while asking cancels the question, not the dialogue: a prevented keydown keeps the dialogue's cancel
-  // from firing, and the page's Esc handler skips it.
-  confirm.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || confirm.hidden) return;
+  // Esc while asking cancels the question, not the dialogue, wherever focus is: caught on the way down, a
+  // prevented keydown keeps the dialogue's cancel from firing, and the page's Esc handler skips it.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || confirm.hidden || !form.isConnected) return;
     event.preventDefault();
     event.stopPropagation();
     ask(false, true);
-  });
+  }, true);
   save.addEventListener("click", () => void commit());
   cancel.addEventListener("click", () => void revert());
   closeButton.addEventListener("click", () => void revert());
