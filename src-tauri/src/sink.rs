@@ -79,7 +79,7 @@ impl SessionSinks {
             .lock()
             .ok()
             .and_then(|map| map.get(&id).cloned())
-            .ok_or_else(|| format!("no session {id}"))?;
+            .ok_or_else(|| "Could not move the pane: its shell has ended.".to_string())?;
         let mut sink = sink.lock().map_err(|e| e.to_string())?;
         f(&mut sink);
         Ok(())

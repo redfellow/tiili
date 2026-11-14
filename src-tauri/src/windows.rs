@@ -374,8 +374,20 @@ pub async fn pane_move(
             }
             let _ = to.unminimize();
             let _ = to.set_focus();
-            to.emit(PANE_ARRIVE_EVENT, PaneArrive { token })
-                .map_err(|e| format!("Could not move the pane: {e}"))?;
+            // Sent to the target only: an app-wide emit would let any window take the pane.
+            if let Err(error) = app.emit_to(
+                label.as_str(),
+                PANE_ARRIVE_EVENT,
+                PaneArrive {
+                    token: token.clone(),
+                },
+            ) {
+                moves.take(&token);
+                if let Some(id) = session {
+                    sessions.reassign(id, window.label());
+                }
+                return Err(format!("Could not move the pane: {error}"));
+            }
         }
     }
     Ok(())
