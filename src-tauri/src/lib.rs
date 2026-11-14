@@ -286,6 +286,7 @@ fn window_destroyed(app: &AppHandle, label: &str) {
     }
     app.state::<windows::LastFocused>().forget(label);
     app.state::<windows::WindowNames>().remove(label);
+    settings::window_destroyed(app, label);
     refresh_move_menu(app);
 }
 
@@ -518,6 +519,7 @@ pub fn run() {
             pty_cwd,
             settings::settings_load,
             settings::settings_save,
+            settings::settings_open,
             app_icon::app_icon_set,
             notes::heynote_load,
             notes::heynote_write,

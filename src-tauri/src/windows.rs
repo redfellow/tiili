@@ -321,6 +321,10 @@ pub fn window_list(
 /// The calling window's focused pane's chip text is now `name`; Move to Window menus list it under that name.
 #[tauri::command]
 pub fn window_set_name(app: AppHandle, window: WebviewWindow, name: String) {
+    // A settings window holds no panes, so it is never a Move to Window target.
+    if crate::settings::is_settings_window(window.label()) {
+        return;
+    }
     app.state::<WindowNames>().set(window.label(), &name);
     crate::refresh_move_menu(&app);
 }
