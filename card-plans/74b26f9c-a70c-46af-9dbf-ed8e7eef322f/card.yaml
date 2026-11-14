@@ -1,0 +1,17 @@
+format: 1
+slug: on-hold-openspec-3
+title: "On hold: openspec"
+x-harvaaja-card: 74b26f9c-a70c-46af-9dbf-ed8e7eef322f
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: "Behaviour unchanged: only reword three over-long requirements in the
+    main repository-colours spec, moving detail into scenarios, so strict
+    validation passes again."
+  citations:
+    - openspec/specs/repository-colours/spec.md requirements[0],[2],[6] (>500
+      chars)
+  revision: 4773216b-dfef-497c-a20a-0f22c6b84bfa
