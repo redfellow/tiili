@@ -24,6 +24,8 @@ derived from Waffle's binaries, name or artwork.
 - **Copy and paste that work on every platform.** ⌘C/⌘V on macOS, through a real Edit menu. Ctrl+Shift+C/V on
   Windows and Linux, because plain Ctrl+C must still interrupt the running program. Right-click offers Copy and
   Paste too.
+- **Updates in the app.** Once a day at startup tiili checks its latest GitHub release and offers to install a newer
+  version. The check is one anonymous request to GitHub and can be turned off in Settings.
 - **Native feel, small footprint.** A real application per platform, not a browser tab, and far lighter than an
   Electron app.
 
@@ -48,7 +50,8 @@ terminal ecosystem). The Rust side of the Tauri app (PTYs, git detection) would 
 ## Out of scope for now
 
 - Remote sessions (SSH) and session persistence across restarts.
-- Any account, sync or telemetry.
+- Any account, sync or telemetry. The daily update check sends nothing about the user: it is one anonymous request
+  for the release's `latest.json`.
 
 ## Brand
 

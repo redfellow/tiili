@@ -10,6 +10,7 @@ pub mod settings;
 pub mod shell_integration;
 pub mod sink;
 pub mod tints;
+pub mod updates;
 pub mod window_state;
 pub mod windows;
 
@@ -456,6 +457,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_filter(windows::is_remembered)
@@ -530,6 +534,7 @@ pub fn run() {
             settings::settings_save,
             settings::settings_open,
             app_icon::app_icon_set,
+            updates::update_install_kind,
             notes::heynote_load,
             notes::heynote_write,
             notes::heynote_remove,

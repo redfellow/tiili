@@ -63,6 +63,11 @@ export interface InactiveSettings {
   desaturate: boolean;
 }
 
+export interface UpdateSettings {
+  /** tiili checks GitHub for a new version at most once a day when it starts. */
+  autoCheck: boolean;
+}
+
 /**
  * The Dock icon on macOS: the one matching the OS appearance, or always the light or the dark one. Other systems
  * always follow the OS.
@@ -92,6 +97,7 @@ export interface Settings {
   appIcon: AppIcon;
   /** Applies to open panes and new ones. */
   prompt: PromptId;
+  updates: UpdateSettings;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -121,6 +127,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
+  updates: { autoCheck: true },
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
@@ -167,6 +174,7 @@ export function normalize(value: unknown): Settings {
   const responsive = isRecord(raw.responsive) ? raw.responsive : {};
   const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
   const inactive = isRecord(raw.inactive) ? raw.inactive : {};
+  const updates = isRecord(raw.updates) ? raw.updates : {};
   return {
     theme: THEME_IDS.includes(raw.theme as ThemeId) ? (raw.theme as ThemeId) : DEFAULT_SETTINGS.theme,
     font: {
@@ -210,5 +218,8 @@ export function normalize(value: unknown): Settings {
     },
     appIcon: APP_ICONS.includes(raw.appIcon as AppIcon) ? (raw.appIcon as AppIcon) : DEFAULT_SETTINGS.appIcon,
     prompt: PROMPT_IDS.includes(raw.prompt as PromptId) ? (raw.prompt as PromptId) : DEFAULT_SETTINGS.prompt,
+    updates: {
+      autoCheck: typeof updates.autoCheck === "boolean" ? updates.autoCheck : DEFAULT_SETTINGS.updates.autoCheck,
+    },
   };
 }

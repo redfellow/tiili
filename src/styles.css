@@ -793,6 +793,51 @@ body.settings-window {
   user-select: text;
 }
 
+/* Updates: the Check for updates button with its result beside it. */
+.settings-update-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-update-result {
+  color: var(--muted);
+}
+
+/* The update dialogue: the settings dialogue's look, with the release notes in a sunken block that scrolls. */
+dialog.update-dialog {
+  width: min(480px, calc(100vw - var(--space-6)));
+}
+
+.update-summary {
+  margin: 0;
+}
+
+.update-notes {
+  max-height: 40vh;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.update-notes[hidden],
+.update-progress[hidden] {
+  display: none;
+}
+
+.update-progress {
+  width: 100%;
+  accent-color: var(--focus);
+}
+
 .settings-layout-icon {
   display: flex;
   flex: none;

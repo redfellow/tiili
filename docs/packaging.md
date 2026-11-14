@@ -158,7 +158,27 @@ build's environment only when it is set, because Tauri may treat an empty variab
 Adding the secrets in the repository settings turns signing on with no edit to the workflow. For Windows signing,
 add a step before `npm run bundle` that imports the certificate and sets `TAURI_CONFIG` as shown above.
 
+### Updater bundles and `latest.json`
+
+Installed tiili checks `https://github.com/redfellow/tiili/releases/latest/download/latest.json` once a day at
+startup (Settings → Behaviour → Updates turns it off). That is one anonymous request to GitHub; nothing else is
+sent. The updater only installs bundles signed with the key whose public half is `plugins.updater.pubkey` in
+`src-tauri/tauri.conf.json`.
+
+- Add the private key and its password as the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (made with `npx tauri signer generate`).
+- With them, each build job also makes and uploads the signed updater bundle and its `.sig`: the `.app.tar.gz` on
+  macOS, the setup `.exe` on Windows and the `.AppImage` on Linux. A `manifest` job then runs
+  `scripts/updater-manifest.mjs` on the `.sig` files and the release notes and uploads `latest.json` to the draft.
+- Without them, the installers are still built and uploaded, without updater bundles; the `manifest` job skips
+  `latest.json` with a warning, so installed apps don't see that release. `npm run bundle` on your own machine
+  works the same way: without `TAURI_SIGNING_PRIVATE_KEY` it leaves the updater bundles out.
+- A `.deb` install can't replace itself, so when it finds a new version it shows the release notes with a link to
+  the release page instead of installing.
+
 ### Publishing
 
 The release stays a draft. When all three build jobs have finished, open the draft on GitHub, check it holds the
-`.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb`, and publish it by hand.
+`.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb` (and, with the updater secrets set, the updater bundles,
+their `.sig` files and `latest.json`), and publish it by hand. Installed apps see a release only once it is
+published, as GitHub's latest release.
