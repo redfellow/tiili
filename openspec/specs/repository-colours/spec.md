@@ -6,7 +6,7 @@ How tiili tells repositories apart at a glance: each pane follows its shell's wo
 ## Requirements
 
 ### Requirement: Pane follows its working directory
-Each pane SHALL know its shell's current working directory and its git repository, updated from OSC 7 on all platforms and by polling the shell process on macOS and Linux. An OSC 7 report SHALL keep the host it names, and SHALL be looked up on the local disk only when the pane is local (see Remote panes). The repository SHALL be found at the nearest `.git`; when that is a file whose `gitdir:` (absolute or relative to its folder) holds a `commondir`, the pane is in a linked worktree and its repository is the common git folder; a `gitdir` without `commondir` (submodule, separate git dir) is its own repository; an unreadable or dangling pointer SHALL make the folder holding the `.git` file the repository. HEAD SHALL be re-read on every lookup, and on macOS and Linux the poll SHALL re-check the repository of a local pane every second even while an OSC 7 stands; Windows updates at each prompt.
+Each pane SHALL know its shell's current working directory and its git repository, updated from OSC 7 on all platforms and by polling the shell process on macOS and Linux. An OSC 7 report SHALL keep the host it names, and SHALL be looked up on the local disk only when the pane is local (see Remote panes).
 
 #### Scenario: Change directory into a repository
 - **WHEN** the user runs `cd` into a folder inside a git repository
@@ -16,9 +16,15 @@ Each pane SHALL know its shell's current working directory and its git repositor
 - **WHEN** a local shell sends OSC 7 `file://<this machine's hostname>/Users/red/tiili` and that folder is in a repository
 - **THEN** the pane shows that repository as before
 
+### Requirement: Repository lookup
+The repository SHALL be found at the nearest `.git`. When that is a file whose `gitdir:` (absolute or relative to its folder) holds a `commondir`, the pane is in a linked worktree and its repository is the common git folder. A `gitdir` without `commondir` (submodule, separate git dir) is its own repository. An unreadable or dangling pointer SHALL make the folder holding the `.git` file the repository.
+
 #### Scenario: Missing main checkout falls back
 - **WHEN** a worktree's `gitdir:` points at a folder that no longer exists
 - **THEN** the worktree folder is the pane's repository, named after it
+
+### Requirement: Repository lookup stays current
+HEAD SHALL be re-read on every lookup. On macOS and Linux the poll SHALL re-check the repository of a local pane every second even while an OSC 7 stands; Windows updates at each prompt.
 
 #### Scenario: Mid-run git switch
 - **WHEN** a program running in a worktree pane on macOS or Linux runs `git switch other`
@@ -52,11 +58,14 @@ Panes in the same repository SHALL share a project tint, assigned in order tint 
 - **THEN** it has the submodule's own tint, not the parent's
 
 ### Requirement: Title chip
-Each pane SHALL show a title chip naming its place and its command as `<place> · <command>`: the place is the repository name in its tint and label colour, or the folder name in a neutral style when outside any repository, where the pane stays untinted. In a linked worktree of a local repository the place SHALL be `<repository> › <branch>`, or `<repository> › <worktree name>` on a detached HEAD, the worktree name being git's `<name>` in `.git/worktrees/<name>`; the main checkout's place is the repository name alone. The command SHALL be the title the foreground program has set itself since it came to the foreground, otherwise the name of the pane's foreground process; at an idle prompt this is the shell's name.
+Each pane SHALL show a title chip naming its place and its command as `<place> · <command>`: the place is the repository name in its tint and label colour, or the folder name in a neutral style when outside any repository, where the pane stays untinted.
 
 #### Scenario: Outside a repository
 - **WHEN** a pane's cwd is not in a git repository
 - **THEN** its chip shows the folder name in the neutral style and the pane has no tint
+
+### Requirement: Title chip command
+The command part of the title chip SHALL be the title the foreground program has set itself since it came to the foreground, otherwise the name of the pane's foreground process; at an idle prompt this is the shell's name.
 
 #### Scenario: Program running
 - **WHEN** the user runs `top` in a pane in their home folder `red`
@@ -65,6 +74,9 @@ Each pane SHALL show a title chip naming its place and its command as `<place> �
 #### Scenario: Program sets its own title
 - **WHEN** the foreground program sends a window title
 - **THEN** the chip's command part shows that title until the foreground process changes
+
+### Requirement: Title chip in a linked worktree
+In a linked worktree of a local repository the chip's place SHALL be `<repository> › <branch>`, or `<repository> › <worktree name>` on a detached HEAD, the worktree name being git's `<name>` in `.git/worktrees/<name>`. The main checkout's place SHALL be the repository name alone.
 
 #### Scenario: Worktree on a branch
 - **WHEN** `claude` runs in a linked worktree of `tiili` on branch `brand/app-icon-15`
@@ -104,7 +116,7 @@ A pane SHALL become remote when an OSC 7 report names a host other than this mac
 - **THEN** the pane is remote with host `WSL` and its chip's place reads `WSL:red`
 
 ### Requirement: Remote repository report
-A remote pane SHALL take its repository root from the user variable `tiili_repo` sent with `OSC 1337 ; SetUserVar=tiili_repo=<base64>`, the repository being named after the root's last folder without a trailing `.git`. tiili's remote snippets SHALL report the main worktree's root (the first entry of `git worktree list --porcelain`), falling back to `git rev-parse --show-toplevel` where that fails; snippets installed before this change keep reporting the worktree root until reinstalled. An empty value SHALL mean no repository. The variable SHALL be ignored while the pane is local, and a pane that goes remote SHALL start without a repository until one is reported.
+A remote pane SHALL take its repository root from the user variable `tiili_repo` sent with `OSC 1337 ; SetUserVar=tiili_repo=<base64>`, the repository being named after the root's last folder without a trailing `.git`. An empty value SHALL mean no repository. The variable SHALL be ignored while the pane is local, and a pane that goes remote SHALL start without a repository until one is reported.
 
 #### Scenario: Repository reported
 - **WHEN** a remote pane on `build-box` receives `tiili_repo` with the base64 of `/srv/api`
@@ -121,6 +133,17 @@ A remote pane SHALL take its repository root from the user variable `tiili_repo`
 #### Scenario: Local shell sends the variable
 - **WHEN** a local pane receives `tiili_repo`
 - **THEN** its repository still comes from the local disk
+
+### Requirement: Remote snippets report the main worktree
+tiili's remote snippets SHALL report the main worktree's root (the first entry of `git worktree list --porcelain`), falling back to `git rev-parse --show-toplevel` where that fails. Snippets installed before this change keep reporting the worktree root until reinstalled.
+
+#### Scenario: Snippet in a linked worktree
+- **WHEN** a tiili remote snippet runs in a linked worktree of `/srv/api`
+- **THEN** it reports `/srv/api`, the main worktree's root, as `tiili_repo`
+
+#### Scenario: Worktree list fails
+- **WHEN** `git worktree list --porcelain` fails in a remote repository
+- **THEN** the snippet reports the output of `git rev-parse --show-toplevel`
 
 ### Requirement: Remote pane tint
 Remote panes SHALL be tinted from the same 16 project tints and assignment rule as repositories: panes with the same host and repository root share a tint, and a remote pane without a repository takes its host's tint. A remote repository SHALL never share a tint key with a local repository or another host's repository of the same path.
