@@ -1,0 +1,22 @@
+# Compiles the macOS app icon (src-tauri/icons/AppIcon.icon) into Assets.car with Xcode's actool, for when no Mac
+# with Xcode 26 is at hand. Run it by hand after `npm run icons` changed AppIcon.icon, download the Assets.car
+# artifact and commit it as src-tauri/icons/Assets.car. See docs/packaging.md.
+name: app-icon
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assets-car:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcrun actool --version --output-format human-readable-text
+      - run: node scripts/app-icon.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Assets.car
+          path: src-tauri/icons/Assets.car
+          if-no-files-found: error
