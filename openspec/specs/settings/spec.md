@@ -17,7 +17,7 @@ The app SHALL open a settings dialogue with ⌘, on macOS (also from the app men
 - **THEN** the settings dialogue opens
 
 ### Requirement: Settings dialogue placement
-The settings dialogue SHALL open in its own OS window, separate from the tiili window that opened it, so the user can move it anywhere on screen and resize it, including larger than the tiili window. It SHALL open centred over the tiili window that opened it and SHALL NOT dim or block that window. Opening settings again from a tiili window that already has its settings window open SHALL bring that settings window to the front instead of opening another. Closing a tiili window SHALL close its settings window without saving.
+The settings dialogue SHALL open in its own OS window, separate from the tiili window that opened it, so the user can move it anywhere on screen and resize it, including larger than the tiili window. It SHALL open centred over the tiili window that opened it and SHALL NOT dim or block that window.
 
 #### Scenario: Larger than the tiili window
 - **WHEN** the tiili window is smaller than the settings dialogue and the user opens settings
@@ -30,6 +30,10 @@ The settings dialogue SHALL open in its own OS window, separate from the tiili w
 #### Scenario: Open settings twice
 - **WHEN** the settings window is open and the user presses the settings shortcut in the same tiili window
 - **THEN** the existing settings window comes to the front and no second one opens
+
+#### Scenario: Closing the tiili window closes settings
+- **WHEN** the settings window is open and the user closes the tiili window that opened it
+- **THEN** the settings window closes without saving
 
 #### Scenario: Previews show in the owning window
 - **WHEN** the user changes the theme in the settings window
@@ -156,7 +160,7 @@ The Behaviour tab SHALL have a "Shrink text in small panes" checkbox (default on
 - **THEN** every pane uses the chosen font size
 
 ### Requirement: Prompt choice
-The user SHALL be able to choose the shell prompt tiili gives its shells: Off (the shell's own prompt), Classic, Minimal or Tiili. Off SHALL be the default and SHALL be marked "(default)"; an unknown or wrong-typed saved value SHALL load as Off. The choice SHALL apply to shells opened after it and to the local zsh, bash and PowerShell shells already open in the app, where those shells' own config left the default prompt. An open zsh shell SHALL redraw an idle prompt at once; other open shells SHALL switch at their next prompt. Nothing SHALL be typed into a shell to switch it.
+The user SHALL be able to choose the shell prompt tiili gives its shells: Off (the shell's own prompt), Classic, Minimal or Tiili. Off SHALL be the default and SHALL be marked "(default)"; an unknown or wrong-typed saved value SHALL load as Off. The choice SHALL apply to shells opened after it and to the local zsh, bash and PowerShell shells already open in the app, where those shells' own config left the default prompt.
 
 #### Scenario: Off by default
 - **WHEN** tiili starts with no saved settings, or the saved prompt is unknown
@@ -169,6 +173,10 @@ The user SHALL be able to choose the shell prompt tiili gives its shells: Off (t
 #### Scenario: Open panes switch
 - **WHEN** a zsh pane started with Off is idle at its prompt and the user saves Tiili
 - **THEN** the pane's prompt redraws as the Tiili prompt without anything typed into the shell
+
+#### Scenario: Other shells switch at next prompt
+- **WHEN** a bash pane started with Off is running a command and the user saves Tiili
+- **THEN** the pane switches to the Tiili prompt at its next prompt, and nothing is typed into the shell
 
 #### Scenario: Own prompt wins
 - **WHEN** a pane's shell config sets its own prompt and the user saves Classic
