@@ -155,6 +155,7 @@ export class Panes {
         return note !== undefined;
       },
       backend.moves ? () => panes.moveItems() : undefined,
+      () => panes.current()?.terminal?.links,
     );
     if (backend.moves) {
       const report = (error: unknown) => panes.report(error);
@@ -496,6 +497,7 @@ export class Panes {
   private showPlace(pane: Pane, place: PaneCwd): void {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
     pane.tint = paneTint(place);
+    pane.terminal?.links.placeChanged(`${place.host ?? ""}\0${place.cwd}`);
     showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
     if (pane === this.current()) this.reportName();
   }

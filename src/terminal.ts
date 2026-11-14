@@ -4,9 +4,11 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
 import type { Backend, SessionId } from "./backend";
+import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
+import { attachLinks, type PaneLinks } from "./terminalLinks";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
 /** Resizing settles this long before a pane re-fits and tells its shell the new size. */
@@ -15,6 +17,8 @@ const RESIZE_SETTLE_MS = 50;
 /** One pane's terminal and the shell session behind it. */
 export interface PaneTerminal {
   term: Terminal;
+  /** The pane's clickable links: URLs, OSC 8 hyperlinks and existing paths. */
+  links: PaneLinks;
   /** The working directory of the pane's shell, when it runs and the platform can read it. */
   cwd(): Promise<string | undefined>;
   /**
@@ -202,6 +206,10 @@ export async function openTerminal(
     term.write(`\r\n${String(error)}\r\n`);
   };
 
+  const links = attachLinks(term, container, backend, currentPlatform(), () => (running ? session : undefined), (error) =>
+    console.error(error),
+  );
+
   const spawn = async (dir?: string) => {
     session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes));
     running = true;
@@ -265,11 +273,13 @@ export async function openTerminal(
     term.textarea?.removeEventListener("focus", onFocus);
     term.textarea?.removeEventListener("blur", onBlur);
     running = false;
+    links.dispose();
     term.dispose();
   };
 
   return {
     term,
+    links,
     cwd: async () => {
       if (!running || session === undefined) return undefined;
       return backend.cwd(session);

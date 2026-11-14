@@ -1,5 +1,6 @@
 import type { AttentionMark } from "./attention";
 import type { NoteStore } from "./heynoteStore";
+import type { ResolvedPath } from "./links";
 import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon, PromptId, Settings } from "./settings";
 import type { WindowEntry } from "./windowMenu";
@@ -120,6 +121,20 @@ export interface Backend {
   onExit(callback: (id: SessionId, code: number) => void): Promise<() => void>;
   readClipboard(): Promise<string>;
   writeClipboard(text: string): Promise<void>;
+  /**
+   * Opens `uri` in the system's handler for its scheme. The core refuses forbidden schemes, and schemes other than
+   * `http`, `https` and `mailto` unless `confirmed` (the user agreed in tiili's dialog).
+   */
+  openLink(uri: string, confirmed: boolean): Promise<void>;
+  /**
+   * The existing file or folder each of `candidates` names in session `id`'s current folder, in order; null where
+   * none does, and for every candidate in a remote or WSL pane.
+   */
+  resolvePaths(id: SessionId, candidates: string[]): Promise<(ResolvedPath | null)[]>;
+  /** Opens the file at absolute `abs` in its default app, or the folder in the file manager; refuses launchers. */
+  openPath(abs: string): Promise<void>;
+  /** Shows the file or folder at absolute `abs` selected in the file manager. */
+  revealPath(abs: string): Promise<void>;
   /** Builds the right-click menu once; the returned function shows it for a `contextmenu` event. */
   contextMenu(items: MenuItem[]): Promise<(event: MouseEvent) => Promise<void>>;
   /** Calls `callback` when a native menu sends `name`; does nothing where there are no native menus. */

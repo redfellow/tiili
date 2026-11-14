@@ -1,6 +1,8 @@
 import type { Terminal } from "@xterm/xterm";
 import type { Backend, MenuItem } from "./backend";
 import { clipboardAction, type ClipboardAction, type KeyChord, type Platform } from "./keymap";
+import { revealLabel, type HoveredLink } from "./links";
+import type { PaneLinks } from "./terminalLinks";
 
 /** Carries out a clipboard action on the terminal. Copy with nothing selected does nothing. */
 async function run(backend: Backend, term: Terminal, action: ClipboardAction): Promise<void> {
@@ -15,6 +17,22 @@ async function run(backend: Backend, term: Terminal, action: ClipboardAction): P
     term.selectAll();
   }
   term.focus();
+}
+
+/** The right-click menu's items for `link`, the link under the pointer, ahead of Copy and Paste. */
+function linkItems(backend: Backend, links: PaneLinks, link: HoveredLink, platform: Platform): MenuItem[] {
+  const report = (error: unknown) => console.error(error);
+  if (link.kind === "url") {
+    return [
+      { label: "Open Link", action: () => links.open(link) },
+      { label: "Copy Link", action: () => void backend.writeClipboard(link.uri).catch(report) },
+    ];
+  }
+  return [
+    ...(link.revealOnly ? [] : [{ label: "Open", action: () => links.open(link) }]),
+    { label: revealLabel(platform), action: () => void backend.revealPath(link.abs).catch(report) },
+    { label: "Copy Path", action: () => void backend.writeClipboard(link.abs).catch(report) },
+  ];
 }
 
 function runReporting(backend: Backend, term: Terminal, action: ClipboardAction): void {
@@ -47,6 +65,7 @@ export function handleClipboardKey(
  * `target`, the focused pane's terminal. The right-click menu's Settings… item calls `openSettings`.
  * `elsewhere` gets each action first and returns true when it carried it out in a pane without a terminal.
  * `more` adds items after those; when given, the menu is built afresh each time it opens, so they can change.
+ * `links` is the focused pane's links: right-clicking a hovered link puts its items (open, reveal, copy) first.
  * Returns the handler for a pane's `contextmenu` event.
  */
 export async function attachClipboardMenus(
@@ -56,6 +75,7 @@ export async function attachClipboardMenus(
   openSettings: () => void,
   elsewhere: (action: ClipboardAction) => boolean = () => false,
   more?: () => Promise<MenuItem[]>,
+  links: () => PaneLinks | undefined = () => undefined,
 ): Promise<(event: MouseEvent) => void> {
   const act = (action: ClipboardAction) => {
     if (elsewhere(action)) return;
@@ -74,17 +94,20 @@ export async function attachClipboardMenus(
     { label: "Settings…", action: () => openSettings() },
   ];
   const fail = (error: unknown) => target()?.write(`\r\nCopy or paste failed: ${String(error)}\r\n`);
-  if (!more) {
-    const showMenu = await backend.contextMenu(items);
-    return (event) => {
-      showMenu(event).catch(fail);
-    };
-  }
+  const showStatic = more ? undefined : await backend.contextMenu(items);
   return (event) => {
+    // The link is the one under the pointer as the menu opens, before anything waits.
+    const paneLinks = links();
+    const link = paneLinks?.hovered();
+    if (showStatic && !link) {
+      showStatic(event).catch(fail);
+      return;
+    }
     // Kept from the webview's own menu now: the items are built after a wait.
     event.preventDefault();
     (async () => {
-      const showMenu = await backend.contextMenu([...items, ...(await more())]);
+      const first: MenuItem[] = paneLinks && link ? [...linkItems(backend, paneLinks, link, platform), { separator: true }] : [];
+      const showMenu = await backend.contextMenu([...first, ...items, ...(more ? await more() : [])]);
       await showMenu(event);
     })().catch(fail);
   };
