@@ -365,6 +365,13 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const closeButton = element("button", { type: "button", className: "settings-close", title: "Close" }, "×");
   closeButton.setAttribute("aria-label", "Close");
   const reset = element("button", { type: "button", className: "settings-reset" }, "Reset to defaults");
+  const confirmReset = element("button", { type: "button", className: "settings-reset" }, "Reset");
+  const keepSettings = element("button", { type: "button", className: "settings-reset" }, "Keep");
+  const confirmLabel = element("span", { id: "settings-confirm-label" }, "Reset all settings?");
+  const confirm = element("div", { className: "settings-confirm", hidden: true },
+    confirmLabel, confirmReset, keepSettings);
+  confirm.setAttribute("role", "group");
+  confirm.setAttribute("aria-labelledby", confirmLabel.id);
   const cancel = element("button", { type: "button", className: "settings-cancel" }, "Cancel");
   const save = element("button", { type: "button", className: "settings-save" }, "Save");
 
@@ -500,7 +507,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     behaviour,
     status,
     element("footer", { className: "settings-footer" },
-      reset, element("div", { className: "settings-actions" }, cancel, save)),
+      reset, confirm, element("div", { className: "settings-actions" }, cancel, save)),
   );
   const show = (settings: Settings) => {
     theme.show(settings.theme);
@@ -562,6 +569,14 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     if (session.edit(next)) void apply(next);
   };
 
+  /** Reset to defaults first asks in the footer; `focus` gives focus back to the button once answered. */
+  const ask = (on: boolean, focus = false) => {
+    reset.hidden = on;
+    confirm.hidden = !on;
+    if (on) keepSettings.focus();
+    else if (focus) reset.focus();
+  };
+
   let saving = false;
   /** While saving, nothing can be edited, so what is written is what stays applied. */
   const lock = (on: boolean) => {
@@ -569,7 +584,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = on;
     responsiveFields.disabled = paneFields.disabled = startupFields.disabled = on;
     appIconFields.disabled = on;
+    if (on) ask(false);
     reset.disabled = save.disabled = cancel.disabled = on;
+    confirmReset.disabled = keepSettings.disabled = on;
     theme.list.setAttribute("aria-disabled", String(on));
     prompt.list.setAttribute("aria-disabled", String(on));
     family.list.setAttribute("aria-disabled", String(on));
@@ -579,6 +596,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   /** Back to the settings from when the form opened, unsaved; false while saving, when nothing changes. */
   const discard = async () => {
     if (saving) return false;
+    ask(false);
     const draft = session.draft;
     const saved = session.cancel();
     if (!same(draft, saved)) await apply(saved);
@@ -615,10 +633,23 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   });
   // Submitting the form would close the dialogue without deciding; only Save and Cancel close it.
   form.addEventListener("submit", (event) => event.preventDefault());
-  reset.addEventListener("click", () => {
+  reset.addEventListener("click", () => ask(true));
+  confirmReset.addEventListener("click", () => {
     change(DEFAULT_SETTINGS);
     show(session.draft);
+    ask(false, true);
   });
+  keepSettings.addEventListener("click", () => ask(false, true));
+  // Esc while asking cancels the question, not the dialogue, wherever focus is: caught on the way down, a
+  // prevented keydown keeps the dialogue's cancel from firing, and the page's Esc handler skips it.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || confirm.hidden || !form.isConnected) return;
+    // A closed dialogue stays in the document; Esc then belongs to the terminal.
+    if (!(form.closest("dialog")?.open ?? true)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    ask(false, true);
+  }, true);
   save.addEventListener("click", () => void commit());
   cancel.addEventListener("click", () => void revert());
   closeButton.addEventListener("click", () => void revert());
@@ -627,6 +658,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     form,
     reset() {
       status.textContent = "";
+      ask(false);
       showTab(0);
       // The installed fonts are listed in the background; the list refills when they are known.
       void installedMonospaceFonts().then((names) => {
