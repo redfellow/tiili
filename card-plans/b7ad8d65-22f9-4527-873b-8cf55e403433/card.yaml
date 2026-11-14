@@ -5,3 +5,13 @@ x-harvaaja-card: b7ad8d65-22f9-4527-873b-8cf55e403433
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: No main spec or active change describes the startup splash; this is a
+    tactical refinement of when the existing splash plays, kept to src/splash.ts
+    and src/main.ts.
+  citations:
+    - src/main.ts:66-80
+    - src/settings.ts:52-56
+    - "grep -rni splash openspec: no matches"
+  revision: 2bb731a6-d814-48b0-99b8-05c3124aed73
