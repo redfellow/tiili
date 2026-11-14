@@ -6,3 +6,16 @@ x-harvaaja-card: 6bfaaa52-37ef-40d7-b486-4220cfe286a5
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable contract (attention state, chip brick, top-bar count,
+    shortcut, OS badges, notifications, settings section). No active change
+    exists; one shared cross-window attention registry ties all parts, so
+    splitting would separate inseparable work.
+  citations:
+    - openspec/specs/repository-colours/spec.md#Remote text is only displayed
+    - openspec/specs/settings/spec.md#Compact settings window
+    - openspec/specs/pane-tiling/spec.md#A moved pane keeps its session
+    - openspec/specs/window-top-bar/spec.md#Top bar buttons
+    - src-tauri/src/tints.rs
+  revision: 61e95567-4b36-4582-ab21-148376b3b23b
