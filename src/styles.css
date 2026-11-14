@@ -455,6 +455,12 @@ body.settings-window {
   gap: var(--space-3);
 }
 
+.settings-version {
+  margin-right: auto;
+  color: var(--muted);
+  font: 12px/1.4 var(--font-mono);
+}
+
 .settings-header button {
   cursor: pointer;
 }
@@ -932,6 +938,16 @@ body.settings-window {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.6s ease, color 0.15s ease;
+}
+
+.splash-version {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  color: var(--splash-muted);
+  font: 11px/1.4 var(--font-mono);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .splash-hint:not(:disabled)::before {

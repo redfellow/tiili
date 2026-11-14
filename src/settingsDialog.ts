@@ -7,6 +7,7 @@ import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS } from "./remoteSnippets";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
+import { APP_VERSION } from "./version";
 
 /** Fonts shipped with the app, listed under "Bundled". */
 const BUNDLED_FONTS = [
@@ -507,6 +508,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     behaviour,
     status,
     element("footer", { className: "settings-footer" },
+      element("span", { className: "settings-version" }, `tiili ${APP_VERSION}`),
       reset, confirm, element("div", { className: "settings-actions" }, cancel, save)),
   );
   const show = (settings: Settings) => {

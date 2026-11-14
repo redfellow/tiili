@@ -1,12 +1,12 @@
 ## 1. Version constant
-- [ ] 1.1 Add `__APP_VERSION__` define in `vite.config.ts` from `package.json`, its declaration under `src/`, and `src/version.ts` exporting `APP_VERSION`
+- [x] 1.1 Add `__APP_VERSION__` define in `vite.config.ts` from `package.json`, its declaration under `src/`, and `src/version.ts` exporting `APP_VERSION`
   - proof: `npx eslint vite.config.ts src/version.ts`
 
 ## 2. Show it
-- [ ] 2.1 Add the `v<version>` label bottom-right on the splash overlay in `src/splash.ts`, styled in `src/styles.css`
+- [x] 2.1 Add the `v<version>` label bottom-right on the splash overlay in `src/splash.ts`, styled in `src/styles.css`
   - proof: `npx vitest run src/splash.test.ts`
   - proof: `npx eslint src/splash.ts`
-- [ ] 2.2 Add `tiili <version>` at the left of the settings footer in `src/settingsDialog.ts`, styled in `src/styles.css`
+- [x] 2.2 Add `tiili <version>` at the left of the settings footer in `src/settingsDialog.ts`, styled in `src/styles.css`
   - proof: `npx eslint src/settingsDialog.ts`
   - proof: `npm run typecheck`
 
