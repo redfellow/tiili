@@ -212,6 +212,12 @@ body {
   color: var(--fg);
   font: 600 11.5px/16px var(--font-sans);
   font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+/* Only a count: hovering shows its tooltip but no button highlight. */
+.top-bar-attention:hover {
+  background: none;
 }
 
 .top-bar-attention .pane-chip-brick {
