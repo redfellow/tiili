@@ -112,6 +112,8 @@ export interface Backend {
   setAppIcon(choice: AppIcon): Promise<void>;
   /** Where the Heynote pane keeps its notes. */
   readonly notes: NoteStore;
+  /** Sets this window's title, as the window switcher and taskbar show it; does nothing where there is no window. */
+  setTitle(title: string): Promise<void>;
   /** Closes the window, after its last pane closed. */
   closeWindow(): Promise<void>;
   /** Opens a full tiili window, cascaded from this one, whose first pane starts in `cwd` (home folder when absent). */
