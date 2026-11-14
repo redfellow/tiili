@@ -282,7 +282,7 @@ fn open_window(
         .to_logical::<f64>(scale);
     let (x, y) = cascade(place.x, place.y);
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
-        .title("tiili")
+        .title("tiili >_")
         .inner_size(size.width, size.height)
         .position(x, y);
     // The same decorations as the main window in `tauri.conf.json`.

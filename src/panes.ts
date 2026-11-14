@@ -39,6 +39,7 @@ import { zoomedSize } from "./responsive";
 import { applyFont, openTerminal, refreshTheme, type AdoptedSession, type PaneTerminal } from "./terminal";
 import { paneTint } from "./tints";
 import { menuEntries } from "./windowMenu";
+import { windowTitle } from "./windowTitle";
 
 /** A pane can't be resized below this many columns and rows of its terminal. */
 const MIN_COLS = 20;
@@ -82,6 +83,8 @@ export class Panes {
   private readonly commands = new Map<number, string>();
   /** The window name last told to the app, so an unchanged one is not sent again. */
   private reportedName = "";
+  /** The window title last set, so an unchanged one is not set again. */
+  private shownTitle = "tiili >_";
 
   private constructor(
     private readonly backend: Backend,
@@ -447,6 +450,7 @@ export class Panes {
   private onCommand(report: PaneCommand): void {
     this.commands.set(report.paneId, report.command);
     const pane = this.panes.find((p) => p.session === report.paneId);
+    if (pane && pane === this.current()) this.showTitle();
     const place = this.places.get(report.paneId);
     if (pane && place) this.showPlace(pane, place);
   }
@@ -455,6 +459,7 @@ export class Panes {
   private onSession(pane: Pane, session: number): void {
     if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
+    if (pane === this.current()) this.showTitle();
     const place = this.places.get(session);
     if (place) this.showPlace(pane, place);
   }
@@ -485,6 +490,16 @@ export class Panes {
     this.backend.moves.setName(name).catch(() => undefined);
   }
 
+  /** Sets the window's title from the focused pane's command: none for a Heynote pane or before one is reported. */
+  private showTitle(): void {
+    const pane = this.current();
+    const command = pane?.session === undefined ? undefined : this.commands.get(pane.session);
+    const title = windowTitle(command);
+    if (title === this.shownTitle) return;
+    this.shownTitle = title;
+    this.backend.setTitle(title).catch(() => undefined);
+  }
+
   private remove(pane: Pane): void {
     const index = this.panes.indexOf(pane);
     if (index < 0) return;
@@ -496,6 +511,7 @@ export class Panes {
     this.render();
     if (this.panes.length === 0) {
       this.focused = -1;
+      this.showTitle();
     } else if (wasFocused) {
       this.focus(Math.min(index, this.panes.length - 1));
     } else if (index < this.focused) {
@@ -510,6 +526,7 @@ export class Panes {
       pane.element.toggleAttribute("data-focused", i === index);
     });
     this.reportName();
+    this.showTitle();
   }
 
   /** Lays the panes out again: one row element per grid row, panes in order, with the dividers. */
