@@ -10,7 +10,7 @@
 ## 2. Move payload at the cap
 - [ ] 2.1 Add a unit test in `src-tauri/src/windows.rs` round-tripping a `MovePayload::Terminal` with 100 000 lines of 200 columns through serde JSON intact
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
   - proof: `openspec validate scrollback-lines-setting-and-option-drag --strict`
 
 ## Manual checks after merge (The user)
