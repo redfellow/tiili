@@ -17,6 +17,15 @@ export interface SettingsSession {
 /** Whether two settings are equal by value. */
 export const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
 
+/**
+ * Settings read from the form while the user is typing: the scrollback stays the draft's until its field is
+ * committed (left or Enter), since the partial numbers on the way to 50 000 clamp to 1 000 and would cut every open
+ * pane's history.
+ */
+export function whileTyping(read: Settings, draft: Settings): Settings {
+  return { ...read, behaviour: { ...read.behaviour, scrollback: draft.behaviour.scrollback } };
+}
+
 export function createSettingsSession(saved: Settings): SettingsSession {
   let baseline = saved;
   let draft = saved;

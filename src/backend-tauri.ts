@@ -4,6 +4,7 @@ import { Menu } from "@tauri-apps/api/menu";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import type { AttentionMark } from "./attention";
 import type { Backend, MenuItem, MovePayload } from "./backend";
 import { noteListeners, type NotesChanged } from "./heynoteStore";
 import { currentPlatform } from "./keymap";
@@ -33,10 +34,18 @@ export function tauriBackend(): Backend {
   let listening: Promise<unknown> | undefined;
   return {
     nativeMenus: currentPlatform() === "macos",
-    spawn: (rows, cols, cwd, prompt, onOutput) => {
+    spawn: (rows, cols, cwd, prompt, onOutput, launch) => {
       const output = new Channel<number[]>();
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
-      return invoke<number>("pty_spawn", { rows, cols, cwd, prompt, onOutput: output });
+      return invoke<number>("pty_spawn", {
+        rows,
+        cols,
+        cwd,
+        prompt,
+        onOutput: output,
+        command: launch?.command ?? null,
+        path: launch?.path ?? null,
+      });
     },
     setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
     write: (id, data) => invoke("pty_write", { id, data }),
@@ -47,6 +56,10 @@ export function tauriBackend(): Backend {
       listen<{ id: number; code: number }>("pty-exit", (event) => callback(event.payload.id, event.payload.code)),
     readClipboard: () => readText(),
     writeClipboard: (text) => writeText(text),
+    openLink: (uri, confirmed) => invoke("link_open", { uri, confirmed }),
+    resolvePaths: (id, candidates) => invoke("path_resolve", { paneId: id, candidates }),
+    openPath: (abs) => invoke("path_open", { abs }),
+    revealPath: (abs) => invoke("path_reveal", { abs }),
     contextMenu: async (items) => {
       const menu = await Menu.new({ items: nativeItems(items) });
       return async (event) => {
@@ -88,12 +101,27 @@ export function tauriBackend(): Backend {
       move: (target, payload) => invoke("pane_move", { target: target ?? null, payload }),
       take: async (token) => (await invoke<MovePayload | null>("pane_move_take", { token })) ?? undefined,
     },
+    attention: {
+      mark: (id, message, title) => invoke("attention_mark", { id, message: message ?? null, title }),
+      clear: (id) => invoke("attention_clear", { id }),
+      next: () => invoke("attention_next"),
+      list: () => invoke<AttentionMark[]>("attention_list"),
+    },
     settingsWindows: {
       open: () => invoke("settings_open"),
       preview: (owner, settings) => emitTo(owner, "settings-preview", settings),
       onCloseRequested: async (handler) => {
         await getCurrentWindow().onCloseRequested(() => handler());
       },
+    },
+    paneControl: {
+      done: (requestId, result) =>
+        invoke("pane_open_done", {
+          requestId,
+          pane: "pane" in result ? result.pane : null,
+          error: "error" in result ? result.error : null,
+        }),
+      setOrder: (sessions) => invoke("pane_order_set", { sessions }),
     },
   };
 }

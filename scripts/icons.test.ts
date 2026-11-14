@@ -1,9 +1,12 @@
 // @harvaaja-test-tier: fast
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { ICON_NAME, iconJson, splitIcon, srgb } from "./app-icon.mjs";
 
 const iconsDir = resolve(__dirname, "../src-tauri/icons");
+const logoDir = resolve(__dirname, "../docs/brand/logo");
 
 /** Icon files each platform's bundle needs, with the pixel size of each PNG (null for container formats). */
 const REQUIRED: Record<string, [file: string, size: number | null][]> = {
@@ -33,6 +36,14 @@ const REQUIRED: Record<string, [file: string, size: number | null][]> = {
     ["128x128.png", 128],
     ["128x128@2x.png", 256],
     ["icon.png", 512],
+  ],
+  // The Icon Composer bundle compiled into Assets.car, whose light and dark appearances the Dock shows while tiili
+  // is not running (scripts/app-icon.mjs).
+  "macOS appearance": [
+    [`${ICON_NAME}.icon/icon.json`, null],
+    [`${ICON_NAME}.icon/Assets/light.png`, 1024],
+    [`${ICON_NAME}.icon/Assets/dark.png`, 1024],
+    ["Assets.car", null],
   ],
   // The light and dark icons the app swaps in at run time to follow the OS appearance (src-tauri/src/app_icon.rs).
   "Run time": [
@@ -93,5 +104,42 @@ describe("Icon set check: every icon each platform needs exists at its size", ()
     const entry = icnsEntries(readFileSync(join(iconsDir, "icon.icns"))).get(type);
     expect(entry).toBeDefined();
     expect(pngSize(entry!)).toEqual([size, size]);
+  });
+});
+
+describe("Appearance icon check: the macOS bundle icon has a light and a dark appearance", () => {
+  const light = splitIcon(readFileSync(join(logoDir, "icon-light.svg"), "utf8"));
+  const dark = splitIcon(readFileSync(join(logoDir, "icon-dark.svg"), "utf8"));
+
+  it("splits the tile colours off the brand icons", () => {
+    expect([light.tile, dark.tile]).toEqual(["#111617", "#111617"]);
+    expect(light.layer).not.toContain('fill="#111617"');
+    expect(light.layer).not.toContain('rx="22.5"');
+  });
+
+  it("writes srgb colours the way Icon Composer does", () => {
+    expect(srgb("#FFFFFF")).toBe("srgb:1.00000,1.00000,1.00000,1.00000");
+    expect(srgb("#111617")).toBe("srgb:0.06667,0.08627,0.09020,1.00000");
+  });
+
+  it(`${ICON_NAME}.icon/icon.json matches the brand icons`, () => {
+    const committed = JSON.parse(readFileSync(join(iconsDir, `${ICON_NAME}.icon/icon.json`), "utf8"));
+    expect(committed).toEqual(iconJson(light, dark));
+  });
+
+  it("Assets.car is an asset catalog", () => {
+    expect(readFileSync(join(iconsDir, "Assets.car")).subarray(0, 8).toString("ascii")).toBe("BOMStore");
+  });
+
+  it.skipIf(process.platform !== "darwin")(`Assets.car holds ${ICON_NAME} in the light and the dark appearance`, () => {
+    const info = spawnSync("assetutil", ["--info", join(iconsDir, "Assets.car")], { encoding: "utf8" });
+    expect(info.status).toBe(0);
+    const renditions: { AssetType?: string; Name?: string; Appearance?: string }[] = JSON.parse(info.stdout);
+    const stacks = renditions.filter((r) => r.AssetType === "IconImageStack" && r.Name === ICON_NAME);
+    expect(stacks.map((r) => r.Appearance)).toEqual(
+      expect.arrayContaining(["NSAppearanceNameAqua", "NSAppearanceNameDarkAqua"]),
+    );
+    // Tauri takes CFBundleIconName from the first flat icon image.
+    expect(renditions.find((r) => r.AssetType === "Icon Image")?.Name).toBe(ICON_NAME);
   });
 });

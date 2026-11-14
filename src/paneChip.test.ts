@@ -33,11 +33,13 @@ describe("chipLabel", () => {
   });
 });
 
-const repo = (root: string, name: string) => ({ root, name });
+const repo = (root: string, name: string, worktree: string | null = null) => ({ root, name, worktree });
 
 // [case, place, chip place]
 const places: [string, Pick<PaneCwd, "cwd" | "repo" | "host">, string][] = [
   ["Local repository", { cwd: "/Users/red/tiili/src", repo: repo("/Users/red/tiili", "tiili"), host: null }, "tiili"],
+  ["Worktree on a branch", { cwd: "/Users/red/tiili-icon", repo: repo("/Users/red/tiili-icon", "tiili", "brand/app-icon-15"), host: null }, "tiili › brand/app-icon-15"],
+  ["Detached HEAD shows worktree name", { cwd: "/w/_main/src", repo: repo("/w/_main", "tiili", "_main"), host: null }, "tiili › _main"],
   ["Outside a repository", { cwd: "/Users/red/Downloads", repo: null, host: null }, "Downloads"],
   ["Remote place: repository", { cwd: "/home/red/api/src", repo: repo("/home/red/api", "api"), host: "build-box" }, "build-box:api"],
   ["Left the repository: remote folder", { cwd: "/home/red/src", repo: null, host: "build-box" }, "build-box:src"],

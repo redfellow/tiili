@@ -1,10 +1,15 @@
-import type { Backend, MenuItem, MovePayload } from "./backend";
+import { AttentionGate, type AttentionMark, type AttentionSignal } from "./attention";
+import type { Backend, MenuItem, MovePayload, PaneLaunch, PaneOpenRequest, SessionId } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import {
+  attentionShortcut,
+  FIND_MENU_ITEMS,
+  findAction,
   layoutAction,
   paneAction,
   settingsShortcut,
   zoomAction,
+  type FindAction,
   type LayoutAction,
   type PaneAction,
   type Platform,
@@ -30,6 +35,7 @@ import {
   PANE_COMMAND_EVENT,
   PANE_CWD_EVENT,
   placeLabel,
+  showPaneAttention,
   showPaneChip,
   type PaneCommand,
   type PaneCwd,
@@ -63,6 +69,15 @@ interface Pane {
   note?: HeynoteFrame;
   /** Pixels added to the Settings font size by the zoom keys; not saved, so a new pane starts at 0. */
   zoom: number;
+  /** Merges and rate-limits the bells and notifications of a terminal pane's shell. */
+  gate?: AttentionGate;
+  /** The name `tiili open --title` gave the pane, which its chip shows instead of its place. */
+  title?: string;
+}
+
+/** A pane `tiili open` asked for: the program it runs and the title its chip shows. */
+interface Requested extends PaneLaunch {
+  title?: string;
 }
 
 /**
@@ -85,6 +100,10 @@ export class Panes {
   private reportedName = "";
   /** The window title last set, so an unchanged one is not set again. */
   private shownTitle = "tiili >_";
+  /** The session order last reported to the app, for `tiili list`. */
+  private reportedOrder = "";
+  /** Every marked session app-wide, so a pane that arrives from another window shows its mark. */
+  private marks = new Map<number, AttentionMark>();
 
   private constructor(
     private readonly backend: Backend,
@@ -103,6 +122,9 @@ export class Panes {
         this.panes.forEach((pane) => pane.terminal?.releaseSize(changed.has(pane.id)));
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
+      // Terminals scale with their moving panes and refit once they are in place, so each shell sees one size change.
+      motionStart: () => this.panes.forEach((pane) => pane.terminal?.holdSize()),
+      motionEnd: () => this.panes.forEach((pane) => pane.terminal?.releaseSize(true)),
     });
     this.layout = emptyLayout(settings().tiling.layout);
     this.styleRoot(settings());
@@ -130,17 +152,33 @@ export class Panes {
     const panes = new Panes(backend, root, platform, settings, openSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
+    if (backend.attention) {
+      await backend.onAppEvent("attention-changed", ({ marks }) => panes.showMarks(marks));
+      await backend.onAppEvent("attention-focus", (session) => panes.focusSession(session));
+      // Coming back to the window is looking at its focused pane.
+      window.addEventListener("focus", () => panes.clearCurrent());
+      panes.showMarks(await backend.attention.list().catch(() => []));
+    }
     panes.contextMenu = await attachClipboardMenus(
       backend,
       () => panes.current()?.terminal?.term,
       platform,
       openSettings,
       (action) => {
+        // While the find bar's field has the keyboard, the Edit menu's Copy, Paste and Select All act on it.
+        const find = panes.current()?.terminal?.find;
+        if (find?.hasFocus()) {
+          find
+            .clipboard(action, () => backend.readClipboard(), (text) => backend.writeClipboard(text))
+            .catch((error: unknown) => console.error(error));
+          return true;
+        }
         const note = panes.current()?.note;
         note?.clipboard(action).catch((error: unknown) => console.error(error));
         return note !== undefined;
       },
       backend.moves ? () => panes.moveItems() : undefined,
+      () => panes.current()?.terminal?.links,
     );
     if (backend.moves) {
       const report = (error: unknown) => panes.report(error);
@@ -149,6 +187,18 @@ export class Panes {
       // A pane another window sent to this one, already open.
       await backend.onAppEvent("pane-arrive", ({ token }) => panes.arrive(token).catch(report));
     }
+    if (backend.paneControl) {
+      const control = backend.paneControl;
+      await backend.onAppEvent("pane-open-request", (request) => {
+        panes
+          .openRequested(request)
+          .then(
+            (pane) => control.done(request.requestId, { pane }),
+            (error: unknown) => control.done(request.requestId, { error: String(error) }),
+          )
+          .catch((error: unknown) => console.error(error));
+      });
+    }
     if (panes.viaMenu()) {
       // ⌘T, ⌘W and ⌃⌘N are Shell menu items on macOS, so the webview may never see those keys.
       await backend.onAppEvent("pane", (payload) => {
@@ -156,6 +206,11 @@ export class Panes {
       });
       // The Shell menu's New Window (⌘N), sent to the focused window only.
       await backend.onAppEvent("new-window", () => panes.act({ type: "newWindow" }));
+      // The Edit menu's Find… (⌘F), Find Next (⌘G) and Find Previous (⇧⌘G).
+      await backend.onAppEvent("clipboard", (payload) => {
+        const action = FIND_MENU_ITEMS[payload];
+        if (action) panes.find(action);
+      });
     }
     return panes;
   }
@@ -215,6 +270,22 @@ export class Panes {
     else if (action.type === "newWindow") this.newWindow().catch(report);
     else if (action.type === "moveToNewWindow") this.movePane(undefined).catch(report);
     else this.focus(action.index);
+  }
+
+  /**
+   * Carries out a find action in the focused pane: a terminal pane opens its find bar or steps through its matches,
+   * a Heynote pane opens Heynote's own search or steps through it.
+   */
+  find(action: FindAction): void {
+    const pane = this.current();
+    if (pane?.note) {
+      pane.note.find(action);
+      return;
+    }
+    const bar = pane?.terminal?.find;
+    if (!bar) return;
+    if (action === "find") bar.open();
+    else bar.step(action);
   }
 
   /** The folder of the focused pane's shell, where a new pane or window starts; undefined when it can't be read. */
@@ -352,7 +423,32 @@ export class Panes {
    * at that pane's zoom.
    */
   async open(start?: string, adopt?: AdoptedSession & { zoom: number }): Promise<void> {
-    const cwd = adopt ? undefined : (start ?? (await this.currentCwd()));
+    await this.openPane(adopt ? undefined : (start ?? (await this.currentCwd())), adopt);
+  }
+
+  /**
+   * Opens the pane `tiili open` asked for after the others, as {@link open} does, but leaves the focus where it is.
+   * Resolves to its session; rejects when the program could not start, after removing the pane.
+   */
+  async openRequested(request: PaneOpenRequest): Promise<SessionId> {
+    const pane = await this.openPane(request.cwd ?? undefined, undefined, {
+      command: request.command,
+      path: request.path ?? undefined,
+      title: request.title ?? undefined,
+    });
+    if (pane.session === undefined) throw new Error("the pane's program did not start");
+    return pane.session;
+  }
+
+  /**
+   * Opens a terminal pane after the others in `cwd`: focused, unless it is a `requested` one, which also runs that
+   * program instead of a shell.
+   */
+  private async openPane(
+    cwd: string | undefined,
+    adopt?: AdoptedSession & { zoom: number },
+    requested?: Requested,
+  ): Promise<Pane> {
 
     const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -366,12 +462,19 @@ export class Panes {
       chip,
       zoom: adopt?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
+      gate: new AttentionGate(),
+      title: requested?.title,
     };
+    if (pane.title !== undefined) showPaneChip(element, chip, pane.title);
+    const focused = this.current();
+    const hadKeyboard = focused !== undefined && focused.element.contains(document.activeElement);
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
     // Laid out first, so the terminal opens at its pane's size.
     this.render();
-    this.markFocused(this.panes.length - 1);
+    if (!requested) this.markFocused(this.panes.length - 1);
+    // Re-rendering the grid can take the keyboard from the focused pane's terminal.
+    else if (focused && hadKeyboard) this.give(focused);
 
     try {
       const opened = await openTerminal(
@@ -383,8 +486,11 @@ export class Panes {
         () => pane.zoom,
         () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
         adopt,
+        (signal) => this.onSignal(pane, signal),
+        requested,
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
+      opened.find.interceptKeys((event) => this.shortcut(event));
       pane.terminal = opened;
       resolve(opened);
     } catch (error) {
@@ -393,6 +499,7 @@ export class Panes {
       throw error;
     }
     if (this.current() === pane) this.give(pane);
+    return pane;
   }
 
   /** Closes pane `index` without asking. Focus moves to the pane that takes its place, else the one before. */
@@ -400,6 +507,7 @@ export class Panes {
     const pane = this.panes[index];
     if (!pane) return;
     pane.note?.flush();
+    if (pane.session !== undefined) this.clearMark(pane.session);
     this.remove(pane);
     if (this.panes.length === 0) {
       await this.backend.closeWindow();
@@ -459,6 +567,8 @@ export class Panes {
   private onSession(pane: Pane, session: number): void {
     if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
+    this.reportOrder();
+    showPaneAttention(pane.element, pane.chip, this.marks.get(session));
     if (pane === this.current()) this.showTitle();
     const place = this.places.get(session);
     if (place) this.showPlace(pane, place);
@@ -478,7 +588,8 @@ export class Panes {
   private showPlace(pane: Pane, place: PaneCwd): void {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
     pane.tint = paneTint(place);
-    showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
+    pane.terminal?.links.placeChanged(`${place.host ?? ""}\0${place.cwd}`);
+    showPaneChip(pane.element, pane.chip, pane.title ?? chipLabel(placeLabel(place), command), pane.tint);
     if (pane === this.current()) this.reportName();
   }
 
@@ -507,7 +618,7 @@ export class Panes {
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
     this.layout = removePane(this.layout, pane.id);
-    pane.element.remove();
+    // The view takes the pane's element out once it has faded out.
     this.render();
     if (this.panes.length === 0) {
       this.focused = -1;
@@ -525,16 +636,73 @@ export class Panes {
     this.panes.forEach((pane, i) => {
       pane.element.toggleAttribute("data-focused", i === index);
     });
+    if (document.hasFocus()) this.clearCurrent();
     this.reportName();
     this.showTitle();
+  }
+
+  /**
+   * A bell or notification from pane `pane`'s shell: marks the pane unless the user is looking at it (it is the
+   * focused pane of the focused window), once its gate lets the signal through.
+   */
+  private onSignal(pane: Pane, signal: AttentionSignal): void {
+    const attention = this.backend.attention;
+    const session = pane.session;
+    if (!attention || !pane.gate || session === undefined) return;
+    if (pane === this.current() && document.hasFocus()) return;
+    const result = pane.gate.signal(signal, performance.now());
+    if (!result) return;
+    attention.mark(session, result.message, pane.chip.textContent ?? "").catch(() => undefined);
+  }
+
+  /** Shows `marks`, every marked session app-wide, on this window's panes. */
+  private showMarks(marks: AttentionMark[]): void {
+    this.marks = new Map(marks.map((mark) => [mark.session, mark]));
+    for (const pane of this.panes) {
+      const mark = pane.session === undefined ? undefined : this.marks.get(pane.session);
+      showPaneAttention(pane.element, pane.chip, mark);
+    }
+  }
+
+  /** Clears session `session`'s mark, if it has one; the app ignores a session without one. */
+  private clearMark(session: number): void {
+    // Asked even when no mark is known yet: one may be on its way from the app.
+    this.marks.delete(session);
+    this.backend.attention?.clear(session).catch(() => undefined);
+  }
+
+  /** The user looks at the focused pane: its mark clears. */
+  private clearCurrent(): void {
+    const session = this.current()?.session;
+    if (session !== undefined) this.clearMark(session);
+  }
+
+  /** Focuses the pane running session `session`, for the next-pane shortcut; its mark clears. */
+  private focusSession(session: number): void {
+    const index = this.panes.findIndex((pane) => pane.session === session);
+    if (index < 0) return;
+    this.focus(index);
+    this.clearMark(session);
   }
 
   /** Lays the panes out again: one row element per grid row, panes in order, with the dividers. */
   private render(): void {
     this.view.render(this.layout);
+    this.reportOrder();
   }
 
-  /** xterm's key hook: layout, pane, settings and clipboard shortcuts are kept from the shell. */
+  /** Tells the app the panes' sessions in grid order when it changed, so `tiili list` follows the grid. */
+  private reportOrder(): void {
+    const control = this.backend.paneControl;
+    if (!control) return;
+    const sessions = this.panes.flatMap((pane) => (pane.session === undefined ? [] : [pane.session]));
+    const order = sessions.join(",");
+    if (order === this.reportedOrder) return;
+    this.reportedOrder = order;
+    control.setOrder(sessions).catch(() => undefined);
+  }
+
+  /** xterm's key hook: layout, pane, settings, find and clipboard shortcuts are kept from the shell. */
   private onKey(terminal: PaneTerminal, event: KeyboardEvent): boolean {
     if (this.shortcut(event)) return false;
     return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
@@ -557,9 +725,9 @@ export class Panes {
   }
 
   /**
-   * Carries out a layout, pane, settings or zoom shortcut on keydown. Returns true when `event` is one of those
-   * keys, which then must not reach the pane's shell or Heynote. Zoom keys act only in terminal panes; in a
-   * Heynote pane they reach Heynote.
+   * Carries out a layout, next-pane, pane, settings, zoom or find shortcut on keydown. Returns true when `event` is
+   * one of those keys, which then must not reach the pane's shell, its find bar's field or Heynote. Zoom and find
+   * keys act only in terminal panes; in a Heynote pane they reach Heynote, whose own search the find keys open.
    */
   private shortcut(event: KeyboardEvent): boolean {
     const layout = layoutAction(event, this.platform);
@@ -567,6 +735,13 @@ export class Panes {
       if (event.type === "keydown") {
         event.preventDefault();
         this.actLayout(layout);
+      }
+      return true;
+    }
+    if (this.backend.attention && attentionShortcut(event, this.platform)) {
+      if (event.type === "keydown") {
+        event.preventDefault();
+        this.backend.attention.next().catch(() => undefined);
       }
       return true;
     }
@@ -595,6 +770,15 @@ export class Panes {
       if (event.type === "keydown") {
         event.preventDefault();
         this.zoom(pane, zoom);
+      }
+      return true;
+    }
+    const find = findAction(event, this.platform);
+    if (find && pane && !pane.note) {
+      // In the macOS app ⌘F, ⌘G and ⇧⌘G come from the Edit menu; here those keys are only kept from the shell.
+      if (!this.viaMenu() && event.type === "keydown") {
+        event.preventDefault();
+        this.find(find);
       }
       return true;
     }

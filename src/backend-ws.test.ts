@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { decodeServer, wsBackend, type SocketLike } from "./backend-ws";
+import { decodeServer, wsBackend, type SocketLike, type WsOptions } from "./backend-ws";
 import { PROMPT_IDS } from "./settings";
 
 type Opening = (socket: FakeSocket) => void;
@@ -31,7 +31,7 @@ class FakeSocket implements SocketLike {
   }
 }
 
-function setup(opening: Opening = startsShell) {
+function setup(opening: Opening = startsShell, extra: Partial<WsOptions> = {}) {
   const sockets: FakeSocket[] = [];
   const backend = wsBackend({
     openSocket: (url) => {
@@ -43,9 +43,32 @@ function setup(opening: Opening = startsShell) {
     page: { protocol: "http:", host: "127.0.0.1:5173" },
     token: "secret",
     clipboard: { readText: async () => "", writeText: async () => undefined },
+    ...extra,
   });
   return { backend, sockets };
 }
+
+describe("WebSocket backend links: the dev browser opens only web links, in a new tab, and has no path links", () => {
+  const cases: [string, boolean][] = [
+    ["https://example.com", true],
+    ["http://example.com", true],
+    ["mailto:a@b.c", false],
+    ["vscode://file/x", false],
+    ["javascript:alert(1)", false],
+  ];
+  it.each(cases)("%s", async (uri, opens) => {
+    const tabs: string[] = [];
+    const { backend } = setup(startsShell, { openTab: (url) => tabs.push(url) });
+    const opened = backend.openLink(uri, true);
+    if (opens) await expect(opened).resolves.toBeUndefined();
+    else await expect(opened).rejects.toThrow();
+    expect(tabs).toEqual(opens ? [uri] : []);
+  });
+
+  it("Paths are never links in the dev browser", async () => {
+    await expect(setup().backend.resolvePaths(1, ["src/main.ts", "/tmp"])).resolves.toEqual([null, null]);
+  });
+});
 
 describe("WebSocket backend", () => {
   it("Move to New Window in the dev browser: the dev server has one window, so there are no pane moves", () => {

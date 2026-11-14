@@ -1,8 +1,15 @@
 pub mod app_icon;
 pub mod appimage_env;
+pub mod attention;
 pub mod bridge;
+pub mod claude_skill;
+pub mod cli;
 pub mod command;
+pub mod control;
+mod control_app;
+pub mod control_server;
 pub mod cwd;
+pub mod links;
 pub mod notes;
 pub mod pty;
 pub mod repo;
@@ -22,14 +29,15 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
-use pty::{SessionId, SessionRegistry};
+use pty::{PaneCommand, SessionId, SessionRegistry};
 use sink::SessionSinks;
 use tints::Tints;
 use windows::WindowSessions;
 
 /// Event sent when a shell exits; its payload names the session.
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
-/// Event sent when a clipboard menu item is chosen; its payload is `copy`, `paste` or `selectAll`.
+/// Event sent when an Edit menu item is chosen; its payload is `copy`, `paste`, `selectAll`, `find`, `findNext` or
+/// `findPrevious`.
 pub const CLIPBOARD_EVENT: &str = "clipboard";
 /// Event sent when a pane menu item is chosen; its payload is `new`, `close` or `moveToNewWindow`.
 pub const PANE_EVENT: &str = "pane";
@@ -51,11 +59,12 @@ struct PtyExit {
     code: u32,
 }
 
-/// A repository as the frontend sees it: root folder and name.
+/// A repository as the frontend sees it: root folder, name and, in a linked worktree, its branch or worktree name.
 #[derive(Clone, Serialize)]
 struct RepoInfo {
     root: String,
     name: String,
+    worktree: Option<String>,
 }
 
 /// Where session `pane_id`'s shell is now, its repository (`None` outside any) and its host (`None` when local).
@@ -82,8 +91,8 @@ struct PaneCommandEvent {
 
 impl PaneCwdEvent {
     fn new(pane_id: SessionId, at: &cwd::PaneCwd, tints: &Tints) -> Self {
-        let root = at.repo.as_ref().map(|r| r.root.to_string_lossy());
-        let key = tints::tint_key(root.as_deref(), at.host.as_deref());
+        let repo_key = at.repo.as_ref().map(|r| r.key.to_string_lossy());
+        let key = tints::tint_key(repo_key.as_deref(), at.host.as_deref());
         Self {
             tint: tints.tint_for(pane_id, key.as_deref()),
             pane_id,
@@ -91,6 +100,7 @@ impl PaneCwdEvent {
             repo: at.repo.as_ref().map(|r| RepoInfo {
                 root: r.root.to_string_lossy().into_owned(),
                 name: r.name.clone(),
+                worktree: r.worktree.clone(),
             }),
             host: at.host.clone(),
         }
@@ -136,6 +146,12 @@ impl SessionReports {
     }
 }
 
+/// Session `id`'s latest reported folder and the host it is on (`None` when local), once a report has arrived.
+pub(crate) fn pane_place(app: &AppHandle, id: SessionId) -> Option<(String, Option<String>)> {
+    let (cwd, _) = app.state::<SessionReports>().latest(id);
+    cwd.map(|event| (event.cwd, event.host))
+}
+
 /// The window session `id`'s events go to: the one it belongs to now, or `spawner` (the window that started it)
 /// before it is registered.
 fn owner_of(app: &AppHandle, id: SessionId, spawner: &str) -> String {
@@ -150,10 +166,13 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
     app.state::<SessionReports>().forget(id);
+    app.state::<control_app::PaneTitles>().forget(id);
+    attention::forget(app, id);
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
-/// in Settings (`off` when absent) and returns its session id; its output streams over `on_output`, a
+/// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
+/// the `tiili open` that asked for it, when given), and returns its session id; its output streams over `on_output`, a
 /// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
 /// `pane-command` events, sent only to the window it belongs to: the one that started it, until its pane moves.
 #[allow(clippy::too_many_arguments)]
@@ -166,8 +185,16 @@ fn pty_spawn(
     cols: u16,
     cwd: Option<String>,
     prompt: Option<String>,
+    command: Option<Vec<String>>,
+    path: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
+    let command = command
+        .filter(|argv| !argv.is_empty())
+        .map(|argv| PaneCommand {
+            argv,
+            path: path.map(Into::into),
+        });
     let label = window.label().to_string();
     let (cwd_app, cwd_label) = (app.clone(), label.clone());
     let (command_app, command_label) = (app.clone(), label.clone());
@@ -180,6 +207,7 @@ fn pty_spawn(
         .spawn_tracked(
             cwd.as_deref().map(Path::new),
             prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
+            command.as_ref(),
             rows,
             cols,
             Box::new(move |_id, data| {
@@ -288,9 +316,12 @@ fn pty_set_prompt(sessions: State<'_, SessionRegistry>, prompt: String) -> Resul
 
 /// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
+    app.state::<control_app::PaneOrders>().forget(label);
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
+        app.state::<control_app::PaneTitles>().forget(id);
+        attention::forget(app, id);
         let _ = registry.close(id);
     }
     app.state::<windows::LastFocused>().forget(label);
@@ -408,6 +439,22 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
                 .accelerator("Cmd+A")
                 .build(app)?,
         )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("find", "Find…")
+                .accelerator("Cmd+F")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("findNext", "Find Next")
+                .accelerator("Cmd+G")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("findPrevious", "Find Previous")
+                .accelerator("Shift+Cmd+G")
+                .build(app)?,
+        )
         .build()?;
     let window_menu = SubmenuBuilder::new(app, "Window")
         .item(&PredefinedMenuItem::minimize(app, None)?)
@@ -460,6 +507,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_filter(windows::is_remembered)
@@ -482,11 +530,20 @@ pub fn run() {
         .manage(SessionSinks::default())
         .manage(SessionReports::default())
         .manage(MoveMenu::default())
+        .manage(attention::Attention::default())
+        .manage(control_app::PendingOpens::default())
+        .manage(control_app::PaneTitles::default())
+        .manage(control_app::ControlState::default())
+        .manage(control_app::PaneOrders::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
                 window.state::<windows::LastFocused>().set(window.label());
                 refresh_move_menu(window.app_handle());
+                attention::focus_changed(window.app_handle(), true);
+            }
+            tauri::WindowEvent::Focused(false) => {
+                attention::focus_changed(window.app_handle(), false);
             }
             // Tauri quits once the last window is gone, on macOS too.
             tauri::WindowEvent::Destroyed => window_destroyed(window.app_handle(), window.label()),
@@ -494,6 +551,17 @@ pub fn run() {
         })
         .setup(|app| {
             app_icon::apply(app.handle());
+            control_app::start(app.handle());
+            {
+                use tauri_plugin_notification::NotificationExt;
+                let handle = app.handle().clone();
+                app.notification().on_action(move |performed| {
+                    if performed.action_id() == "tap" {
+                        let id = performed.notification().map(|n| n.id());
+                        attention::notification_clicked(&handle, id);
+                    }
+                })?;
+            }
             reset_off_screen_window(app)?;
             #[cfg(target_os = "macos")]
             {
@@ -506,7 +574,10 @@ pub fn run() {
                     };
                     let label = label.as_str();
                     let id = event.id().as_ref();
-                    if matches!(id, "copy" | "paste" | "selectAll") {
+                    if matches!(
+                        id,
+                        "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious"
+                    ) {
                         let _ = app.emit_to(label, CLIPBOARD_EVENT, id);
                     } else if matches!(id, "new" | "close" | "moveToNewWindow") {
                         let _ = app.emit_to(label, PANE_EVENT, id);
@@ -546,8 +617,23 @@ pub fn run() {
             windows::window_list,
             windows::window_set_name,
             windows::pane_move,
-            windows::pane_move_take
+            windows::pane_move_take,
+            attention::attention_mark,
+            attention::attention_clear,
+            attention::attention_list,
+            attention::attention_next,
+            control_app::pane_open_done,
+            control_app::pane_order_set,
+            links::link_open,
+            links::path_resolve,
+            links::path_open,
+            links::path_reveal
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tiili");
+        .build(tauri::generate_context!())
+        .expect("error while building tiili")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                control_app::stop(app);
+            }
+        });
 }

@@ -54,6 +54,8 @@ export interface BehaviourSettings {
   hoverHighlight: boolean;
   /** The brick-laying tiili splash plays when tiili opens. */
   startupSplash: boolean;
+  /** Lines of history each terminal keeps; applies live to open panes. */
+  scrollback: number;
 }
 
 export interface InactiveSettings {
@@ -82,6 +84,24 @@ export type AppIcon = (typeof APP_ICONS)[number];
 export const PROMPT_IDS = ["off", "classic", "minimal", "tiili"] as const;
 export type PromptId = (typeof PROMPT_IDS)[number];
 
+/** Which signals send a desktop notification while no tiili window is in front. */
+export const NOTIFY_MODES = ["messages", "messagesAndBells", "off"] as const;
+export type NotifyMode = (typeof NOTIFY_MODES)[number];
+
+/** How often the app icon asks for attention for a new mark: once, until the user returns, or never. */
+export const BOUNCE_MODES = ["once", "untilReturn", "never"] as const;
+export type BounceMode = (typeof BOUNCE_MODES)[number];
+
+export interface AttentionSettings {
+  notify: NotifyMode;
+  /** The app icon shows the count of panes that need you. */
+  badge: boolean;
+  bounce: BounceMode;
+}
+
+/** Allowed range of the scrollback lines a terminal keeps. */
+export const SCROLLBACK_RANGE = { min: 1000, max: 100000, step: 1 } as const;
+
 /** Allowed range of the inactive opacity. */
 export const INACTIVE_OPACITY = { min: 0.3, max: 1, step: 0.01 } as const;
 
@@ -98,6 +118,8 @@ export interface Settings {
   /** Applies to open panes and new ones. */
   prompt: PromptId;
   updates: UpdateSettings;
+  /** How a pane that needs you shows outside tiili; read by the app, which mirrors these defaults. */
+  attention: AttentionSettings;
 }
 
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
@@ -123,11 +145,12 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true, startupSplash: true },
+  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
   updates: { autoCheck: true },
+  attention: { notify: "messages", badge: true, bounce: "once" },
 };
 
 /** Allowed range of each numeric font setting and the step values snap to. */
@@ -175,6 +198,7 @@ export function normalize(value: unknown): Settings {
   const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
   const inactive = isRecord(raw.inactive) ? raw.inactive : {};
   const updates = isRecord(raw.updates) ? raw.updates : {};
+  const attention = isRecord(raw.attention) ? raw.attention : {};
   return {
     theme: THEME_IDS.includes(raw.theme as ThemeId) ? (raw.theme as ThemeId) : DEFAULT_SETTINGS.theme,
     font: {
@@ -210,6 +234,7 @@ export function normalize(value: unknown): Settings {
         typeof behaviour.startupSplash === "boolean"
           ? behaviour.startupSplash
           : DEFAULT_SETTINGS.behaviour.startupSplash,
+      scrollback: number(behaviour.scrollback, DEFAULT_SETTINGS.behaviour.scrollback, SCROLLBACK_RANGE),
     },
     inactive: {
       opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
@@ -220,6 +245,15 @@ export function normalize(value: unknown): Settings {
     prompt: PROMPT_IDS.includes(raw.prompt as PromptId) ? (raw.prompt as PromptId) : DEFAULT_SETTINGS.prompt,
     updates: {
       autoCheck: typeof updates.autoCheck === "boolean" ? updates.autoCheck : DEFAULT_SETTINGS.updates.autoCheck,
+    },
+    attention: {
+      notify: NOTIFY_MODES.includes(attention.notify as NotifyMode)
+        ? (attention.notify as NotifyMode)
+        : DEFAULT_SETTINGS.attention.notify,
+      badge: typeof attention.badge === "boolean" ? attention.badge : DEFAULT_SETTINGS.attention.badge,
+      bounce: BOUNCE_MODES.includes(attention.bounce as BounceMode)
+        ? (attention.bounce as BounceMode)
+        : DEFAULT_SETTINGS.attention.bounce,
     },
   };
 }

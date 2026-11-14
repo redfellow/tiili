@@ -58,10 +58,24 @@ below come from `icon-light-small.svg`. After changing the logo, run `npm run ic
 
 The script also writes `app-light.png` and `app-dark.png`, which the app embeds and swaps in while it runs so its
 icon follows the OS light or dark mode: the Dock icon on macOS, the window and taskbar icon on Windows and Linux. On
-macOS the Settings dialogue's Dock icon choice can pin it to the light or the dark icon instead. The installed bundle
-keeps the light icon, so that is what the Dock shows while tiili is not running.
+macOS the Settings dialogue's Dock icon choice can pin it to the light or the dark icon instead.
 
-`scripts/icons.test.ts` checks that every icon each platform needs is present at the right size.
+While tiili is not running, the macOS bundle icon follows the OS appearance as well. `npm run icons` writes
+`src-tauri/icons/AppIcon.icon`, an Icon Composer bundle whose fill is the tile colour and whose single layer is the
+icon's artwork, each with a light and a dark appearance. Apple's `actool` compiles it into `src-tauri/icons/Assets.car`,
+which Tauri copies into the app and names in `CFBundleIconName`; `icon.icns` stays in the bundle as the fallback for
+macOS before 11. Finder and the Dock show the dark icon when System Settings → Appearance → Icon & widget style is
+Dark. The `.icon` bundle is drawn from the large icon only, so the closed app's smallest sizes don't use
+`icon-light-small.svg`.
+
+`actool` comes with Xcode 26 or later, not with the Command Line Tools. When it is installed, `npm run icons`
+compiles `Assets.car` too. Otherwise, after the icon changed, push the branch, run the **app-icon** workflow
+(`.github/workflows/app-icon.yml`, started by hand on a macOS 26 runner) on it, download its `Assets.car` artifact
+and commit it as `src-tauri/icons/Assets.car`. Builds only need the committed file, not Xcode.
+
+`scripts/icons.test.ts` checks that every icon each platform needs is present at the right size, that
+`AppIcon.icon/icon.json` matches the brand icons, and, on macOS, that `Assets.car` holds the light and the dark
+appearance.
 
 ## Signing and notarisation
 

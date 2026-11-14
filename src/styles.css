@@ -128,17 +128,18 @@ body {
   -webkit-user-select: none;
 }
 
-/* macOS overlay title bar: the native title bar's height, with room on the left for the window buttons. */
+/* macOS overlay title bar: a 38px bar with room on the left for the window buttons. trafficLightPosition in
+   tauri.conf.json centres them: its y is roughly the buttons' centre from the window's top, so y 19 is half of 38px. */
 .top-bar[data-overlay] {
-  height: 28px;
-  padding-left: 76px;
+  height: 38px;
+  padding-left: 82px;
 }
 
 .top-bar-title {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  font: 500 13px/28px var(--font-sans);
+  font: 500 13px/38px var(--font-sans);
   color: var(--fg);
 }
 
@@ -204,6 +205,30 @@ body {
   opacity: 1;
 }
 
+/* The count of panes that need the user: a brick and a number, hidden when none do. */
+.top-bar-attention {
+  width: auto;
+  padding: 0 var(--space-1);
+  gap: 3px;
+  color: var(--fg);
+  font: 600 11.5px/16px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+/* Only a count: hovering shows its tooltip but no button highlight. */
+.top-bar-attention:hover {
+  background: none;
+}
+
+.top-bar-attention .pane-chip-brick {
+  margin-right: 0;
+}
+
+.top-bar-attention[hidden] {
+  display: none;
+}
+
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
   --pane-gap: 3px;
@@ -242,12 +267,14 @@ body {
   opacity: var(--inactive-opacity, 0.82);
 }
 
-#panes[data-desaturate] .pane:not([data-focused]) > :is(.pane-title, .pane-terminal) {
+#panes[data-desaturate] .pane:not([data-focused], [data-attention]) > :is(.pane-title, .pane-terminal) {
   filter: grayscale(0.8);
 }
 
-.pane[data-focused] > :is(.pane-title, .pane-terminal) {
+.pane[data-focused] > :is(.pane-title, .pane-terminal),
+.pane[data-attention] > :is(.pane-title, .pane-terminal) {
   opacity: 1;
+  filter: none;
 }
 
 /* Focused pane: a 2 px accent line on its top edge; no glow, no border. */
@@ -277,14 +304,136 @@ body {
   background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
-/* No overview ruler track beside the scrollbar: it only draws a hairline border, as we use no decorations. */
-.xterm-decoration-overview-ruler {
+/* The overview ruler lies over the 8 px scrollbar and shows only the search matches' marks; its border takes the
+   terminal ground's colour (the xterm theme), so no hairline shows beside the scrollbar. */
+
+.pane-terminal {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* The find bar overlays the top right of the terminal area, so the terminal and its shell keep their size. Its frame
+   spans the area's width, as a container the bar measures: under 360 px the bar takes the whole width. */
+.find-bar-frame {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  height: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.find-bar {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  max-width: calc(100% - var(--space-3));
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11.5px/16px var(--font-sans);
+  box-shadow: 0 4px 12px color-mix(in srgb, #000 25%, transparent);
+  pointer-events: auto;
+}
+
+.find-bar[hidden] {
   display: none;
 }
 
-.pane-terminal {
-  flex: 1 1 0;
-  min-height: 0;
+@container (max-width: 359px) {
+  .find-bar {
+    right: 0;
+    left: 0;
+    max-width: none;
+  }
+}
+
+.find-bar-field {
+  flex: 1 1 160px;
+  min-width: 0;
+  width: 160px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-brick);
+  outline: none;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px var(--font-mono);
+}
+
+.find-bar-field:focus {
+  border-color: var(--focus);
+}
+
+.find-bar-error .find-bar-field {
+  border-color: var(--ansi-1);
+  color: var(--ansi-1);
+}
+
+.find-bar-count {
+  min-width: 44px;
+  padding: 0 var(--space-1);
+  font: 500 11px/16px var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.find-bar-button {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-brick);
+  background: none;
+  color: inherit;
+  font: 500 11px/16px var(--font-mono);
+  cursor: pointer;
+}
+
+.find-bar-button:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.find-bar-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg);
+}
+
+/* The hovered link's hint: what ⌘- or Ctrl-click does, in a quiet chip at the pane's bottom edge. */
+.terminal-link-hint {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 5;
+  max-width: calc(100% - var(--space-4));
+  padding: var(--space-1) var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.terminal-link-hint[hidden] {
+  display: none;
 }
 
 /* The Heynote pane's frame fills the pane's content area; Heynote draws its own background. */
@@ -317,8 +466,41 @@ body {
 }
 
 /* Keeps the title row's height before the folder is known. */
-.pane-chip:empty {
+.pane-chip:empty,
+.pane-chip:has(> .pane-chip-text:empty):not(:has(> .pane-chip-brick)) {
   visibility: hidden;
+}
+
+/* A pane that needs the user: a small brick before the chip's text, in the chip's label colour (the accent on the
+   neutral chip); the chip pulses once when the mark arrives. */
+.pane-chip-brick {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--space-1);
+  border-radius: 1px;
+  background: var(--accent);
+  vertical-align: 0;
+}
+
+.pane[data-tint] .pane-chip-brick {
+  background: var(--pane-tint-on);
+}
+
+.pane-chip[data-pulse] {
+  animation: pane-attention-pulse 0.6s ease-out 1;
+}
+
+@keyframes pane-attention-pulse {
+  40% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-chip[data-pulse] {
+    animation: none;
+  }
 }
 
 /* In a repository: the project tint with its label colour. */
@@ -1128,7 +1310,8 @@ body.settings-window {
 }
 
 .settings-snippet {
-  max-height: 150px;
+  /* A fixed height that scrolls inside, so the Behaviour tab fits a 720×640 settings window. */
+  height: 96px;
   margin: var(--space-1) 0 0;
   padding: var(--space-2) var(--space-3);
   overflow: auto;
@@ -1166,6 +1349,31 @@ dialog.update-dialog {
   font-size: 11.5px;
   line-height: 1.4;
   white-space: pre-wrap;
+  user-select: text;
+}
+
+/* Confirming a link whose scheme tiili doesn't open on its own: the full URI in a sunken block. */
+dialog.link-dialog {
+  width: min(480px, calc(100vw - var(--space-6)));
+}
+
+.link-dialog-scheme {
+  margin: 0;
+}
+
+.link-dialog-uri {
+  max-height: 30vh;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
   user-select: text;
 }
 

@@ -9,6 +9,13 @@ export interface TopBarOptions {
   onClosePane: () => void;
   onResetLayout: () => void;
   onSettings: () => void;
+  /** Shows the count of panes that need you; off where the backend keeps no attention marks. */
+  attentionCount?: boolean;
+}
+
+/** What the top bar shows after it is made: the count of panes that need you, across all windows. */
+export interface TopBar {
+  setAttentionCount: (count: number) => void;
 }
 
 interface TopBarButton {
@@ -40,10 +47,10 @@ const ICONS = {
 
 /**
  * Fills `bar`, the window's top bar, with the New pane, Heynote, Close pane, Reset layout and Settings buttons on its
- * right. Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title bar the bar
+ * right, led by the count of panes that need you (hidden at zero). Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title bar the bar
  * leaves room for the native window buttons and shows the title; dragging the bar moves the window.
  */
-export function createTopBar(bar: HTMLElement, options: TopBarOptions): void {
+export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
   const { platform } = options;
   bar.classList.add("top-bar");
   bar.toggleAttribute("data-overlay", options.overlay);
@@ -73,6 +80,28 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): void {
 
   const group = document.createElement("div");
   group.className = "top-bar-actions";
+
+  // The attention count: a brick and the number of marked panes.
+  const count = document.createElement("span");
+  const countNumber = document.createElement("span");
+  const countTip = document.createElement("span");
+  if (options.attentionCount) {
+    count.className = "top-bar-button top-bar-attention";
+    count.hidden = true;
+    const brick = document.createElement("span");
+    brick.className = "pane-chip-brick";
+    brick.setAttribute("aria-hidden", "true");
+    countNumber.className = "top-bar-attention-count";
+    const tip = document.createElement("span");
+    tip.className = "top-bar-tooltip";
+    tip.setAttribute("role", "tooltip");
+    const keys = document.createElement("kbd");
+    keys.textContent = platform === "macos" ? "⌘J" : "Ctrl+Shift+J";
+    tip.append(countTip, keys);
+    count.append(brick, countNumber, tip);
+    group.append(count);
+  }
+
   for (const { name, shortcut, icon, action } of buttons) {
     const button = document.createElement("button");
     button.type = "button";
@@ -99,4 +128,13 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): void {
     group.append(button);
   }
   bar.append(group);
+
+  return {
+    setAttentionCount: (n) => {
+      count.hidden = n <= 0;
+      countNumber.textContent = String(n);
+      countTip.textContent = n === 1 ? "1 pane needs you" : `${n} panes need you`;
+      count.setAttribute("aria-label", countTip.textContent);
+    },
+  };
 }

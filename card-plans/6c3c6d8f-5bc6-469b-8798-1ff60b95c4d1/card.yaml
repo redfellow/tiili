@@ -1,0 +1,18 @@
+format: 1
+slug: one-more-pass-at-the-app-icon-remove-the
+title: "One more pass at the app icon: remove the top and bottom small tiles and
+  reduce the embossing. simple wide brick with..."
+x-harvaaja-card: 6c3c6d8f-5bc6-469b-8798-1ff60b95c4d1
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The packaging spec's appearance-icon scenarios name the tile and
+    brick (kalkki tile in light mode); a black base with one centred brick
+    changes that contract. No active change covers the icon.
+  citations:
+    - "openspec/specs/packaging/spec.md: Requirement macOS bundle icon follows
+      the appearance"
+    - docs/brand/README.md lines 30-39
+  revision: ebfd6f39-7f3f-448c-94cd-335c8a31ad99
