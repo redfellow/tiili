@@ -66,6 +66,8 @@ export function createFindBar(
 ): FindBar {
   const options: Record<Option, boolean> = { caseSensitive: false, wholeWord: false, regex: false };
   let opened = false;
+  /** The terminal selection the last search left on its active match, which is not the user's own selection. */
+  let selectedMatch = "";
   let intercept: (event: KeyboardEvent) => boolean = () => false;
   const keys = keyNames(platform);
 
@@ -129,6 +131,8 @@ export function createFindBar(
     const searchOptions: ISearchOptions = { ...options, decorations: decorations(), incremental };
     const found = direction === "next" ? addon.findNext(query, searchOptions) : addon.findPrevious(query, searchOptions);
     if (!found) count.textContent = matchCountLabel(-1, 0, false);
+    // The addon selects the active match; that selection must not later replace the user's query (a regex with it).
+    selectedMatch = found ? term.getSelection() : "";
   };
 
   /** Highlights the open search afresh, e.g. with new colours or options. */
@@ -140,7 +144,7 @@ export function createFindBar(
 
   const show = () => {
     const selection = term.getSelection();
-    if (selection !== "" && !selection.includes("\n")) field.value = selection;
+    if (selection !== "" && selection !== selectedMatch && !selection.includes("\n")) field.value = selection;
     if (!opened) {
       opened = true;
       bar.hidden = false;
