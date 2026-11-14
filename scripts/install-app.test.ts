@@ -35,8 +35,17 @@ describe("install-app", () => {
     expect(isPinned(xml)).toBe(true);
   });
 
-  it("builds only the host-architecture .app", () => {
-    expect(buildArgs()).toEqual(["tauri", "build", "--bundles", "app", "--", "--no-default-features"]);
+  it("builds only the host-architecture .app, without an updater bundle", () => {
+    expect(buildArgs()).toEqual([
+      "tauri",
+      "build",
+      "--bundles",
+      "app",
+      "--config",
+      '{"bundle":{"createUpdaterArtifacts":false}}',
+      "--",
+      "--no-default-features",
+    ]);
     expect(builtAppPath("/repo")).toBe("/repo/src-tauri/target/release/bundle/macos/tiili.app");
   });
 });
