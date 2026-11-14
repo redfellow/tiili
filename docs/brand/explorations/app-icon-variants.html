@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tiili app icon variants</title>
+<style>
+  @font-face { font-family: "Geist Mono"; src: url("../../../src/assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; }
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d1011; color: #e9e2d8; font: 13px/1.5 "Geist Mono", ui-monospace, monospace; padding: 24px 16px 64px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.lead { color: #9a948c; margin: 0 0 24px; max-width: 70ch; }
+  .dock { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; padding: 12px 18px 16px; margin: 0 0 32px; border-radius: 22px; width: max-content; max-width: 100%; overflow-x: auto;
+    background: linear-gradient(180deg, rgba(120,40,60,.55), rgba(70,20,40,.75)); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); }
+  .dock figure { margin: 0; display: grid; justify-items: center; gap: 6px; }
+  .dock figcaption { font-size: 11px; color: #f2d9dd; }
+  .dock.light { background: linear-gradient(180deg, rgba(240,226,230,.9), rgba(220,200,210,.9)); }
+  .dock.light figcaption { color: #4a2c34; }
+  .variant { display: grid; grid-template-columns: 220px 1fr; gap: 16px 24px; padding: 20px 0; border-top: 1px solid #222a2c; }
+  .variant h2 { font-size: 14px; margin: 0; }
+  .variant p { color: #9a948c; margin: 4px 0 0; }
+  .sizes { display: flex; flex-wrap: wrap; gap: 20px; align-items: end; }
+  .pair { display: flex; gap: 12px; align-items: end; padding: 12px; border-radius: 12px; background: #161b1d; }
+  .pair.light { background: #ece4d8; }
+  .tag { font-size: 11px; color: #6e6862; }
+  img { display: block; }
+  @media (max-width: 720px) { .variant { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<h1>tiili app icon: a clearer &gt;_</h1>
+<p class="lead">The current icon draws &gt;_ with a 1.5-unit stroke inside a 25×12 brick, which is about 1 px in the Dock. Each variant keeps the seven-brick running bond and the brand palette, and makes the prompt read at 64 px and below.</p>
+
+<div class="dock" id="dock-dark"></div>
+<div class="dock light" id="dock-light"></div>
+<div id="variants"></div>
+
+<script>
+const C = { tiili: "#A4472B", klinkkeri: "#6B2A1E", savi: "#C9764F", koski: "#111617", kalkki: "#F6F1E9", ground: "#182023", ink: "#2A2321" };
+
+/** The seven-brick running bond in mark units (52 × 40); `mid` replaces the middle course. */
+function bond({ top = 0, h = 12, gap = 2, mid } = {}) {
+  const rows = [];
+  const course = (y, hh) => [[0, y, 25, hh], [27, y, 25, hh]];
+  rows.push(...course(top, h).map((r) => ({ r })));
+  const midY = top + h + gap;
+  const midH = mid?.h ?? h;
+  const focusW = mid?.w ?? 25;
+  const sideW = (52 - focusW - 2 * gap) / 2;
+  rows.push({ r: [0, midY, sideW, midH] }, { r: [sideW + gap, midY, focusW, midH], focus: true }, { r: [52 - sideW, midY, sideW, midH] });
+  rows.push(...course(midY + midH + gap, h).map((r) => ({ r })));
+  return { bricks: rows, focus: [sideW + gap, midY, focusW, midH], height: midY + midH + gap + h };
+}
+
+const rect = ([x, y, w, h], fill, rx = 1.5) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}"/>`;
+
+/** A `>` and a cursor, centred in `box`: `size` is the chevron height as a share of the box, `stroke` in mark units. */
+function prompt(box, { size = 0.45, stroke = 1.5, color, cursor = "underscore", cursorColor = color, align = "center" }) {
+  const [x, y, w, h] = box;
+  const ch = h * size, cw = ch * 0.62;
+  const curW = cursor === "block" ? ch * 0.55 : ch * 0.85;
+  const gap = ch * (cursor === "block" ? 0.5 : 0.32);
+  const total = cw + gap + curW;
+  const x0 = (align === "left" ? x + w * 0.17 : x + (w - total) / 2) + stroke * 0.3, cy = y + h / 2;
+  const chev = `<path d="M${x0} ${cy - ch / 2} L${x0 + cw} ${cy} L${x0} ${cy + ch / 2}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="square" stroke-linejoin="miter"/>`;
+  const cx = x0 + cw + gap;
+  const cur = cursor === "block"
+    ? `<rect x="${cx}" y="${cy - ch / 2 - stroke * 0.2}" width="${curW}" height="${ch + stroke * 0.4}" rx="${stroke * 0.35}" fill="${cursorColor}"/>`
+    : `<rect x="${cx}" y="${cy + ch / 2 - stroke / 2}" width="${curW}" height="${stroke}" fill="${cursorColor}"/>`;
+  return chev + cur;
+}
+
+/** The icon frame: a rounded square of the ground, with the mark fitted to `box` (x, y, w in icon units). */
+function icon(light, mark, { box = [6, 16.154, 88], clip = false } = {}) {
+  const ground = light ? C.kalkki : C.ground;
+  const k = box[2] / 52;
+  const id = "c" + Math.random().toString(36).slice(2, 8);
+  const inner = `<g transform="translate(${box[0]} ${box[1]}) scale(${k})">${mark}</g>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    ${clip ? `<clipPath id="${id}"><rect width="100" height="100" rx="22.5"/></clipPath>` : ""}
+    <rect width="100" height="100" rx="22.5" fill="${ground}"/>
+    ${clip ? `<g clip-path="url(#${id})">${inner}</g>` : inner}</svg>`;
+}
+
+const focusFill = (light) => (light ? C.klinkkeri : C.savi);
+const glyphInk = (light) => (light ? "#FFFFFF" : C.koski);
+
+const VARIANTS = [
+  {
+    name: "Current",
+    note: "For comparison: the shipped icon (1.5-unit stroke, chevron ~45% of the brick).",
+    svg: (light) => {
+      const b = bond();
+      const mark = b.bricks.map(({ r, focus }) => rect(r, focus ? focusFill(light) : C.tiili)).join("") +
+        `<path d="M21.6 17.3 L25.2 20 L21.6 22.7" fill="none" stroke="${glyphInk(light)}" stroke-width="1.5" stroke-linecap="square"/><rect x="26.6" y="22" width="4.8" height="1.5" fill="${glyphInk(light)}"/>`;
+      return icon(light, mark);
+    },
+  },
+  {
+    name: "1 · Heavier",
+    note: "Same layout; the prompt fills the brick with a stroke about 1.7× heavier. The smallest change.",
+    svg: (light) => {
+      const b = bond();
+      const mark = b.bricks.map(({ r, focus }) => rect(r, focus ? focusFill(light) : C.tiili)).join("") +
+        prompt(b.focus, { size: 0.6, stroke: 2.5, color: glyphInk(light) });
+      return icon(light, mark);
+    },
+  },
+  {
+    name: "2 · Wide focus",
+    note: "The middle course is a long focus brick between two closers, like a stretcher. Room for a big >_.",
+    svg: (light) => {
+      const b = bond({ mid: { w: 34 } });
+      const mark = b.bricks.map(({ r, focus }) => rect(r, focus ? focusFill(light) : C.tiili)).join("") +
+        prompt(b.focus, { size: 0.62, stroke: 2.6, color: glyphInk(light) });
+      return icon(light, mark);
+    },
+  },
+  {
+    name: "3 · Lit window",
+    note: "The focus brick is a dark terminal set in the wall, with a savi prompt and brick cursor. The most contrast.",
+    svg: (light) => {
+      const b = bond({ mid: { w: 30 } });
+      const screen = light ? C.ink : C.koski;
+      const mark = b.bricks.map(({ r, focus }) => rect(r, focus ? screen : C.tiili)).join("") +
+        prompt(b.focus, { size: 0.58, stroke: 2.4, color: light ? C.kalkki : C.savi, cursor: "block", cursorColor: C.savi });
+      return icon(light, mark);
+    },
+  },
+  {
+    name: "4 · Close-up",
+    note: "The camera moves in: the wall runs off the edges and the focus brick fills the middle. Strongest at 32 px.",
+    svg: (light) => {
+      // A wider bond, cropped by the icon's rounded square.
+      let bricks = "";
+      const W = 25, H = 12, G = 2;
+      for (let row = -1; row <= 1; row++) {
+        const off = row % 2 ? -(W + G) / 2 : 0;
+        for (let c = -2; c <= 3; c++) {
+          const x = c * (W + G) + off + 13.5, y = 14 + row * (H + G);
+          const focus = row === 0 && c === 0;
+          if (focus) continue;
+          bricks += rect([x, y, W, H], C.tiili);
+        }
+      }
+      const f = [13.5, 14, 25, 12];
+      const mark = bricks + rect(f, focusFill(light)) + prompt(f, { size: 0.6, stroke: 2.2, color: glyphInk(light) });
+      return icon(light, mark, { box: [-27, -9.2, 154], clip: true });
+    },
+  },
+  {
+    name: "5 · Tall course",
+    note: "The middle course stands taller than the others, so the prompt is set big and the block cursor reads as the brick cursor.",
+    svg: (light) => {
+      const b = bond({ h: 10, mid: { w: 28, h: 18 } });
+      const mark = b.bricks.map(({ r, focus }) => rect(r, focus ? focusFill(light) : C.tiili)).join("") +
+        prompt(b.focus, { size: 0.5, stroke: 2.6, color: glyphInk(light), cursor: "block" });
+      return icon(light, mark, { box: [6, 50 - (88 * b.height) / 52 / 2, 88] });
+    },
+  },
+  ...[["6 · Tall close-up", "Variant 5's own seven bricks, cropped like 4: the tall focus brick fills about three quarters of the width, the closers are slivers at the edges, and the courses above and below run off the top and bottom.",
+        { k: 2.6 }],
+      ["7 · Tall close-up, >_", "The focus brick spans the icon's full width; only the edges of the courses above and below show, the one above nudged left and the one below right, so the joints don't line up.",
+        { k: 100 / 28, cursor: "underscore", shift: 4 }],
+      ["8 · Wide stagger", "7 with a bolder stagger: the joints sit about a third of the way in from each side, so the off-bond reads even at 32 px.",
+        { k: 100 / 28, cursor: "underscore", shift: 8 }],
+      ["9 · Breathing room", "7 pulled back a touch: thin slivers of the closers show at both edges, framing the >_ brick inside the wall.",
+        { k: 3.2, cursor: "underscore", shift: 4 }],
+      ["10 · Fired tones", "7 with each wall brick fired a different shade (tiili, klinkkeri and a warm mid-tone), like a real wall.",
+        { k: 100 / 28, cursor: "underscore", shift: 4, tones: true }],
+      ["11 · Prompt at the margin", "7 with the >_ set left, where a prompt sits in a terminal, and a little larger.",
+        { k: 100 / 28, cursor: "underscore", shift: 4, align: "left", size: 0.56 }]]
+    .map(([name, note, opts]) => ({ name, note, svg: (light) => tallCloseUp(light, opts) })),
+];
+
+/** Variant 5 (the tall-course bond), scaled by `k` about the focus brick's centre and cropped by the icon's rounded square. */
+function tallCloseUp(light, { k, cursor = "block", ink, shift = 0, tones = false, align = "center", size = 0.5 }) {
+  const b = bond({ h: 10, mid: { w: 28, h: 18 } });
+  const [fx, fy, fw, fh] = b.focus;
+  // The course above is nudged left and the one below right, so their joints sit off the centre line.
+  const nudge = (r) => (r[1] < fy ? [r[0] - shift, ...r.slice(1)] : r[1] > fy ? [r[0] + shift, ...r.slice(1)] : r);
+  const shades = [C.tiili, C.klinkkeri, "#8E3A24", C.tiili, "#B4553A", C.klinkkeri, "#8E3A24"];
+  const mark = b.bricks.map(({ r, focus }, i) => rect(nudge(r), focus ? focusFill(light) : tones ? shades[i] : C.tiili)).join("") +
+    prompt(b.focus, { size, stroke: 2.6, color: ink ?? glyphInk(light), cursor, align });
+  return icon(light, mark, { box: [50 - (fx + fw / 2) * k, 50 - (fy + fh / 2) * k, 52 * k], clip: true });
+}
+
+const url =(svg) => "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+const img = (svg, size) => `<img src="${url(svg)}" width="${size}" height="${size}" alt="">`;
+
+for (const [id, light] of [["dock-dark", false], ["dock-light", true]]) {
+  document.getElementById(id).innerHTML = VARIANTS.map((v) =>
+    `<figure>${img(v.svg(light), 64)}<figcaption>${v.name.split(" · ")[0]}</figcaption></figure>`).join("");
+}
+
+document.getElementById("variants").innerHTML = VARIANTS.map((v) => `
+  <section class="variant">
+    <div><h2>${v.name}</h2><p>${v.note}</p></div>
+    <div class="sizes">
+      ${[false, true].map((light) => `<div class="pair ${light ? "light" : ""}">
+        ${[256, 128, 64, 32, 16].map((s) => img(v.svg(light), s)).join("")}</div>`).join("")}
+    </div>
+  </section>`).join("");
+</script>
+</body>
+</html>
