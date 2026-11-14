@@ -28,149 +28,149 @@
   - proof: `npx vitest run scripts/updater-manifest.test.ts`
   - proof: `npx eslint scripts/updater-manifest.mjs scripts/updater-manifest.test.ts`
 - [ ] 3.2 (triage) Sign updater bundles, upload them with their signatures, and add the manifest job.
-  file: .github/workflows/release.yml
-  content:
-```yaml
-name: release
-on:
-  push:
-    tags: ["v*"]
+  - file: .github/workflows/release.yml
+  - content:
+  ```yaml
+  name: release
+  on:
+    push:
+      tags: ["v*"]
 
-permissions:
-  contents: write
-  # The release notes read the promotion pull requests' bodies.
-  pull-requests: read
+  permissions:
+    contents: write
+    # The release notes read the promotion pull requests' bodies.
+    pull-requests: read
 
-jobs:
-  draft:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # The notes need the earlier tags and main's history since the previous release.
-          fetch-depth: 0
-      # The version comes from the tag, not from package.json: releases do not commit version bumps.
-      - name: Tag is a version
-        run: |
-          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Tag $GITHUB_REF_NAME is not a vX.Y.Z version"
-            exit 1
-          fi
-      - name: Create draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then exit 0; fi
-          # Notes from the promotions since the previous tag; GitHub's generated notes if that fails.
-          if node scripts/release-notes.mjs "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"; then
-            gh release create "$GITHUB_REF_NAME" --draft --notes-file "$RUNNER_TEMP/notes.md" --title "tiili $GITHUB_REF_NAME"
-          else
-            gh release create "$GITHUB_REF_NAME" --draft --generate-notes --title "tiili $GITHUB_REF_NAME"
-          fi
+  jobs:
+    draft:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            # The notes need the earlier tags and main's history since the previous release.
+            fetch-depth: 0
+        # The version comes from the tag, not from package.json: releases do not commit version bumps.
+        - name: Tag is a version
+          run: |
+            if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Tag $GITHUB_REF_NAME is not a vX.Y.Z version"
+              exit 1
+            fi
+        - name: Create draft release
+          env:
+            GH_TOKEN: ${{ github.token }}
+          run: |
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then exit 0; fi
+            # Notes from the promotions since the previous tag; GitHub's generated notes if that fails.
+            if node scripts/release-notes.mjs "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"; then
+              gh release create "$GITHUB_REF_NAME" --draft --notes-file "$RUNNER_TEMP/notes.md" --title "tiili $GITHUB_REF_NAME"
+            else
+              gh release create "$GITHUB_REF_NAME" --draft --generate-notes --title "tiili $GITHUB_REF_NAME"
+            fi
 
-  bundle:
-    needs: draft
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Linux dependencies
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: Signing variables from secrets that are set
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            value="${!name}"
-            if [ -n "$value" ]; then
+    bundle:
+      needs: draft
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [macos-latest, windows-latest, ubuntu-22.04]
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: lts/*
+            cache: npm
+        - uses: dtolnay/rust-toolchain@stable
+        - name: Linux dependencies
+          if: matrix.os == 'ubuntu-22.04'
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
+              libssl-dev libayatana-appindicator3-dev librsvg2-dev
+        - name: Signing variables from secrets that are set
+          if: matrix.os == 'macos-latest'
+          shell: bash
+          env:
+            APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+            APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+            APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+            APPLE_ID: ${{ secrets.APPLE_ID }}
+            APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+            APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          run: |
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              value="${!name}"
+              if [ -n "$value" ]; then
+                {
+                  echo "$name<<__END__"
+                  echo "$value"
+                  echo "__END__"
+                } >> "$GITHUB_ENV"
+              fi
+            done
+        - run: npm ci
+        - name: Stamp the version from the tag
+          shell: bash
+          run: node scripts/stamp-version.mjs "$GITHUB_REF_NAME"
+        - name: Updater signing key
+          shell: bash
+          env:
+            TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          run: |
+            if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+              echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building installers without updater bundles"
+              exit 0
+            fi
+            for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
               {
                 echo "$name<<__END__"
-                echo "$value"
+                echo "${!name}"
                 echo "__END__"
               } >> "$GITHUB_ENV"
+            done
+        - run: npm run bundle
+        - name: Upload installers
+          shell: bash
+          env:
+            GH_TOKEN: ${{ github.token }}
+          run: |
+            # find, not globstar: the macOS runner's /bin/bash is 3.2, which has no globstar.
+            files=()
+            while IFS= read -r file; do files+=("$file"); done < <(find src-tauri/target -type f \( \
+              -path '*/bundle/dmg/*.dmg' -o -path '*/bundle/nsis/*.exe' -o \
+              -path '*/bundle/appimage/*.AppImage' -o -path '*/bundle/deb/*.deb' -o \
+              -path '*/bundle/macos/*.app.tar.gz' -o -path '*/bundle/*/*.sig' \))
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "No installers found"
+              exit 1
             fi
-          done
-      - run: npm ci
-      - name: Stamp the version from the tag
-        shell: bash
-        run: node scripts/stamp-version.mjs "$GITHUB_REF_NAME"
-      - name: Updater signing key
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building installers without updater bundles"
-            exit 0
-          fi
-          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
-            {
-              echo "$name<<__END__"
-              echo "${!name}"
-              echo "__END__"
-            } >> "$GITHUB_ENV"
-          done
-      - run: npm run bundle
-      - name: Upload installers
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # find, not globstar: the macOS runner's /bin/bash is 3.2, which has no globstar.
-          files=()
-          while IFS= read -r file; do files+=("$file"); done < <(find src-tauri/target -type f \( \
-            -path '*/bundle/dmg/*.dmg' -o -path '*/bundle/nsis/*.exe' -o \
-            -path '*/bundle/appimage/*.AppImage' -o -path '*/bundle/deb/*.deb' -o \
-            -path '*/bundle/macos/*.app.tar.gz' -o -path '*/bundle/*/*.sig' \))
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No installers found"
-            exit 1
-          fi
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
 
-  manifest:
-    needs: bundle
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-      - name: Assemble and upload latest.json
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
-        run: |
-          if [ "$HAS_KEY" != "true" ]; then
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: skipping latest.json, so installed apps will not see this release"
-            exit 0
-          fi
-          mkdir -p "$RUNNER_TEMP/sigs"
-          gh release download "$GITHUB_REF_NAME" --pattern '*.sig' --dir "$RUNNER_TEMP/sigs"
-          gh release view "$GITHUB_REF_NAME" --json body --jq .body > "$RUNNER_TEMP/notes.md"
-          node scripts/updater-manifest.mjs "$GITHUB_REF_NAME" "$RUNNER_TEMP/sigs" "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/latest.json"
-          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/latest.json" --clobber
-```
+    manifest:
+      needs: bundle
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: lts/*
+        - name: Assemble and upload latest.json
+          env:
+            GH_TOKEN: ${{ github.token }}
+            HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          run: |
+            if [ "$HAS_KEY" != "true" ]; then
+              echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: skipping latest.json, so installed apps will not see this release"
+              exit 0
+            fi
+            mkdir -p "$RUNNER_TEMP/sigs"
+            gh release download "$GITHUB_REF_NAME" --pattern '*.sig' --dir "$RUNNER_TEMP/sigs"
+            gh release view "$GITHUB_REF_NAME" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+            node scripts/updater-manifest.mjs "$GITHUB_REF_NAME" "$RUNNER_TEMP/sigs" "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/latest.json"
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/latest.json" --clobber
+  ```
 
 ## 4. Docs
 
