@@ -43,6 +43,14 @@ describe("Tauri backend", () => {
   });
 });
 
+describe("Tauri backend prompt choice", () => {
+  it.each(PROMPT_IDS)("Open panes switch: pty_set_prompt gets prompt %s", async (prompt) => {
+    invoke.mockClear();
+    await tauriBackend().setPrompt(prompt);
+    expect(invoke.mock.calls).toEqual([["pty_set_prompt", { prompt }]]);
+  });
+});
+
 describe("Tauri backend events", () => {
   it("Copy with two windows open: menu and shell events are heard on this window only", async () => {
     windowListen.mockClear();

@@ -37,6 +37,7 @@ export function tauriBackend(): Backend {
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
       return invoke<number>("pty_spawn", { rows, cols, cwd, prompt, onOutput: output });
     },
+    setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
     write: (id, data) => invoke("pty_write", { id, data }),
     resize: (id, rows, cols) => invoke("pty_resize", { id, rows, cols }),
     close: (id) => invoke("pty_close", { id }),

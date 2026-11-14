@@ -56,7 +56,13 @@ pub struct PtySession {
     input: Arc<Mutex<Option<Sender<Vec<u8>>>>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
+    /// Set once the shell has shown a prompt through tiili's integration and redraws it on SIGUSR1 (zsh): before
+    /// that, the signal could reach it ahead of the handler and end it.
+    redraws: Arc<AtomicBool>,
 }
+
+/// What tiili's integration writes before every prompt (OSC 7): once seen, its startup files have loaded.
+const INTEGRATION_PROMPT: &[u8] = b"\x1b]7;";
 
 fn size(rows: u16, cols: u16) -> PtySize {
     PtySize {
@@ -97,31 +103,42 @@ impl PtySession {
     }
 
     /// Starts the user's default shell in `cwd`. Without `cwd`, or when it is not a folder, the
-    /// shell starts in the home folder. With a `prompt` other than `off`, zsh, bash and PowerShell
-    /// start through tiili's shell integration, which sets that prompt where the user's own startup
-    /// files left the default one. Every shell gets `TERM=xterm-256color`, `COLORTERM=truecolor`,
+    /// shell starts in the home folder. zsh, bash and PowerShell start through tiili's shell
+    /// integration, which sets `prompt` (Off included) where the user's own startup files left the
+    /// default one, and follows later choices from [`set_prompt`]. Every shell gets `TERM=xterm-256color`, `COLORTERM=truecolor`,
     /// `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
     pub fn spawn_in(
         cwd: Option<&Path>,
         prompt: &str,
         rows: u16,
         cols: u16,
-        on_output: OutputFn,
+        mut on_output: OutputFn,
         on_exit: ExitFn,
     ) -> io::Result<Self> {
-        let dir = if prompt == crate::shell_integration::PROMPT_OFF {
-            None
-        } else {
-            crate::shell_integration::default_dir()
-        };
-        let mut cmd = crate::shell_integration::shell_command(prompt, dir.as_deref());
+        let dir = crate::shell_integration::default_dir();
+        let (mut cmd, redraws) = crate::shell_integration::shell_command(prompt, dir.as_deref());
         set_colour_env(&mut cmd);
         // portable-pty starts the default shell in the home folder when no cwd is set or the
         // given one is not a folder.
         if let Some(dir) = cwd {
             cmd.cwd(dir);
         }
-        Self::spawn_command(cmd, rows, cols, on_output, on_exit)
+        let ready = Arc::new(AtomicBool::new(false));
+        let output_ready = Arc::clone(&ready);
+        let watched = Box::new(move |data: &[u8]| {
+            if redraws
+                && !output_ready.load(Ordering::Relaxed)
+                && data
+                    .windows(INTEGRATION_PROMPT.len())
+                    .any(|w| w == INTEGRATION_PROMPT)
+            {
+                output_ready.store(true, Ordering::Relaxed);
+            }
+            on_output(data)
+        });
+        let mut session = Self::spawn_command(cmd, rows, cols, watched, on_exit)?;
+        session.redraws = ready;
+        Ok(session)
     }
 
     /// Starts `cmd` on a new pseudo-terminal of `rows` x `cols`.
@@ -198,6 +215,7 @@ impl PtySession {
             input,
             killer,
             pid,
+            redraws: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -211,6 +229,20 @@ impl PtySession {
     /// The shell's process id, when the platform reports one.
     pub fn pid(&self) -> Option<u32> {
         self.pid
+    }
+
+    /// Asks the shell to redraw its prompt now, after the prompt choice changed: SIGUSR1 to an integrated zsh that
+    /// has shown its first prompt, on Unix. Other shells are sent nothing; they switch at their next prompt.
+    pub fn redraw_prompt(&self) {
+        #[cfg(unix)]
+        if self.redraws.load(Ordering::Relaxed) {
+            if let Some(pid) = self.pid.and_then(|p| libc::pid_t::try_from(p).ok()) {
+                // SAFETY: kill only sends a signal; the pid is this session's own shell.
+                unsafe {
+                    libc::kill(pid, libc::SIGUSR1);
+                }
+            }
+        }
     }
 
     /// Reads which process is in this session's foreground.
@@ -230,6 +262,19 @@ impl Drop for PtySession {
     fn drop(&mut self) {
         let _ = self.killer.kill();
     }
+}
+
+/// Makes `prompt` the current choice for the shells tiili integrates: written to the integration folder, which they
+/// read before every prompt, and each of `sessions` that can redraw an idle prompt is asked to.
+pub fn set_prompt<'a>(
+    prompt: &str,
+    sessions: impl IntoIterator<Item = &'a PtySession>,
+) -> io::Result<()> {
+    let dir = crate::shell_integration::default_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no cache folder"))?;
+    crate::shell_integration::write_prompt(&dir, prompt)?;
+    sessions.into_iter().for_each(PtySession::redraw_prompt);
+    Ok(())
 }
 
 /// Runs every tick about once a second while `alive` holds, on macOS and Linux; elsewhere neither
@@ -434,6 +479,12 @@ impl SessionRegistry {
     /// The working directory of session `id`'s shell, where the platform can read it.
     pub fn cwd(&self, id: SessionId) -> io::Result<Option<PathBuf>> {
         self.with(id, |s| Ok(s.pid().and_then(crate::cwd::process_cwd)))
+    }
+
+    /// Makes `prompt` the current choice for every integrated shell, open ones included (see [`set_prompt`]).
+    pub fn set_prompt(&self, prompt: &str) -> io::Result<()> {
+        let sessions = self.sessions.lock().map_err(to_io)?;
+        set_prompt(prompt, sessions.values())
     }
 
     /// How many sessions are open.

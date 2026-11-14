@@ -52,6 +52,13 @@ describe("WebSocket backend", () => {
     expect(setup().backend.moves).toBeUndefined();
   });
 
+  it("Open panes keep their prompt in the dev browser: setPrompt sends nothing to the shells", async () => {
+    const { backend, sockets } = setup();
+    await backend.spawn(24, 80, undefined, "off", () => undefined);
+    await backend.setPrompt("tiili");
+    expect(sockets[0].sent).toEqual([]);
+  });
+
   it.each(PROMPT_IDS)("New panes use the choice: the URL carries prompt %s", async (prompt) => {
     const { backend, sockets } = setup();
     await backend.spawn(24, 80, undefined, prompt, () => undefined);
