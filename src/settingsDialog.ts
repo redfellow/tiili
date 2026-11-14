@@ -704,7 +704,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse"))),
     section("Attention",
       "A pane whose program rings the bell or sends a notification gets a brick on its title until you look at it. " +
-      "⌘J or Ctrl+Shift+J goes to the oldest one.",
+      `${options.platform === "macos" ? "⌘J" : "Ctrl+Shift+J"} goes to the oldest one.`,
       row("Notify", notify.el,
         infoButton("Notify",
           "A desktop notification while no tiili window is in front: for messages only, or for bells too." +
