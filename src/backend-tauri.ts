@@ -4,6 +4,7 @@ import { Menu } from "@tauri-apps/api/menu";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import type { AttentionMark } from "./attention";
 import type { Backend, MenuItem, MovePayload } from "./backend";
 import { noteListeners, type NotesChanged } from "./heynoteStore";
 import { currentPlatform } from "./keymap";
@@ -87,6 +88,12 @@ export function tauriBackend(): Backend {
       setName: (name) => invoke("window_set_name", { name }),
       move: (target, payload) => invoke("pane_move", { target: target ?? null, payload }),
       take: async (token) => (await invoke<MovePayload | null>("pane_move_take", { token })) ?? undefined,
+    },
+    attention: {
+      mark: (id, message, title) => invoke("attention_mark", { id, message: message ?? null, title }),
+      clear: (id) => invoke("attention_clear", { id }),
+      next: () => invoke("attention_next"),
+      list: () => invoke<AttentionMark[]>("attention_list"),
     },
     settingsWindows: {
       open: () => invoke("settings_open"),
