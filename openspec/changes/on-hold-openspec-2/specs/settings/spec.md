@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Remote shells snippets
-The Behaviour tab SHALL have a Remote shells section whose info hint says adding the snippet to a remote shell startup file lets tiili show that machine's folder and repository. A bash / zsh / fish switch (bash on each form reset) SHALL pick the read-only snippet shown, and Copy SHALL put it on the clipboard. Each snippet SHALL send the folder as OSC 7 and the git root (empty outside a repository) as `tiili_repo` at every prompt. The section saves nothing.
+The Behaviour tab SHALL have a Remote shells section with an info button whose hint says adding the snippet to a remote shell startup file lets tiili show that machine's folder and repository. A bash / zsh / fish switch (bash on each form reset) SHALL pick the read-only snippet shown, and Copy SHALL put it on the clipboard. Each snippet SHALL send the folder as OSC 7 and the git root (empty outside a repository) as `tiili_repo` at every prompt. The section saves nothing.
 
 #### Scenario: Copy the zsh snippet
 - **WHEN** the user switches to zsh and clicks Copy
