@@ -61,11 +61,15 @@ Each pane SHALL send its own rows and columns to its pseudo-terminal when the la
 - **THEN** each session receives the rows and columns of its own pane
 
 ### Requirement: Focus appearance
-Panes SHALL sit on `--term-gap` with 3 px gaps. The focused pane SHALL show a 2 px accent line on its top edge and the cursor style chosen in settings (a blinking block by default); other panes SHALL show an outlined cursor and keep showing output.
+Panes SHALL sit on `--term-gap` with 3 px gaps. The focused pane SHALL show a 2 px accent line on its top edge and the cursor style chosen in settings (a blinking block by default); other panes SHALL show a still, non-blinking outlined cursor whatever the Blink setting, and keep showing output.
 
 #### Scenario: Focused pane shows accent line
 - **WHEN** a pane gains focus
 - **THEN** it shows a 2 px accent line on its top edge and the cursor style chosen in settings
+
+#### Scenario: Inactive pane cursor does not blink
+- **WHEN** Blink is on in settings and a pane loses focus
+- **THEN** its cursor shows as a steady outline that does not blink, and it blinks again when the pane regains focus
 
 #### Scenario: Inactive pane keeps streaming
 - **WHEN** a pane without focus receives output
