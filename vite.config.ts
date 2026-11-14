@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
 import type { Plugin, UserConfig } from "vite";
+
+/** The app version from package.json (Tauri reads the same one), baked into the frontend as `__APP_VERSION__`. */
+const appVersion = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -24,6 +28,7 @@ function devBridge(): Plugin {
 // server loads it before vitest is necessarily installed. Test settings live in vitest.config.ts.
 const config: UserConfig = {
   clearScreen: false,
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [devBridge()],
   server: {
     port: 1420,

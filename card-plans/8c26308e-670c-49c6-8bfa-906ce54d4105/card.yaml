@@ -1,0 +1,17 @@
+format: 1
+slug: application-wide-default-font-size-of-13
+title: Application-wide default font size of 13 pixels
+x-harvaaja-card: 8c26308e-670c-49c6-8bfa-906ce54d4105
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: The settings spec names no default font size (only family Geist Mono
+    and weight 100), so changing the default from 12 to 13 is a tactical value
+    change. The earlier card d0e79aba (12 px) took the same route.
+  citations:
+    - openspec/specs/settings/spec.md:79
+    - src/settings.ts:110
+    - commit 495d070
+  revision: f8cbf245-1052-4b33-9457-c753837c5799
