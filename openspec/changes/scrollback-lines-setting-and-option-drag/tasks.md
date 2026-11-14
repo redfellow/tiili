@@ -4,7 +4,8 @@
   - proof: `npx vitest run src/settings.test.ts`
   - proof: `npx eslint src/settings.ts src/settings.test.ts`
 - [x] 1.2 Add the "Scrollback lines" field to Behaviour › Panes in `src/settingsDialog.ts`; apply `scrollback` live and set `macOptionClickForcesSelection: true` in `src/terminal.ts`
-  - proof: `npx eslint src/settingsDialog.ts src/terminal.ts`
+  - proof: `npx vitest run src/settingsSession.test.ts`
+  - proof: `npx eslint src/settingsDialog.ts src/terminal.ts src/settingsSession.ts src/settingsSession.test.ts`
   - proof: `npm run typecheck`
 
 ## 2. Move payload at the cap

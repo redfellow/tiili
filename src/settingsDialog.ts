@@ -8,7 +8,7 @@ import {
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
-import { createSettingsSession, same } from "./settingsSession";
+import { createSettingsSession, same, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION } from "./version";
 
@@ -898,6 +898,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   /** Save: write the previewed settings and close; on failure stay open with the error. */
   const commit = async () => {
     if (saving) return;
+    // A scrollback still being typed when Save is clicked is saved too.
+    changed();
     lock(true);
     const written = session.draft;
     try {
@@ -912,8 +914,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     }
   };
 
-  // Apply while the user types; once a field is left, show the value that was actually applied.
-  form.addEventListener("input", changed);
+  // Apply while the user types, except a scrollback being typed; once a field is left, apply it all and show the
+  // value that was actually applied.
+  form.addEventListener("input", () => change(whileTyping(read(), session.draft)));
   form.addEventListener("change", () => {
     changed();
     show(session.draft);
