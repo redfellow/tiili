@@ -86,6 +86,20 @@ describe("Tauri backend prompt choice", () => {
   });
 });
 
+describe("Tauri backend links: each goes to its core command, which checks it", () => {
+  const cases: [string, (backend: Backend) => Promise<unknown>, string, unknown][] = [
+    ["openLink", (b) => b.openLink("vscode://x", true), "link_open", { uri: "vscode://x", confirmed: true }],
+    ["resolvePaths", (b) => b.resolvePaths(3, ["a.ts"]), "path_resolve", { paneId: 3, candidates: ["a.ts"] }],
+    ["openPath", (b) => b.openPath("/tmp/a.ts"), "path_open", { abs: "/tmp/a.ts" }],
+    ["revealPath", (b) => b.revealPath("/tmp/a.ts"), "path_reveal", { abs: "/tmp/a.ts" }],
+  ];
+  it.each(cases)("%s", async (_name, call, command, args) => {
+    invoke.mockClear();
+    await call(tauriBackend());
+    expect(invoke.mock.calls).toEqual([[command, args]]);
+  });
+});
+
 describe("Tauri backend events", () => {
   it("Copy with two windows open: menu and shell events are heard on this window only", async () => {
     windowListen.mockClear();

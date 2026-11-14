@@ -1,0 +1,17 @@
+format: 1
+slug: clickable-terminal-links-urls-osc-8-and
+title: "Clickable terminal links: URLs, OSC 8 and existing file paths, with
+  Open/Copy/Reveal right-click items"
+x-harvaaja-card: e22c8847-a2e2-48c0-982d-62584648c9bd
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New capability terminal-links plus a clipboard right-click change; no
+    existing change shares this intent (search card covers find only).
+  citations:
+    - "openspec/specs/clipboard/spec.md: Right-click Copy and Paste"
+    - src/clipboard.ts attachClipboardMenus
+    - src-tauri/capabilities/default.json opener scope
+  revision: c8cb8954-24db-4f1c-b64a-cfe0baa03a5e
