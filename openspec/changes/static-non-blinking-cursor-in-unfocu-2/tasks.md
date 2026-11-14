@@ -1,9 +1,9 @@
 ## 1. Still cursor in panes without focus
 
-- [ ] 1.1 In `src/terminal.ts`, turn `cursorBlink` off when the terminal loses focus and restore `settings().cursor.blink` when it gains focus. Have `applyTerminalSettings` set blink only while the terminal has focus. Update the `openTerminal` doc comment.
+- [x] 1.1 In `src/terminal.ts`, turn `cursorBlink` off when the terminal loses focus and restore `settings().cursor.blink` when it gains focus. Have `applyTerminalSettings` set blink only while the terminal has focus. Update the `openTerminal` doc comment.
   - proof: `npx eslint src/terminal.ts`
   - proof: `npm run typecheck`
-- [ ] 1.2 Validate the spec delta
+- [x] 1.2 Validate the spec delta
   - proof: `openspec validate static-non-blinking-cursor-in-unfocu-2 --strict`
 
 ## Manual checks after merge (The user)
