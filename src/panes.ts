@@ -3,10 +3,13 @@ import type { Backend, MenuItem, MovePayload } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import {
   attentionShortcut,
+  FIND_MENU_ITEMS,
+  findAction,
   layoutAction,
   paneAction,
   settingsShortcut,
   zoomAction,
+  type FindAction,
   type LayoutAction,
   type PaneAction,
   type Platform,
@@ -110,6 +113,9 @@ export class Panes {
         this.panes.forEach((pane) => pane.terminal?.releaseSize(changed.has(pane.id)));
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
+      // Terminals scale with their moving panes and refit once they are in place, so each shell sees one size change.
+      motionStart: () => this.panes.forEach((pane) => pane.terminal?.holdSize()),
+      motionEnd: () => this.panes.forEach((pane) => pane.terminal?.releaseSize(true)),
     });
     this.layout = emptyLayout(settings().tiling.layout);
     this.styleRoot(settings());
@@ -150,6 +156,14 @@ export class Panes {
       platform,
       openSettings,
       (action) => {
+        // While the find bar's field has the keyboard, the Edit menu's Copy, Paste and Select All act on it.
+        const find = panes.current()?.terminal?.find;
+        if (find?.hasFocus()) {
+          find
+            .clipboard(action, () => backend.readClipboard(), (text) => backend.writeClipboard(text))
+            .catch((error: unknown) => console.error(error));
+          return true;
+        }
         const note = panes.current()?.note;
         note?.clipboard(action).catch((error: unknown) => console.error(error));
         return note !== undefined;
@@ -171,6 +185,11 @@ export class Panes {
       });
       // The Shell menu's New Window (⌘N), sent to the focused window only.
       await backend.onAppEvent("new-window", () => panes.act({ type: "newWindow" }));
+      // The Edit menu's Find… (⌘F), Find Next (⌘G) and Find Previous (⇧⌘G).
+      await backend.onAppEvent("clipboard", (payload) => {
+        const action = FIND_MENU_ITEMS[payload];
+        if (action) panes.find(action);
+      });
     }
     return panes;
   }
@@ -230,6 +249,22 @@ export class Panes {
     else if (action.type === "newWindow") this.newWindow().catch(report);
     else if (action.type === "moveToNewWindow") this.movePane(undefined).catch(report);
     else this.focus(action.index);
+  }
+
+  /**
+   * Carries out a find action in the focused pane: a terminal pane opens its find bar or steps through its matches,
+   * a Heynote pane opens Heynote's own search or steps through it.
+   */
+  find(action: FindAction): void {
+    const pane = this.current();
+    if (pane?.note) {
+      pane.note.find(action);
+      return;
+    }
+    const bar = pane?.terminal?.find;
+    if (!bar) return;
+    if (action === "find") bar.open();
+    else bar.step(action);
   }
 
   /** The folder of the focused pane's shell, where a new pane or window starts; undefined when it can't be read. */
@@ -402,6 +437,7 @@ export class Panes {
         (signal) => this.onSignal(pane, signal),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
+      opened.find.interceptKeys((event) => this.shortcut(event));
       pane.terminal = opened;
       resolve(opened);
     } catch (error) {
@@ -527,7 +563,7 @@ export class Panes {
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
     this.layout = removePane(this.layout, pane.id);
-    pane.element.remove();
+    // The view takes the pane's element out once it has faded out.
     this.render();
     if (this.panes.length === 0) {
       this.focused = -1;
@@ -599,7 +635,7 @@ export class Panes {
     this.view.render(this.layout);
   }
 
-  /** xterm's key hook: layout, pane, settings and clipboard shortcuts are kept from the shell. */
+  /** xterm's key hook: layout, pane, settings, find and clipboard shortcuts are kept from the shell. */
   private onKey(terminal: PaneTerminal, event: KeyboardEvent): boolean {
     if (this.shortcut(event)) return false;
     return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
@@ -622,9 +658,9 @@ export class Panes {
   }
 
   /**
-   * Carries out a layout, next-pane, pane, settings or zoom shortcut on keydown. Returns true when `event` is one of
-   * those keys, which then must not reach the pane's shell or Heynote. Zoom keys act only in terminal panes; in a
-   * Heynote pane they reach Heynote.
+   * Carries out a layout, next-pane, pane, settings, zoom or find shortcut on keydown. Returns true when `event` is
+   * one of those keys, which then must not reach the pane's shell, its find bar's field or Heynote. Zoom and find
+   * keys act only in terminal panes; in a Heynote pane they reach Heynote, whose own search the find keys open.
    */
   private shortcut(event: KeyboardEvent): boolean {
     const layout = layoutAction(event, this.platform);
@@ -667,6 +703,15 @@ export class Panes {
       if (event.type === "keydown") {
         event.preventDefault();
         this.zoom(pane, zoom);
+      }
+      return true;
+    }
+    const find = findAction(event, this.platform);
+    if (find && pane && !pane.note) {
+      // In the macOS app ⌘F, ⌘G and ⇧⌘G come from the Edit menu; here those keys are only kept from the shell.
+      if (!this.viaMenu() && event.type === "keydown") {
+        event.preventDefault();
+        this.find(find);
       }
       return true;
     }

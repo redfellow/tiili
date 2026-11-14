@@ -71,7 +71,7 @@ export interface SettingsWindows {
  * the panes that need the user (every window hears these) and the ask to focus one of this window's marked panes.
  */
 export interface AppEvents {
-  clipboard: "copy" | "paste" | "selectAll";
+  clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
   pane: "new" | "close" | "moveToNewWindow";
   "new-window": undefined;
   "move-to-window": string;

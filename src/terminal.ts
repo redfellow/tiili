@@ -1,12 +1,15 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
+import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
 import type { Backend, SessionId } from "./backend";
+import { createFindBar, type FindBar } from "./findBar";
 import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
+import { SEARCH_LIMIT, searchDecorations } from "./search";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
 import { attachLinks, type PaneLinks } from "./terminalLinks";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
@@ -19,6 +22,8 @@ export interface PaneTerminal {
   term: Terminal;
   /** The pane's clickable links: URLs, OSC 8 hyperlinks and existing paths. */
   links: PaneLinks;
+  /** The pane's find bar over the terminal, which searches its scrollback. */
+  find: FindBar;
   /** The working directory of the pane's shell, when it runs and the platform can read it. */
   cwd(): Promise<string | undefined>;
   /**
@@ -46,7 +51,7 @@ export interface AdoptedSession {
 }
 
 /** The addons `applyFont` changes or refits with, per terminal. */
-const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
+const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon; find?: FindBar }>();
 
 /** Resolves once everything written to `term` so far has been parsed. */
 function written(term: Terminal, data: string | Uint8Array = ""): Promise<void> {
@@ -107,6 +112,8 @@ export async function applyFont(term: Terminal, settings: Settings, zoom = 0): P
   applySize(term, settings, zoom);
   term.options.cursorStyle = settings.cursor.style;
   term.options.cursorBlink = settings.cursor.blink && hasFocus(term);
+  // Lowering it drops the oldest lines beyond the new limit.
+  term.options.scrollback = settings.behaviour.scrollback;
 
   const own = addons.get(term);
   if (!own) return;
@@ -120,9 +127,10 @@ export async function applyFont(term: Terminal, settings: Settings, zoom = 0): P
   own.fit.fit();
 }
 
-/** Re-reads the theme tokens into the terminal, after the theme setting changed. */
+/** Re-reads the theme tokens into the terminal and its search highlights, after the theme setting changed. */
 export function refreshTheme(term: Terminal): void {
   term.options.theme = terminalTheme(documentTokens());
+  addons.get(term)?.find?.refreshTheme();
 }
 
 /**
@@ -156,17 +164,26 @@ export async function openTerminal(
     cursorInactiveStyle: "outline",
     // Blinking starts when the terminal gets focus.
     cursorBlink: false,
-    // The ligatures addon uses xterm's proposed character joiner API.
+    // The ligatures addon uses xterm's proposed character joiner API, and the search addon its decorations.
     allowProposedApi: true,
     // xterm sizes its scrollbar by the overview ruler's width (14 px by default); the fit addon reserves the same.
+    // The ruler shows the search matches' marks over the scrollbar.
     overviewRuler: { width: 8 },
+    scrollback: settings().behaviour.scrollback,
+    // On macOS, Option-drag selects even while a program such as vim or tmux reports the mouse; a plain
+    // Option-click still moves the shell cursor.
+    macOptionClickForcesSelection: true,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
   const serializer = new SerializeAddon();
   term.loadAddon(serializer);
-  addons.set(term, { fit });
+  const search = new SearchAddon({ highlightLimit: SEARCH_LIMIT });
+  term.loadAddon(search);
   term.open(container);
+  // Over the terminal, not beside it: opening the bar changes neither the terminal's size nor its shell's.
+  const find = createFindBar(container, term, search, currentPlatform(), () => searchDecorations(documentTokens()));
+  addons.set(term, { fit, find });
   const onFocus = () => {
     term.options.cursorBlink = settings().cursor.blink;
   };
@@ -178,6 +195,7 @@ export async function openTerminal(
   const stopTheme = followSystemTheme(
     (theme) => {
       term.options.theme = theme;
+      find.refreshTheme();
     },
     () => settings().theme === "system",
   );
@@ -274,12 +292,14 @@ export async function openTerminal(
     term.textarea?.removeEventListener("blur", onBlur);
     running = false;
     links.dispose();
+    find.dispose();
     term.dispose();
   };
 
   return {
     term,
     links,
+    find,
     cwd: async () => {
       if (!running || session === undefined) return undefined;
       return backend.cwd(session);

@@ -1,4 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
+import { blendHex } from "./search";
 
 const ANSI_NAMES = [
   "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
@@ -9,13 +10,22 @@ const ANSI_NAMES = [
 /** Reads a CSS custom property, e.g. `--term-bg`. */
 export type TokenReader = (name: string) => string;
 
-/** The xterm theme from the tiili tokens: terminal colours, ANSI 0–15 and a brick block cursor. */
+/** How strongly taivas shows through `--term-bg` in the selection: a cool blue, apart from the brick search matches. */
+const SELECTION_ALPHA = 0.45;
+
+/**
+ * The xterm theme from the tiili tokens: terminal colours, ANSI 0–15, a brick block cursor and a taivas selection,
+ * which stays apart from the search highlights (accent and brick).
+ */
 export function terminalTheme(token: TokenReader): ITheme {
   const theme: ITheme = {
     background: token("--term-bg"),
     foreground: token("--term-fg"),
     cursor: token("--accent"),
     cursorAccent: token("--term-bg"),
+    // The overview ruler's border melts into the ground; the ruler shows only the search matches' marks.
+    overviewRulerBorder: token("--term-bg"),
+    selectionBackground: blendHex(token("--tiili-taivas"), token("--term-bg"), SELECTION_ALPHA),
   };
   ANSI_NAMES.forEach((name, i) => {
     theme[name] = token(`--ansi-${i}`);

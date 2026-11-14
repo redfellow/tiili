@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   attentionShortcut,
   clipboardAction,
+  findAction,
   layoutAction,
   paneAction,
   settingsShortcut,
   type ClipboardAction,
+  type FindAction,
   type KeyChord,
   type LayoutAction,
   type PaneAction,
@@ -211,6 +213,39 @@ describe("zoomAction", () => {
       expect(paneAction(event, platform)).toBeNull();
       expect(settingsShortcut(event, platform)).toBeNull();
       expect(clipboardAction(event, platform)).toBeNull();
+    }
+  });
+});
+
+const findCases: [string, Platform, KeyChord, FindAction | null][] = [
+  ["macOS Edit menu: ⌘F finds", "macos", chord("f", { metaKey: true }), "find"],
+  ["macOS Edit menu: ⌘G finds the next match", "macos", chord("g", { metaKey: true }), "next"],
+  ["macOS Edit menu: ⇧⌘G finds the previous match", "macos", chord("G", { metaKey: true, shiftKey: true }), "previous"],
+  ["macOS: Ctrl+F reaches the shell", "macos", chord("f", { ctrlKey: true }), null],
+  ["Open with a selection: Ctrl+Shift+F finds on Windows", "windows", chord("F", { ctrlKey: true, shiftKey: true }), "find"],
+  ["Open with a selection: Ctrl+Shift+F finds on Linux", "linux", chord("F", { ctrlKey: true, shiftKey: true }), "find"],
+  ["Navigate and close: F3 finds the next match on Linux", "linux", chord("F3"), "next"],
+  ["Navigate and close: Shift+F3 finds the previous match on Windows", "windows", chord("F3", { shiftKey: true }), "previous"],
+  ["Ctrl+F on Linux: the shell receives it", "linux", chord("f", { ctrlKey: true }), null],
+  ["Ctrl+F on Windows: the shell receives it", "windows", chord("f", { ctrlKey: true }), null],
+  ["Linux: plain F reaches the shell", "linux", chord("f"), null],
+  ["macOS: F3 is not a find key", "macos", chord("F3"), null],
+];
+
+describe("findAction", () => {
+  it.each(findCases)("%s", (_name, platform, event, expected) => {
+    expect(findAction(event, platform)).toBe(expected);
+  });
+
+  it("Find keys are not pane, layout, settings, zoom or clipboard keys", () => {
+    for (const [, platform, event, expected] of findCases) {
+      if (expected === null) continue;
+      expect(clipboardAction(event, platform)).toBeNull();
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(settingsShortcut(event, platform)).toBeNull();
+      expect(zoomAction(event, platform)).toBeNull();
+      expect(attentionShortcut(event, platform)).toBeNull();
     }
   });
 });
