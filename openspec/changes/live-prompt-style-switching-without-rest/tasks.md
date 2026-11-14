@@ -4,6 +4,9 @@
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib shell_integration`
 - [x] 1.2 Write the active prompt to the integration folder's `prompt` file and add the `pty_set_prompt` command that rewrites it and sends SIGUSR1 (Unix) to integrated local sessions only; add a unit test that an unknown id writes `off`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib shell_integration`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib command`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test signal_catch`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 - [x] 1.3 zsh, bash and PowerShell scripts: remember whether the user's config left the default prompt and their original prompt, re-read the file before each prompt, zsh `TRAPUSR1` with `zle reset-prompt`, bash `trap '' USR1`; extend `pty_session.rs` with a test that a bash and a zsh shell started with Off show the Classic prompt after the file changes and a newline is sent
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`

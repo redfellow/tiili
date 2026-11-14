@@ -105,14 +105,14 @@ impl PtySession {
     /// Starts the user's default shell in `cwd`. Without `cwd`, or when it is not a folder, the
     /// shell starts in the home folder. zsh, bash and PowerShell start through tiili's shell
     /// integration, which sets `prompt` (Off included) where the user's own startup files left the
-    /// default one, and follows later choices from [`set_prompt`]. Every shell gets `TERM=xterm-256color`, `COLORTERM=truecolor`,
-    /// `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
+    /// default one, and follows later choices from [`set_prompt`]. Every shell gets
+    /// `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
     pub fn spawn_in(
         cwd: Option<&Path>,
         prompt: &str,
         rows: u16,
         cols: u16,
-        mut on_output: OutputFn,
+        on_output: OutputFn,
         on_exit: ExitFn,
     ) -> io::Result<Self> {
         let dir = crate::shell_integration::default_dir();
@@ -123,6 +123,19 @@ impl PtySession {
         if let Some(dir) = cwd {
             cmd.cwd(dir);
         }
+        Self::spawn_integrated(cmd, redraws, rows, cols, on_output, on_exit)
+    }
+
+    /// Like [`spawn_command`](Self::spawn_command), for a shell started through tiili's integration; with `redraws`
+    /// (an integrated zsh) [`redraw_prompt`](Self::redraw_prompt) may signal it once it has shown its first prompt.
+    pub fn spawn_integrated(
+        cmd: CommandBuilder,
+        redraws: bool,
+        rows: u16,
+        cols: u16,
+        mut on_output: OutputFn,
+        on_exit: ExitFn,
+    ) -> io::Result<Self> {
         let ready = Arc::new(AtomicBool::new(false));
         let output_ready = Arc::clone(&ready);
         let watched = Box::new(move |data: &[u8]| {
@@ -232,17 +245,23 @@ impl PtySession {
     }
 
     /// Asks the shell to redraw its prompt now, after the prompt choice changed: SIGUSR1 to an integrated zsh that
-    /// has shown its first prompt, on Unix. Other shells are sent nothing; they switch at their next prompt.
-    pub fn redraw_prompt(&self) {
+    /// has shown its first prompt and still catches the signal, on macOS and Linux. Whatever has replaced it
+    /// (`exec`), a process whose handlers cannot be read and other shells are sent nothing; shells switch at their
+    /// next prompt. Returns whether the signal was sent.
+    pub fn redraw_prompt(&self) -> bool {
         #[cfg(unix)]
         if self.redraws.load(Ordering::Relaxed) {
-            if let Some(pid) = self.pid.and_then(|p| libc::pid_t::try_from(p).ok()) {
-                // SAFETY: kill only sends a signal; the pid is this session's own shell.
-                unsafe {
-                    libc::kill(pid, libc::SIGUSR1);
+            if let Some(pid) = self.pid {
+                // The default action of SIGUSR1 ends the process: only one with a handler gets it.
+                if crate::command::catches_signal(pid, libc::SIGUSR1) == Some(true) {
+                    if let Ok(pid) = libc::pid_t::try_from(pid) {
+                        // SAFETY: kill only sends a signal; the pid is this session's own shell.
+                        return unsafe { libc::kill(pid, libc::SIGUSR1) } == 0;
+                    }
                 }
             }
         }
+        false
     }
 
     /// Reads which process is in this session's foreground.
@@ -273,7 +292,9 @@ pub fn set_prompt<'a>(
     let dir = crate::shell_integration::default_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no cache folder"))?;
     crate::shell_integration::write_prompt(&dir, prompt)?;
-    sessions.into_iter().for_each(PtySession::redraw_prompt);
+    for session in sessions {
+        session.redraw_prompt();
+    }
     Ok(())
 }
 
