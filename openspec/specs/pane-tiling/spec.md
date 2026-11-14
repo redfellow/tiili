@@ -61,11 +61,15 @@ Each pane SHALL send its own rows and columns to its pseudo-terminal when the la
 - **THEN** each session receives the rows and columns of its own pane
 
 ### Requirement: Focus appearance
-Panes SHALL sit on `--term-gap` with 3 px gaps. The focused pane SHALL show a 2 px accent line on its top edge and the cursor style chosen in settings (a blinking block by default); other panes SHALL show an outlined cursor and keep showing output.
+Panes SHALL sit on `--term-gap` with 3 px gaps. The focused pane SHALL show a 2 px accent line on its top edge and the cursor style chosen in settings (a blinking block by default); other panes SHALL show a still, non-blinking outlined cursor whatever the Blink setting, and keep showing output.
 
 #### Scenario: Focused pane shows accent line
 - **WHEN** a pane gains focus
 - **THEN** it shows a 2 px accent line on its top edge and the cursor style chosen in settings
+
+#### Scenario: Inactive pane cursor does not blink
+- **WHEN** Blink is on in settings and a pane loses focus
+- **THEN** its cursor shows as a steady outline that does not blink, and it blinks again when the pane regains focus
 
 #### Scenario: Inactive pane keeps streaming
 - **WHEN** a pane without focus receives output
@@ -200,3 +204,22 @@ Each tiili window's title, as shown by the system's window switcher and taskbar,
 #### Scenario: Focus moves
 - **WHEN** the user moves focus from a pane running `vim` to one running `htop`
 - **THEN** the window title changes to `htop — tiili >_`
+
+### Requirement: Pane motion
+When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL animate from its old place and size to its new one in about 180 ms. A new pane SHALL grow in and a closing pane SHALL shrink and fade out. When the OS asks for reduced motion, the change SHALL apply instantly. Dragging a divider SHALL stay instant. Each pane's PTY SHALL be resized once, to its final size.
+
+#### Scenario: Opening a pane animates
+- **WHEN** 2 panes are open and the user opens a third
+- **THEN** the new pane grows into its place and the panes that move glide to their new places
+
+#### Scenario: Closing a pane animates
+- **WHEN** a pane is closed
+- **THEN** it shrinks and fades out while the remaining panes glide to fill the grid
+
+#### Scenario: Swap animates
+- **WHEN** two panes swap
+- **THEN** each slides from its old place to the other's
+
+#### Scenario: Reduced motion
+- **WHEN** the OS asks for reduced motion and a pane opens, closes or swaps
+- **THEN** the panes take their new places instantly
