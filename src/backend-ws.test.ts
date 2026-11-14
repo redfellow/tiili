@@ -48,6 +48,10 @@ function setup(opening: Opening = startsShell) {
 }
 
 describe("WebSocket backend", () => {
+  it("Move to New Window in the dev browser: the dev server has one window, so there are no pane moves", () => {
+    expect(setup().backend.moves).toBeUndefined();
+  });
+
   it.each(PROMPT_IDS)("New panes use the choice: the URL carries prompt %s", async (prompt) => {
     const { backend, sockets } = setup();
     await backend.spawn(24, 80, undefined, prompt, () => undefined);

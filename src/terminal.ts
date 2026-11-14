@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import type { Backend, SessionId } from "./backend";
 import { sizeReporter } from "./resize";
@@ -23,12 +24,29 @@ export interface PaneTerminal {
   releaseSize(refit: boolean): void;
   /** The size of one character cell in CSS pixels, once the terminal has been laid out. */
   cellSize(): { width: number; height: number } | undefined;
+  /** The terminal's scrollback and screen as text with escape codes, once everything written to it has landed. */
+  serialize(): Promise<string>;
+  /** The shell session the terminal shows, while it runs. */
+  session(): SessionId | undefined;
+  /** Frees the terminal but leaves its shell running, for a pane that moved to another window. */
+  detach(): void;
   /** Ends the shell and frees the terminal. */
   dispose(): Promise<void>;
 }
 
+/** A running shell session a terminal takes over from another window, with the scrollback it showed there. */
+export interface AdoptedSession {
+  session: SessionId;
+  scrollback: string;
+}
+
 /** The addons `applyFont` changes or refits with, per terminal. */
 const addons = new WeakMap<Terminal, { fit: FitAddon; ligatures?: LigaturesAddon }>();
+
+/** Resolves once everything written to `term` so far has been parsed. */
+function written(term: Terminal, data: string | Uint8Array = ""): Promise<void> {
+  return new Promise((resolve) => term.write(data, resolve));
+}
 
 /** Counts `applyFont` calls per terminal, so a call whose font loaded late doesn't undo a newer one. */
 const fontGenerations = new WeakMap<Terminal, number>();
@@ -103,7 +121,9 @@ export function refreshTheme(term: Terminal): void {
  * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
  * chosen; otherwise it is an outline. The shell runs on `backend`; `onSession` hears the id of each shell session
  * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
- * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits.
+ * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits. With `adopt`
+ * the terminal starts no shell: it shows the adopted scrollback, then takes over that running session, whose output
+ * kept during the move follows, and resizes it so full-screen programs redraw.
  */
 export async function openTerminal(
   backend: Backend,
@@ -113,6 +133,7 @@ export async function openTerminal(
   onSession: (id: number) => void = () => {},
   zoom: () => number = () => 0,
   onExit: () => void = () => {},
+  adopt?: AdoptedSession,
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -128,6 +149,8 @@ export async function openTerminal(
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  const serializer = new SerializeAddon();
+  term.loadAddon(serializer);
   addons.set(term, { fit });
   term.open(container);
   const stopTheme = followSystemTheme(
@@ -182,7 +205,29 @@ export async function openTerminal(
   observer.observe(container);
   term.onResize(schedule);
 
-  await spawn(cwd).catch(reportError);
+  // Takes over a session moved here from another window. Shrinking it by a row and back sends the program two
+  // size changes, so a full-screen one (vim, a coding agent) redraws itself for this terminal.
+  const take = async ({ session: id, scrollback }: AdoptedSession) => {
+    await written(term, scrollback);
+    session = id;
+    running = true;
+    onSession(id);
+    await backend.moves?.attach(id, (bytes) => term.write(bytes));
+    if (term.rows > 1) await backend.resize(id, term.rows - 1, term.cols);
+    await backend.resize(id, term.rows, term.cols);
+  };
+
+  if (adopt) await take(adopt).catch(reportError);
+  else await spawn(cwd).catch(reportError);
+
+  const free = () => {
+    observer.disconnect();
+    reporter.cancel();
+    unlistenExit();
+    stopTheme();
+    running = false;
+    term.dispose();
+  };
 
   return {
     term,
@@ -203,14 +248,19 @@ export async function openTerminal(
       if (!screen || term.cols <= 0 || term.rows <= 0 || screen.width <= 0) return undefined;
       return { width: screen.width / term.cols, height: screen.height / term.rows };
     },
+    serialize: async () => {
+      await written(term);
+      return serializer.serialize();
+    },
+    session: () => (running ? session : undefined),
+    detach: () => {
+      session = undefined;
+      free();
+    },
     dispose: async () => {
-      observer.disconnect();
-      unlistenExit();
-      stopTheme();
       const ended = session;
       session = undefined;
-      running = false;
-      term.dispose();
+      free();
       if (ended !== undefined) await backend.close(ended);
     },
   };

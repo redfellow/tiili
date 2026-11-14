@@ -28,7 +28,17 @@ export function showContextMenu(items: MenuItem[], x: number, y: number): void {
     close();
   };
 
-  for (const item of items) {
+  const entries = (list: MenuItem[], prefix: string): MenuItem[] =>
+    list.flatMap((item) =>
+      "items" in item
+        ? entries(item.items, `${prefix}${item.label} ▸ `)
+        : "separator" in item || !prefix
+          ? [item]
+          : [{ label: prefix + item.label, action: item.action }],
+    );
+  // The HTML menu shows a submenu's items inline, each after the submenu's label.
+  for (const item of entries(items, "")) {
+    if ("items" in item) continue;
     if ("separator" in item) {
       const line = document.createElement("div");
       line.className = "context-menu-separator";

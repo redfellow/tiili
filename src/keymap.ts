@@ -5,15 +5,16 @@ export type ClipboardAction = "copy" | "paste" | "selectAll";
 /** A layout shortcut: move the focused pane one place, or reset the grid to even sizes. */
 export type LayoutAction = { move: Direction } | "reset";
 /**
- * A pane shortcut: open a new pane, close the focused one, focus pane `index` (0-based), or open a new window.
- * `heynote` opens (or focuses) the Heynote pane and has no shortcut of its own.
+ * A pane shortcut: open a new pane, close the focused one, focus pane `index` (0-based), open a new window, or move
+ * the focused pane to a new window. `heynote` opens (or focuses) the Heynote pane and has no shortcut of its own.
  */
 export type PaneAction =
   | { type: "new" }
   | { type: "heynote" }
   | { type: "close" }
   | { type: "focus"; index: number }
-  | { type: "newWindow" };
+  | { type: "newWindow" }
+  | { type: "moveToNewWindow" };
 /** A zoom shortcut: the focused pane's text one step larger, smaller, or back to the Settings size. */
 export type ZoomAction = "in" | "out" | "reset";
 
@@ -50,13 +51,17 @@ export function clipboardAction(event: KeyChord, platform: Platform): ClipboardA
 
 /**
  * Which pane action a key press asks for, or null when the key belongs to the shell.
- * macOS: ⌘T new, ⌘W close, ⌘1–⌘9 focus, ⌘N new window. Windows and Linux: Ctrl+Shift+T new, Ctrl+Shift+W close,
- * Alt+1–Alt+9 focus, Ctrl+Shift+N new window; plain Ctrl+T, Ctrl+W, Ctrl+N and Ctrl+1 stay with the shell.
+ * macOS: ⌘T new, ⌘W close, ⌘1–⌘9 focus, ⌘N new window, ⌃⌘N move to new window. Windows and Linux: Ctrl+Shift+T
+ * new, Ctrl+Shift+W close, Alt+1–Alt+9 focus, Ctrl+Shift+N new window, Ctrl+Alt+Shift+N move to new window; plain
+ * Ctrl+T, Ctrl+W, Ctrl+N and Ctrl+1 stay with the shell.
  */
 export function paneAction(event: KeyChord, platform: Platform): PaneAction | null {
   const key = event.key.toLowerCase();
   const digit = /^[1-9]$/.test(key) ? Number(key) - 1 : null;
   if (platform === "macos") {
+    if (event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey && key === "n") {
+      return { type: "moveToNewWindow" };
+    }
     if (!event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
     if (key === "t") return { type: "new" };
     if (key === "w") return { type: "close" };
@@ -64,6 +69,7 @@ export function paneAction(event: KeyChord, platform: Platform): PaneAction | nu
     return digit === null ? null : { type: "focus", index: digit };
   }
   if (event.metaKey) return null;
+  if (event.ctrlKey && event.shiftKey && event.altKey && key === "n") return { type: "moveToNewWindow" };
   if (event.ctrlKey && event.shiftKey && !event.altKey) {
     if (key === "t") return { type: "new" };
     if (key === "w") return { type: "close" };
