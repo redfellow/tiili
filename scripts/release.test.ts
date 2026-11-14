@@ -1,6 +1,15 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { bumpVersion, highestTag, pickTarget, setCargoVersion, setJsonVersion } from "./release.mjs";
+import {
+  bumpVersion,
+  describeJob,
+  formatDuration,
+  highestTag,
+  pickTarget,
+  setCargoLockVersion,
+  setCargoVersion,
+  setJsonVersion,
+} from "./release.mjs";
 
 describe("release", () => {
   it("Latest release: highestTag compares versions numerically and skips other tags", () => {
@@ -56,5 +65,49 @@ describe("release", () => {
     ],
   ])("Minor release: rewrites %s", (_name, rewrite, before, after) => {
     expect(rewrite(before, "0.2.0")).toBe(after);
+  });
+
+  it("Stamped version: setCargoLockVersion rewrites only tiili's own entry", () => {
+    const lock =
+      '[[package]]\nname = "serde"\nversion = "1.0.0"\n\n[[package]]\nname = "tiili"\nversion = "0.2.0"\ndependencies = [\n "serde",\n]\n';
+    expect(setCargoLockVersion(lock, "0.3.1")).toBe(lock.replace('"0.2.0"', '"0.3.1"'));
+    expect(setCargoLockVersion(lock, "0.2.0")).toBe(lock);
+    expect(() => setCargoLockVersion('[[package]]\nname = "serde"\nversion = "1.0.0"\n', "0.3.1")).toThrow();
+  });
+
+  it.each([
+    [42_000, "0:42"],
+    [446_000, "7:26"],
+    [3_725_000, "1:02:05"],
+  ])("Build progress: formatDuration(%i) is %s", (ms, text) => {
+    expect(formatDuration(ms)).toBe(text);
+  });
+
+  it("Build progress: describeJob names the platform and its current step", () => {
+    const steps = [
+      { name: "Set up job", status: "completed" },
+      { name: "Run npm ci", status: "completed" },
+      { name: "Run npm run bundle", status: "in_progress" },
+      { name: "Upload installers", status: "queued" },
+    ];
+    expect(describeJob({ name: "bundle (macos-latest)", status: "in_progress", steps }, "⠋")).toBe(
+      "⠋ macOS   npm run bundle  (step 3/4)",
+    );
+    expect(
+      describeJob(
+        {
+          name: "bundle (windows-latest)",
+          status: "completed",
+          conclusion: "success",
+          startedAt: "2026-11-13T21:12:08Z",
+          completedAt: "2026-11-13T21:17:03Z",
+        },
+        "⠋",
+      ),
+    ).toBe("✓ Windows done  4:55");
+    expect(describeJob({ name: "bundle (ubuntu-22.04)", status: "completed", conclusion: "failure" }, "⠋")).toBe(
+      "✗ Linux   failure",
+    );
+    expect(describeJob({ name: "bundle (ubuntu-22.04)", status: "queued" }, "⠋")).toBe("· Linux   waiting for a runner");
   });
 });
