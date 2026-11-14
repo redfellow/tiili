@@ -6,3 +6,14 @@ x-harvaaja-card: 21936f6e-0a65-4906-8a45-198c5a65fcc7
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes observable contracts of repository-colours (tint sharing,
+    chip text, remote report); no active change shares this intent.
+  citations:
+    - openspec/specs/repository-colours/spec.md
+    - src-tauri/src/repo.rs
+    - src-tauri/src/tints.rs
+    - src/paneChip.ts
+    - src/remoteSnippets.ts
+  revision: d1066839-b553-4c52-ba50-cc9e390444e8
