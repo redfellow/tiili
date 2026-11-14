@@ -18,6 +18,7 @@ describe("REMOTE_SNIPPETS", () => {
     const text = REMOTE_SNIPPETS.find((s) => s.shell === shell)?.text ?? "";
     expect(text).toContain("\\033]7;file://");
     expect(text).toContain("\\033]1337;SetUserVar=tiili_repo=");
+    expect(text).toContain("git worktree list --porcelain");
     expect(text).toContain("git rev-parse --show-toplevel");
     expect(text).toContain("base64 | tr -d '\\n'");
     expect(text).toContain(hook);

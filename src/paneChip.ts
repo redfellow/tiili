@@ -5,7 +5,8 @@
 export interface PaneCwd {
   paneId: number;
   cwd: string;
-  repo: { root: string; name: string } | null;
+  /** `worktree` is a linked worktree's branch, or its worktree name on a detached HEAD; null in a main checkout. */
+  repo: { root: string; name: string; worktree?: string | null } | null;
   host: string | null;
   /** The pane's project tint, assigned app-wide so a repository has the same tint in every window; null untinted. */
   tint: number | null;
@@ -37,11 +38,12 @@ export function folderName(path: string): string {
 }
 
 /**
- * The chip's place: the repository name, else the folder name; a remote pane's is prefixed with its host, as
- * `host:name`.
+ * The chip's place: the repository name, followed by ` › branch` (or worktree name) in a linked worktree, else the
+ * folder name; a remote pane's is prefixed with its host, as `host:name`.
  */
 export function placeLabel(place: Pick<PaneCwd, "cwd" | "repo" | "host">): string {
-  const name = place.repo ? place.repo.name : folderName(place.cwd);
+  const { repo } = place;
+  const name = !repo ? folderName(place.cwd) : repo.worktree ? `${repo.name} › ${repo.worktree}` : repo.name;
   return place.host === null ? name : `${place.host}:${name}`;
 }
 
