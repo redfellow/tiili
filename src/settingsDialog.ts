@@ -596,6 +596,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   /** Back to the settings from when the form opened, unsaved; false while saving, when nothing changes. */
   const discard = async () => {
     if (saving) return false;
+    ask(false);
     const draft = session.draft;
     const saved = session.cancel();
     if (!same(draft, saved)) await apply(saved);
@@ -643,6 +644,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   // prevented keydown keeps the dialogue's cancel from firing, and the page's Esc handler skips it.
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || confirm.hidden || !form.isConnected) return;
+    // A closed dialogue stays in the document; Esc then belongs to the terminal.
+    if (!(form.closest("dialog")?.open ?? true)) return;
     event.preventDefault();
     event.stopPropagation();
     ask(false, true);
