@@ -1,4 +1,5 @@
 import "./styles.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { loadBackend, selectBackend } from "./backend";
 import { currentPlatform } from "./keymap";
 import { Panes } from "./panes";
@@ -8,6 +9,8 @@ import { same } from "./settingsSession";
 import { applyTheme } from "./themes";
 import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
+import { showUpdateDialog } from "./updateDialog";
+import { findUpdate, startupCheck } from "./updates";
 
 /** Event sent when the macOS app menu's Settings… item is chosen. */
 const OPEN_SETTINGS_EVENT = "open-settings";
@@ -45,6 +48,11 @@ async function startSettings(owner: string): Promise<void> {
     save: (next) => backend.saveSettings(next),
     onClose: () => void backend.closeWindow().catch((error: unknown) => console.error(error)),
     copy: (text) => backend.writeClipboard(text),
+    checkForUpdates: async () => {
+      const update = await findUpdate();
+      if (update) showUpdateDialog(update);
+      return update !== undefined;
+    },
   });
   // Settings saved in another window are the ones Cancel returns to from now on.
   await backend.onAppEvent(SETTINGS_CHANGED_EVENT, (value) => {
@@ -173,6 +181,16 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   const arrived = moveToken ? await panes.arrive(moveToken).catch(() => false) : false;
   if (!arrived) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
+
+  // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top.
+  if (selectBackend(window) === "tauri" && getCurrentWindow().label === "main") {
+    void (splash?.done ?? Promise.resolve()).then(() =>
+      startupCheck({
+        enabled: settings.updates.autoCheck,
+        show: (update) => showUpdateDialog(update, () => panes.focusCurrent()),
+      }),
+    );
+  }
 }
 
 const settingsOwner = new URLSearchParams(window.location.search).get("settings");

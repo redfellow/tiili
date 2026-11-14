@@ -80,6 +80,23 @@ jobs:
       - name: Stamp the version from the tag
         shell: bash
         run: node scripts/stamp-version.mjs "$GITHUB_REF_NAME"
+      - name: Updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building installers without updater bundles"
+            exit 0
+          fi
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            {
+              echo "$name<<__END__"
+              echo "${!name}"
+              echo "__END__"
+            } >> "$GITHUB_ENV"
+          done
       - run: npm run bundle
       - name: Upload installers
         shell: bash
@@ -90,9 +107,33 @@ jobs:
           files=()
           while IFS= read -r file; do files+=("$file"); done < <(find src-tauri/target -type f \( \
             -path '*/bundle/dmg/*.dmg' -o -path '*/bundle/nsis/*.exe' -o \
-            -path '*/bundle/appimage/*.AppImage' -o -path '*/bundle/deb/*.deb' \))
+            -path '*/bundle/appimage/*.AppImage' -o -path '*/bundle/deb/*.deb' -o \
+            -path '*/bundle/macos/*.app.tar.gz' -o -path '*/bundle/*/*.sig' \))
           if [ ${#files[@]} -eq 0 ]; then
             echo "No installers found"
             exit 1
           fi
           gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+
+  manifest:
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Assemble and upload latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: skipping latest.json, so installed apps will not see this release"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/sigs"
+          gh release download "$GITHUB_REF_NAME" --pattern '*.sig' --dir "$RUNNER_TEMP/sigs"
+          gh release view "$GITHUB_REF_NAME" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+          node scripts/updater-manifest.mjs "$GITHUB_REF_NAME" "$RUNNER_TEMP/sigs" "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/latest.json"
+          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/latest.json" --clobber
