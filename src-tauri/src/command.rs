@@ -208,8 +208,88 @@ pub fn process_name(_pid: i32) -> Option<String> {
     None
 }
 
+/// Whether the `SigCgt` (caught signals) mask in a `/proc/<pid>/status` text has `signal` set; `None` when the
+/// text has no readable mask.
+pub fn sigcgt_catches(status: &str, signal: i32) -> Option<bool> {
+    let bit = u32::try_from(signal).ok()?.checked_sub(1)?;
+    let mask = status
+        .lines()
+        .find_map(|line| line.strip_prefix("SigCgt:"))
+        .and_then(|hex| u64::from_str_radix(hex.trim(), 16).ok())?;
+    Some(mask.checked_shr(bit)? & 1 == 1)
+}
+
+/// Whether process `pid` has a handler for `signal` (so the signal does not end it), or `None` when that cannot be
+/// read.
+#[cfg(target_os = "linux")]
+pub fn catches_signal(pid: u32, signal: i32) -> Option<bool> {
+    sigcgt_catches(
+        &std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?,
+        signal,
+    )
+}
+
+/// Whether process `pid` has a handler for `signal` (so the signal does not end it), or `None` when that cannot be
+/// read: `kp_proc.p_sigcatch` of its `kinfo_proc` from sysctl.
+#[cfg(target_os = "macos")]
+pub fn catches_signal(pid: u32, signal: i32) -> Option<bool> {
+    // libc has no kinfo_proc for Apple: its size and the offsets used, the same on arm64 and x86_64 (LP64).
+    const SIZE: usize = 648;
+    const PID_AT: usize = 40;
+    const SIGCATCH_AT: usize = 236;
+    let pid = libc::c_int::try_from(pid).ok()?;
+    let bit = u32::try_from(signal).ok()?.checked_sub(1)?;
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid];
+    let mut buf = [0u8; SIZE];
+    let mut len = SIZE;
+    // SAFETY: buf holds `len` writable bytes; sysctl writes at most that many and reports how many.
+    let ok = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            buf.as_mut_ptr().cast(),
+            &mut len,
+            std::ptr::null_mut(),
+            0,
+        )
+    } == 0;
+    let word = |at: usize| buf[at..at + 4].try_into().ok().map(u32::from_ne_bytes);
+    // A missing process gives no record; a record for another pid means the layout is not the one assumed.
+    if !ok || len != SIZE || word(PID_AT)? != pid as u32 {
+        return None;
+    }
+    Some(word(SIGCATCH_AT)?.checked_shr(bit)? & 1 == 1)
+}
+
+/// Whether process `pid` has a handler for `signal`: never readable here.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn catches_signal(_pid: u32, _signal: i32) -> Option<bool> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn caught_signals_read_from_the_sigcgt_mask() {
+        // SIGUSR1 is 10 on Linux: bit 9, 0x200.
+        let cases = [
+            ("Name:\tzsh\nSigCgt:\t0000000000000200\n", 10, Some(true)),
+            ("SigCgt:\t0000000000010002\n", 10, Some(false)),
+            ("SigCgt:\t0000000000010002\n", 2, Some(true)),
+            ("SigCgt:\t8000000000000000\n", 64, Some(true)),
+            ("Name:\tsleep\n", 10, None),
+            ("SigCgt:\tzz\n", 10, None),
+            ("SigCgt:\t0000000000000200\n", 0, None),
+        ];
+        for (status, signal, caught) in cases {
+            assert_eq!(
+                super::sigcgt_catches(status, signal),
+                caught,
+                "{status:?} {signal}"
+            );
+        }
+    }
+
     use super::*;
     use std::sync::{Arc, Mutex};
 

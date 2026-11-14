@@ -3,8 +3,8 @@
 //   npm run heynote                      clones Heynote at HEYNOTE_COMMIT into a temporary folder and builds it
 //   HEYNOTE_SRC=~/src/heynote npm run heynote   builds an existing checkout instead (left as it was afterwards)
 //
-// The build swaps Heynote's webapp/bridge.js for tiili's heynote/bridge.js (notes in tiili's files, not
-// localStorage) and makes the page start Heynote only after the bridge has loaded the library. The output is
+// The build swaps Heynote's webapp/bridge.js for tiili's heynote/bridge.js and adds its heynote/save-on-close.js
+// (notes in tiili's files, not localStorage) and makes the page start Heynote only after the bridge has loaded the library. The output is
 // committed, so tiili's own build and checks need neither the network nor Heynote's dependencies.
 
 import { execFileSync } from "node:child_process";
@@ -32,6 +32,8 @@ if (!src) {
 }
 
 const bridge = join(src, "webapp", "bridge.js");
+// The bridge's own module, which Heynote has no file of its own for: added for the build and removed after.
+const saveOnClose = join(src, "webapp", "save-on-close.js");
 const index = join(src, "webapp", "index.html");
 const original = { bridge: readFileSync(bridge), index: readFileSync(index, "utf8") };
 
@@ -41,6 +43,7 @@ try {
     run("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], src);
   }
   copyFileSync(join(root, "heynote", "bridge.js"), bridge);
+  copyFileSync(join(root, "heynote", "save-on-close.js"), saveOnClose);
   const startup =
     '<script type="module">\n' +
     '      import { Heynote, ipcRenderer } from "./bridge.js";\n' +
@@ -70,6 +73,7 @@ try {
   console.log(`Heynote ${commit.slice(0, 7)} built into ${out}`);
 } finally {
   writeFileSync(bridge, original.bridge);
+  rmSync(saveOnClose, { force: true });
   writeFileSync(index, original.index);
   if (temp) rmSync(temp, { recursive: true, force: true });
 }

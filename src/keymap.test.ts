@@ -44,6 +44,8 @@ describe("clipboardAction", () => {
 const NEW: PaneAction = { type: "new" };
 const CLOSE: PaneAction = { type: "close" };
 const focus = (index: number): PaneAction => ({ type: "focus", index });
+const NEW_WINDOW: PaneAction = { type: "newWindow" };
+const MOVE_TO_NEW_WINDOW: PaneAction = { type: "moveToNewWindow" };
 
 const paneCases: [string, Platform, KeyChord, PaneAction | null][] = [
   ["Open and close: ⌘T opens a pane on macOS", "macos", chord("t", { metaKey: true }), NEW],
@@ -72,6 +74,18 @@ const paneCases: [string, Platform, KeyChord, PaneAction | null][] = [
   ["Linux: Ctrl+Alt+1 is not a pane key", "linux", chord("1", { ctrlKey: true, altKey: true }), null],
   ["Windows and Linux shortcuts: Ctrl+Shift+C stays a clipboard key", "linux", chord("C", { ctrlKey: true, shiftKey: true }), null],
   ["Plain letters reach the shell", "macos", chord("t"), null],
+  ["Open a second window: ⌘N is kept from the shell on macOS", "macos", chord("n", { metaKey: true }), NEW_WINDOW],
+  ["Open a second window: Ctrl+Shift+N on Windows", "windows", chord("N", { ctrlKey: true, shiftKey: true }), NEW_WINDOW],
+  ["Open a second window: Ctrl+Shift+N on Linux", "linux", chord("N", { ctrlKey: true, shiftKey: true }), NEW_WINDOW],
+  ["Ctrl+N reaches the shell on Linux", "linux", chord("n", { ctrlKey: true }), null],
+  ["macOS: ⌘⇧N is not a pane key", "macos", chord("N", { metaKey: true, shiftKey: true }), null],
+  ["Move to a new window: ⌃⌘N on macOS", "macos", chord("n", { ctrlKey: true, metaKey: true }), MOVE_TO_NEW_WINDOW],
+  ["Move to a new window: Ctrl+Alt+Shift+N on Windows", "windows", chord("N", { ctrlKey: true, altKey: true, shiftKey: true }), MOVE_TO_NEW_WINDOW],
+  ["Move to a new window: Ctrl+Alt+Shift+N on Linux", "linux", chord("N", { ctrlKey: true, altKey: true, shiftKey: true }), MOVE_TO_NEW_WINDOW],
+  ["macOS: ⌃⌘⇧N is not a pane key", "macos", chord("N", { ctrlKey: true, metaKey: true, shiftKey: true }), null],
+  ["macOS: Ctrl+Alt+Shift+N is not a pane key", "macos", chord("N", { ctrlKey: true, altKey: true, shiftKey: true }), null],
+  ["Linux: Ctrl+Alt+N reaches the shell", "linux", chord("n", { ctrlKey: true, altKey: true }), null],
+  ["Windows: Ctrl+Meta+N is not a pane key", "windows", chord("n", { ctrlKey: true, metaKey: true }), null],
 ];
 
 describe("paneAction", () => {
