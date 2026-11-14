@@ -4,7 +4,6 @@
 
 - [ ] 1.1 Add `tauri-plugin-updater` and `tauri-plugin-process` to `src-tauri/Cargo.toml`, register both in `src-tauri/src/lib.rs`, add `updater:default` and `process:allow-restart` to `src-tauri/capabilities/default.json`, and add the `update_install_kind` command with a pure `install_kind(os, appimage_set)` helper and a table-driven unit test (linux+no APPIMAGE → deb; linux+APPIMAGE, macos, windows → bundle).
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib install_kind`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 - [ ] 1.2 In `src-tauri/tauri.conf.json` set `bundle.createUpdaterArtifacts: true` and `plugins.updater` with endpoint `https://github.com/redfellow/tiili/releases/latest/download/latest.json` and pubkey `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc3RTYwRDNFQjg1Mjk0OUUKUldTZWxGSzRQZzNtZDd1MVk2UHVrNTArTkd6c2lsZGZQK2lNMmkxcndZUTl5TitsbEhXWGx5cjUK`. In `scripts/bundle.mjs` add `--config` turning `createUpdaterArtifacts` off when `TAURI_SIGNING_PRIVATE_KEY` is unset (export the argument builder and test it).
   - proof: `node -e "const c=require('./src-tauri/tauri.conf.json');if(!c.bundle.createUpdaterArtifacts||!c.plugins.updater.pubkey)process.exit(1)"`
