@@ -45,6 +45,18 @@ export const SKIP_PACE = 1.4;
 /** How long the reduced-motion splash shows the finished lockup, and how long it fades, in real seconds. */
 const STILL = { hold: 0.9, fade: 0.3 };
 
+// ---- once a day ----
+/** The local calendar day of `now` as YYYY-MM-DD. */
+export function localDay(now: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Whether the splash is due: unless it already started today, whatever is stored (nothing, an earlier day, garbage). */
+export function splashDue(lastShown: string | null, now: Date): boolean {
+  return lastShown !== localDay(now);
+}
+
 // ---- helpers ----
 export const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;

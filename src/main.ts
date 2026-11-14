@@ -6,7 +6,7 @@ import { normalize, type Settings } from "./settings";
 import { createSettingsDialog, mountSettingsPage, type SettingsDialog } from "./settingsDialog";
 import { same } from "./settingsSession";
 import { applyTheme } from "./themes";
-import { playSplash } from "./splash";
+import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
 
 /** Event sent when the macOS app menu's Settings… item is chosen. */
@@ -55,6 +55,20 @@ async function startSettings(owner: string): Promise<void> {
   await windows.onCloseRequested(() => page.discard());
 }
 
+const SPLASH_KEY = "tiili.splash.lastShown";
+
+/** Whether the splash is due today; if so, records today as its day. Storage that fails plays the splash. */
+function claimSplashDay(): boolean {
+  const now = new Date();
+  try {
+    if (!splashDue(localStorage.getItem(SPLASH_KEY), now)) return false;
+    localStorage.setItem(SPLASH_KEY, localDay(now));
+  } catch {
+    // Storage is unavailable: play the splash rather than lose it.
+  }
+  return true;
+}
+
 async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> {
   const backend = await loadBackend();
   // A missing or broken settings file loads as null, which normalizes to the defaults.
@@ -65,7 +79,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
 
   // The splash covers the start-up; the first terminal opens underneath it, where its >_ lands.
   let adoptSettings: (next: Settings) => void = () => undefined;
-  const splash = settings.behaviour.startupSplash
+  const splash = settings.behaviour.startupSplash && claimSplashDay()
     ? playSplash({
         target: () => root.querySelector(".pane[data-focused] .xterm-screen"),
         fontSize: settings.font.size,
