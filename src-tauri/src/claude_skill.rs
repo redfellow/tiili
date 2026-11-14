@@ -42,7 +42,7 @@ fn home_dir() -> Option<PathBuf> {
 /// Runs `tiili install-claude-skill`: installs the skill, prints where it went and returns the process exit code.
 pub fn run_install() -> i32 {
     let Some(home) = home_dir() else {
-        eprintln!("Could not install the tiili-tiles skill: no home folder (HOME is not set).");
+        eprintln!("Could not install the tiili-tiles skill: no home folder: HOME (or USERPROFILE on Windows) is not set. Set it to your home folder and run the command again.");
         return 1;
     };
     match install(&home) {

@@ -54,3 +54,8 @@ libproc = "0.14"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSImage"] }
 objc2-foundation = { version = "0.3", features = ["NSData"] }
+
+# Attaching `tiili <subcommand>` to the calling console (src/main.rs): release builds are GUI-subsystem apps, which
+# start without one. tauri already depends on this version.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Console"] }
