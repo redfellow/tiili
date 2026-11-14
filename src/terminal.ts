@@ -103,6 +103,8 @@ export async function applyFont(term: Terminal, settings: Settings, zoom = 0): P
   applySize(term, settings, zoom);
   term.options.cursorStyle = settings.cursor.style;
   term.options.cursorBlink = settings.cursor.blink && hasFocus(term);
+  // Lowering it drops the oldest lines beyond the new limit.
+  term.options.scrollback = settings.behaviour.scrollback;
 
   const own = addons.get(term);
   if (!own) return;
@@ -156,6 +158,10 @@ export async function openTerminal(
     allowProposedApi: true,
     // xterm sizes its scrollbar by the overview ruler's width (14 px by default); the fit addon reserves the same.
     overviewRuler: { width: 8 },
+    scrollback: settings().behaviour.scrollback,
+    // On macOS, Option-drag selects even while a program such as vim or tmux reports the mouse; a plain
+    // Option-click still moves the shell cursor.
+    macOptionClickForcesSelection: true,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
