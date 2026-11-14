@@ -45,7 +45,7 @@
     "shortDescription": "A desktop terminal that tiles its terminals automatically.",
     "longDescription": "tiili is a desktop terminal that tiles its terminals automatically, so you can run many coding agents side by side and still tell them apart. Terminals in the same git repository share a colour, and copy and paste work on every platform.",
     "macOS": {
-      "signingIdentity": null
+      "signingIdentity": "-"
     },
     "windows": {
       "certificateThumbprint": null

@@ -30,8 +30,13 @@ carries a `>_` prompt.
 | `>_` prompt | white `#FFFFFF` | near-black `#111617` |
 | App icon tile | kalkki `#F6F1E9` | koski `#182023` |
 
-- Below 64 px the `>_` is left off (`*-small.svg`); the brick is too small to hold it.
-- The app icon tile has a 22.5% corner radius; the mark fills 88% of its width.
+- Below 64 px the mark leaves the `>_` off (`mark-*-small.svg`); the brick is too small to hold it.
+- The app icon is a close-up of the mark: the focus brick, with a taller course, spans the tile's full width, and only
+  the inner edges of the courses above and below show, the one above nudged left and the one below right. The `>_` sits
+  at the left, where a prompt sits in a terminal. The bricks are pressed: a lit top edge, a shaded bottom edge, a
+  shadow under the focus brick and the `>_` pressed into it. Being a close-up, it keeps the `>_` at every size;
+  `icon-*-small.svg` (32 px and below) is the same drawing without the light and shadow.
+- The app icon tile has a 22.5% corner radius.
 - Next to the wordmark the mark stands free, at 0.82× the wordmark's font size, 0.32 em apart.
 
 Files in `logo/`: `mark-{light,dark}[-small].svg` (free-standing), `icon-{light,dark}[-small].svg` (on the tile) and `lockup-{light,dark}.svg` (mark and brick-dot wordmark together).
