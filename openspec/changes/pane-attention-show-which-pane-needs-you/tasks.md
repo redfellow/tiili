@@ -8,8 +8,8 @@
 ## 2. Registry and OS level
 - [ ] 2.1 Add `src-tauri/src/attention.rs`: session-keyed registry (mark, clear, oldest-first next, count), cleared by session removal, `attention-changed` event, `attention_next` focusing the owner window; unit tests for ordering and counts
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib attention`
-- [ ] 2.2 OS attention when no tiili window is focused: badge count / Windows overlay brick icon / Linux badge, `request_user_attention` Informational or Critical per setting, cleared on app focus
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+- [ ] 2.2 OS attention when no tiili window is focused: badge count / Windows overlay brick icon / Linux badge, `request_user_attention` Informational or Critical per setting, cleared on app focus; unit tests in an `attention::os` module for the pure decision (badge count and attention level from focus state and settings)
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib attention::os`
 - [ ] 2.3 Spike then add `tauri-plugin-notification` (Cargo, npm, capability): one per session until cleared, 2 s summary `N panes need you`, title `<place> · <command>`, click focuses the pane where delivered; record per-OS click findings in design.md
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib attention`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
