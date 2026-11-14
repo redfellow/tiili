@@ -1,4 +1,5 @@
 pub mod app_icon;
+pub mod appimage_env;
 pub mod bridge;
 pub mod command;
 pub mod cwd;
