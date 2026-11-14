@@ -1,7 +1,15 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import type { Platform } from "./keymap";
-import { findPathCandidates, isOpenGesture, neverOpens, opensDirectly, truncateMiddle } from "./links";
+import {
+  findPathCandidates,
+  hintText,
+  isOpenGesture,
+  neverOpens,
+  opensDirectly,
+  truncateMiddle,
+  type HoveredLink,
+} from "./links";
 
 describe("findPathCandidates", () => {
   const cases: [string, { path: string; text: string; line?: number; col?: number }[]][] = [
@@ -77,5 +85,25 @@ describe("truncateMiddle", () => {
       expect(text.startsWith(head)).toBe(true);
       expect(text.endsWith(tail)).toBe(true);
     }
+  });
+});
+
+describe("hintText", () => {
+  const long = "https://example.com/" + "x".repeat(80) + "/end";
+  const file = { kind: "path", abs: "/p/src/main.ts", isDir: false, revealOnly: false } as const;
+  const cases: [string, HoveredLink, Platform, string][] = [
+    ["Plain URL on macOS", { kind: "url", uri: "https://example.com" }, "macos", "⌘-click to open"],
+    ["Plain URL on Linux", { kind: "url", uri: "https://example.com" }, "linux", "Ctrl-click to open"],
+    ["OSC 8 target shown", { kind: "url", uri: "https://example.com/a", label: "docs" }, "macos", "⌘-click to open https://example.com/a"],
+    ["OSC 8 long target cut", { kind: "url", uri: long, label: "docs" }, "macos", `⌘-click to open ${truncateMiddle(long, 30)}`],
+    ["File", file, "macos", "⌘-click to open in default app"],
+    ["File with a line", { ...file, line: 10 }, "windows", "Ctrl-click to open in default app (line ignored)"],
+    ["Folder on macOS", { ...file, isDir: true }, "macos", "⌘-click to open in Finder"],
+    ["Folder on Windows", { ...file, isDir: true }, "windows", "Ctrl-click to open in Explorer"],
+    ["Executable on macOS", { ...file, revealOnly: true }, "macos", "⌘-click to reveal in Finder"],
+    ["Executable on Windows", { ...file, revealOnly: true }, "windows", "Ctrl-click to show in Explorer"],
+  ];
+  it.each(cases)("%s", (_name, link, platform, expected) => {
+    expect(hintText(link, platform, 30)).toBe(expected);
   });
 });

@@ -122,7 +122,10 @@ export function hintText(link: HoveredLink, platform: Platform, max = 60): strin
   if (link.kind === "url") {
     return link.label !== undefined ? `${click} to open ${truncateMiddle(link.uri, max)}` : `${click} to open`;
   }
-  if (link.revealOnly) return `${click} to ${revealLabel(platform).toLowerCase()}`;
+  if (link.revealOnly) {
+    const label = revealLabel(platform);
+    return `${click} to ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  }
   if (link.isDir) {
     const manager = platform === "macos" ? "Finder" : platform === "windows" ? "Explorer" : "the file manager";
     return `${click} to open in ${manager}`;

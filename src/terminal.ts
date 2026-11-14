@@ -207,7 +207,7 @@ export async function openTerminal(
   };
 
   const links = attachLinks(term, container, backend, currentPlatform(), () => (running ? session : undefined), (error) =>
-    console.error(error),
+    term.write(`\r\nCouldn't open the link: ${String(error)}\r\n`),
   );
 
   const spawn = async (dir?: string) => {

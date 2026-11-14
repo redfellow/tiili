@@ -20,18 +20,25 @@ async function run(backend: Backend, term: Terminal, action: ClipboardAction): P
 }
 
 /** The right-click menu's items for `link`, the link under the pointer, ahead of Copy and Paste. */
-function linkItems(backend: Backend, links: PaneLinks, link: HoveredLink, platform: Platform): MenuItem[] {
-  const report = (error: unknown) => console.error(error);
+function linkItems(
+  backend: Backend,
+  links: PaneLinks,
+  link: HoveredLink,
+  platform: Platform,
+  say: (message: string) => void,
+): MenuItem[] {
+  const copyFailed = (error: unknown) => say(`Copy failed: ${String(error)}`);
   if (link.kind === "url") {
     return [
       { label: "Open Link", action: () => links.open(link) },
-      { label: "Copy Link", action: () => void backend.writeClipboard(link.uri).catch(report) },
+      { label: "Copy Link", action: () => void backend.writeClipboard(link.uri).catch(copyFailed) },
     ];
   }
+  const revealFailed = (error: unknown) => say(`Couldn't reveal ${link.abs}: ${String(error)}`);
   return [
     ...(link.revealOnly ? [] : [{ label: "Open", action: () => links.open(link) }]),
-    { label: revealLabel(platform), action: () => void backend.revealPath(link.abs).catch(report) },
-    { label: "Copy Path", action: () => void backend.writeClipboard(link.abs).catch(report) },
+    { label: revealLabel(platform), action: () => void backend.revealPath(link.abs).catch(revealFailed) },
+    { label: "Copy Path", action: () => void backend.writeClipboard(link.abs).catch(copyFailed) },
   ];
 }
 
@@ -93,7 +100,8 @@ export async function attachClipboardMenus(
     { separator: true },
     { label: "Settings…", action: () => openSettings() },
   ];
-  const fail = (error: unknown) => target()?.write(`\r\nCopy or paste failed: ${String(error)}\r\n`);
+  const say = (message: string) => target()?.write(`\r\n${message}\r\n`);
+  const fail = (error: unknown) => say(`Copy or paste failed: ${String(error)}`);
   const showStatic = more ? undefined : await backend.contextMenu(items);
   return (event) => {
     // The link is the one under the pointer as the menu opens, before anything waits.
@@ -106,7 +114,7 @@ export async function attachClipboardMenus(
     // Kept from the webview's own menu now: the items are built after a wait.
     event.preventDefault();
     (async () => {
-      const first: MenuItem[] = paneLinks && link ? [...linkItems(backend, paneLinks, link, platform), { separator: true }] : [];
+      const first: MenuItem[] = paneLinks && link ? [...linkItems(backend, paneLinks, link, platform, say), { separator: true }] : [];
       const showMenu = await backend.contextMenu([...first, ...items, ...(more ? await more() : [])]);
       await showMenu(event);
     })().catch(fail);

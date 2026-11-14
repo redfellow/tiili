@@ -172,13 +172,15 @@ fn is_reveal_only(os: Os, path: &Path, meta: &std::fs::Metadata) -> bool {
     }
 }
 
-/// What `abs`, an absolute path, is on disk under `os`'s rules; `None` when nothing is there.
+/// What `abs`, an absolute path, is on disk under `os`'s rules; `None` when nothing is there. A symlink is judged by
+/// its own name and by what it points to, so a link to a launcher is reveal-only too.
 pub fn inspect(os: Os, abs: &Path) -> Option<Resolved> {
     let meta = std::fs::metadata(abs).ok()?;
+    let target = std::fs::canonicalize(abs).ok()?;
     Some(Resolved {
         abs: abs.to_string_lossy().into_owned(),
         is_dir: meta.is_dir(),
-        reveal_only: is_reveal_only(os, abs, &meta),
+        reveal_only: is_reveal_only(os, abs, &meta) || is_reveal_only(os, &target, &meta),
     })
 }
 

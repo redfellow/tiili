@@ -183,3 +183,28 @@ fn executable_is_revealed() {
         assert!(!plain.reveal_only, "{os:?}");
     }
 }
+
+/// A symlink to a launcher is revealed: its target decides, whatever the link is named.
+#[cfg(unix)]
+#[test]
+fn symlink_to_launcher_is_revealed() {
+    use std::os::unix::fs::symlink;
+    let scratch = Scratch::new("symlink");
+    fs::create_dir_all(scratch.0.join("Tool.app")).unwrap();
+    scratch.file("setup.pkg");
+    scratch.file("notes.txt");
+    fs::create_dir_all(scratch.0.join("docs")).unwrap();
+    symlink("../Tool.app", scratch.0.join("docs/README.txt")).unwrap();
+    symlink("../setup.pkg", scratch.0.join("docs/guide.md")).unwrap();
+    symlink("../notes.txt", scratch.0.join("docs/plain.md")).unwrap();
+    // (link, reveal-only on macOS)
+    let cases = [
+        ("docs/README.txt", true),
+        ("docs/guide.md", true),
+        ("docs/plain.md", false),
+    ];
+    for (text, reveal_only) in cases {
+        let got = resolve_path_on(Os::MacOs, &scratch.0, None, text).unwrap();
+        assert_eq!(got.reveal_only, reveal_only, "{text}");
+    }
+}
