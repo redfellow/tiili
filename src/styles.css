@@ -128,8 +128,8 @@ body {
   -webkit-user-select: none;
 }
 
-/* macOS overlay title bar: a 38px bar with the window buttons centred in it (trafficLightPosition in tauri.conf.json),
-   and room on the left for them. */
+/* macOS overlay title bar: a 38px bar with room on the left for the window buttons. trafficLightPosition in
+   tauri.conf.json centres them: its y is roughly the buttons' centre from the window's top, so y 19 is half of 38px. */
 .top-bar[data-overlay] {
   height: 38px;
   padding-left: 82px;
