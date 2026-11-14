@@ -1,10 +1,11 @@
 import { gridFor, TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
-  APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
+  APP_ICONS, type AppIcon, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES,
+  fontFamilyList, INACTIVE_OPACITY, normalize, type PromptId, type Settings,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
-import { REMOTE_SNIPPETS } from "./remoteSnippets";
+import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION } from "./version";
@@ -22,6 +23,12 @@ const COMMON_MONO_FONTS = [
   "IBM Plex Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "DejaVu Sans Mono", "Ubuntu Mono",
 ];
 
+/** The text the Ligatures example and the preview draw, rich in the pairs coding fonts join. */
+const LIGATURE_SAMPLE = "-> => != === <= >= ::";
+
+/** The preview's terminal is drawn no bigger than this, so a large font still fits the strip. */
+const PREVIEW_MAX_SIZE = 18;
+
 export interface SettingsDialogOptions {
   initial: Settings;
   /** Shows the Dock icon choice; only macOS lets the user pick it. */
@@ -32,11 +39,11 @@ export interface SettingsDialogOptions {
   save: (settings: Settings) => Promise<void>;
   /** Called after the settings close, e.g. to give the terminal its focus back or to close the settings window. */
   onClose: () => void;
-  /** Puts text on the clipboard, for the Remote shells snippets' Copy buttons. */
+  /** Puts text on the clipboard, for the Remote shells snippet's Copy button. */
   copy: (text: string) => Promise<void>;
   /**
    * Checks for a new version now, ignoring the daily limit and a skipped version, and opens the update dialog when
-   * there is one; resolves whether there was. Without it (the dev server) there is no Check for updates button.
+   * there is one; resolves whether there was. Without it (the dev server) there is no Check now button.
    */
   checkForUpdates?: () => Promise<boolean>;
 }
@@ -57,10 +64,10 @@ export interface SettingsPage {
 /** The settings form, ready to mount in a dialogue or a page. */
 interface SettingsForm {
   form: HTMLFormElement;
-  /** Fills the form with the saved settings on its first tab, focuses the theme list and lists installed fonts. */
+  /** Fills the form with the saved settings on its first tab, focuses the theme grid and lists installed fonts. */
   reset(): void;
   adopt(settings: Settings): void;
-  /** Cancel, Esc and ×: back to the opening settings, unsaved, then closes. */
+  /** Cancel and Esc: back to the opening settings, unsaved, then closes. */
   revert(): Promise<void>;
   /** Back to the opening settings, unsaved, without closing. */
   discard(): Promise<void>;
@@ -76,22 +83,17 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-/** A label and its control side by side, or with the control under the label when `stacked`. */
-function field(label: string, control: HTMLElement, stacked = false): HTMLLabelElement {
-  const className = stacked ? "settings-field settings-field-stacked" : "settings-field";
-  return element("label", { className }, element("span", {}, label), control);
-}
-
 function numberInput(name: string, range: { min: number; max: number; step: number }): HTMLInputElement {
   return element("input", {
     type: "number", name, min: String(range.min), max: String(range.max), step: String(range.step),
   });
 }
 
-/** A slider with a filled track and a live readout; `input` is the range, `control` the row to put in a field. */
-function rangeInput(name: string, range: { min: number; max: number; step: number }) {
+/** A slider with a filled track and a live readout; `input` is the range, `control` the pair to put in a row. */
+function rangeInput(name: string, label: string, range: { min: number; max: number; step: number }) {
   const input = numberInput(name, range);
   input.type = "range";
+  input.setAttribute("aria-label", label);
   const out = element("output", {}, "");
   const sync = () => {
     out.textContent = String(Number(input.value));
@@ -140,11 +142,6 @@ async function installedMonospaceFonts(): Promise<string[]> {
   return names.filter((n) => !BUNDLED_FONTS.includes(n)).sort((a, b) => a.localeCompare(b));
 }
 
-/** Adds the muted "(default)" after a row's name. */
-function markDefault(row: HTMLElement): void {
-  row.append(element("span", { className: "settings-default" }, "(default)"));
-}
-
 const TILING_LABELS: Record<TilingMode, string> = {
   grid: "Grid",
   wide: "Wide grid",
@@ -172,14 +169,107 @@ function tilingIcon(mode: TilingMode): HTMLElement {
   return icon;
 }
 
-const CURSOR_LABELS = { block: "Brick", underline: "Underline", bar: "Bar" } as const;
-const APP_ICON_LABELS: Record<AppIcon, string> = { system: "Follow system appearance", light: "Light", dark: "Dark" };
+const CURSOR_LABELS: Record<CursorStyle, string> = { block: "Brick", underline: "Underline", bar: "Bar" };
+const APP_ICON_LABELS: Record<AppIcon, string> = { system: "System", light: "Light", dark: "Dark" };
+
+/** The "DEFAULT" tag on the default choice's card or row. */
+function defaultTag(): HTMLElement {
+  return element("span", { className: "settings-tag" }, "DEFAULT");
+}
+
+let tooltipCount = 0;
+
+/** An ⓘ button whose tooltip, shown on hover and keyboard focus, holds `hint`; the tooltip also describes the button. */
+function infoButton(about: string, hint: string): HTMLElement {
+  const tip = element("span", { className: "settings-tooltip", id: `settings-tip-${tooltipCount++}` }, hint);
+  tip.setAttribute("role", "tooltip");
+  const button = element("button", { type: "button", className: "settings-info" }, "ⓘ");
+  button.setAttribute("aria-label", `About ${about}`);
+  button.setAttribute("aria-describedby", tip.id);
+  return element("span", { className: "settings-info-wrap" }, button, tip);
+}
+
+/** A section: its heading, with an ⓘ hint beside it when given, then its contents. */
+function section(title: string, hint: string | undefined, ...children: HTMLElement[]): HTMLFieldSetElement {
+  const legend = element("legend", {}, element("span", {}, title));
+  if (hint) legend.append(infoButton(title, hint));
+  return element("fieldset", {}, legend, ...children);
+}
+
+/** A label on the left and its controls in a line on the right. */
+function row(label: string, ...controls: (HTMLElement | string)[]): HTMLElement {
+  return element("div", { className: "settings-row" },
+    element("span", { className: "settings-row-label" }, label),
+    element("div", { className: "settings-row-controls" }, ...controls));
+}
+
+/** A checkbox with its text after it. */
+function check(input: HTMLInputElement, text: string): HTMLLabelElement {
+  return element("label", { className: "settings-check" }, input, element("span", {}, text));
+}
+
+/**
+ * A segmented control: a radio group of buttons, one checked. Left/Right (and Up/Down) move the choice round, Home
+ * and End go to the ends, and Tab reaches the checked button. `onChange` runs when the user picks another one.
+ */
+function segmented<T extends string>(
+  label: string,
+  choices: readonly { value: T; label: string }[],
+  onChange: () => void,
+) {
+  let value = choices[0].value;
+  const buttons = choices.map((choice) => {
+    const button = element("button", { type: "button", className: "settings-segment" }, choice.label);
+    button.setAttribute("role", "radio");
+    return button;
+  });
+  const el = element("div", { className: "settings-segmented" }, ...buttons);
+  el.setAttribute("role", "radiogroup");
+  el.setAttribute("aria-label", label);
+
+  /** Checks `next`, without telling `onChange`. */
+  const set = (next: T) => {
+    value = next;
+    buttons.forEach((button, i) => {
+      const on = choices[i].value === next;
+      button.setAttribute("aria-checked", String(on));
+      button.tabIndex = on ? 0 : -1;
+    });
+  };
+  const pick = (index: number, focus: boolean) => {
+    const i = (index + choices.length) % choices.length;
+    if (choices[i].value !== value) {
+      set(choices[i].value);
+      onChange();
+    }
+    if (focus) buttons[i].focus();
+  };
+  buttons.forEach((button, i) => {
+    button.addEventListener("click", () => pick(i, false));
+    button.addEventListener("keydown", (event) => {
+      const moves: Record<string, number> = {
+        ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: choices.length - 1,
+      };
+      const next = moves[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      pick(next, true);
+    });
+  });
+  set(value);
+  return {
+    el,
+    value: () => value,
+    set,
+    setDisabled: (disabled: boolean) => buttons.forEach((button) => (button.disabled = disabled)),
+  };
+}
 
 interface PickItem { id: string; name: string }
 interface PickGroup { label?: string; items: PickItem[] }
 
 /**
- * A focusable single-select list in groups, for themes and fonts. Up/Down, Home/End and clicks select at once (the
+ * A focusable single-select list in groups, for font families. Up/Down, Home/End and clicks select at once (the
  * choice applies as focus moves) unless `locked`. `render` decorates each row; groups can be replaced later.
  */
 function pickList(
@@ -254,87 +344,192 @@ function pickList(
   return { list, show, setGroups, value: () => value };
 }
 
-/** A theme's colours for its swatch: terminal ground and text, and the accent. System shows light and dark halves. */
-function swatchColours(theme: Theme) {
-  const light = THEMES.find((t) => t.id === "tiili-light")!.tokens;
-  const dark = THEMES.find((t) => t.id === "tiili-dark")!.tokens;
-  const t = theme.kind === "system" ? light : theme.tokens;
-  return {
-    bg: theme.kind === "system"
-      ? `linear-gradient(115deg, ${light["--term-bg"]} 50%, ${dark["--term-bg"]} 50%)`
-      : t["--term-bg"]!,
-    fg: t["--term-fg"]!,
-    accent: t["--accent"]!,
-  };
-}
-
-/** The theme list: System first, then the dark themes, then the light ones, each row led by a colour swatch. */
-function themeList(onSelect: () => void, locked: () => boolean) {
-  const byId = new Map<string, Theme>(THEMES.map((t) => [t.id, t]));
-  const picker = pickList("Theme", onSelect, locked, (row, item) => {
-    const theme = byId.get(item.id)!;
-    const colours = swatchColours(theme);
-    const swatch = element("span", { className: "settings-swatch" }, theme.kind === "system" ? "" : "Aa");
-    swatch.setAttribute("aria-hidden", "true");
-    swatch.style.setProperty("--sw-bg", colours.bg);
-    swatch.style.setProperty("--sw-fg", colours.fg);
-    swatch.style.setProperty("--sw-accent", colours.accent);
-    row.append(swatch, element("span", {}, item.name));
-    if (item.id === DEFAULT_SETTINGS.theme) markDefault(row);
+/**
+ * A focusable single-select grid of cards, for themes, prompts and tiling. Left/Right move one card, Up/Down one row
+ * (as many cards as the grid has columns), Home/End go to the first and last card, all stopping at the ends; clicks
+ * select. Each selection applies at once unless `locked`. `render` fills each card.
+ */
+function cardGrid(
+  label: string,
+  className: string,
+  items: PickItem[],
+  onSelect: () => void,
+  locked: () => boolean,
+  render: (card: HTMLElement, item: PickItem) => void,
+) {
+  let value = "";
+  const grid = element("div", { className: `settings-cards ${className}`, tabIndex: 0 });
+  grid.setAttribute("role", "listbox");
+  grid.setAttribute("aria-label", label);
+  const cards = items.map((item, i) => {
+    const card = element("div", { className: "settings-card", id: `${label.replace(/\s+/g, "-")}-card-${i}` });
+    card.setAttribute("role", "option");
+    card.dataset.id = item.id;
+    render(card, item);
+    return card;
   });
-  const of = (kind: Theme["kind"]) => THEMES.filter((t) => t.kind === kind).map(({ id, name }) => ({ id, name }));
-  picker.setGroups([{ items: of("system") }, { label: "Dark", items: of("dark") }, { label: "Light", items: of("light") }]);
-  return picker;
+  grid.append(...cards);
+
+  /** Marks `id` selected, without applying it. */
+  const show = (id: string) => {
+    value = id;
+    cards.forEach((card, i) => {
+      const selected = items[i].id === id;
+      card.setAttribute("aria-selected", String(selected));
+      if (selected) grid.setAttribute("aria-activedescendant", card.id);
+    });
+  };
+  const select = (index: number) => {
+    const id = items[index]?.id;
+    if (id === undefined || id === value || locked()) return;
+    show(id);
+    cards[index].scrollIntoView({ block: "nearest" });
+    onSelect();
+  };
+  /** How many cards a row holds, counted from the grid's laid-out column tracks. */
+  const columns = () => {
+    const tracks = getComputedStyle(grid).gridTemplateColumns.split(" ").filter((t) => t && t !== "none");
+    return Math.max(1, tracks.length);
+  };
+
+  grid.addEventListener("keydown", (event) => {
+    const index = items.findIndex((i) => i.id === value);
+    const last = items.length - 1;
+    const cols = columns();
+    const rowOf = (i: number) => Math.floor(i / cols);
+    // Down from a row above a short last row lands on the last card rather than nowhere.
+    const down = index + cols <= last ? index + cols : rowOf(index) < rowOf(last) ? last : index;
+    const moves: Record<string, number> = {
+      ArrowLeft: Math.max(0, index - 1),
+      ArrowRight: Math.min(last, index + 1),
+      ArrowUp: index - cols >= 0 ? index - cols : index,
+      ArrowDown: down,
+      Home: 0,
+      End: last,
+    };
+    const next = moves[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    select(next);
+  });
+  grid.addEventListener("click", (event) => {
+    const card = (event.target as Element).closest<HTMLElement>("[role=option]");
+    if (!card) return;
+    grid.focus();
+    select(items.findIndex((i) => i.id === card.dataset.id));
+  });
+
+  /** The selected card, scrolled into view. */
+  const reveal = () => cards[items.findIndex((i) => i.id === value)]?.scrollIntoView({ block: "nearest" });
+  return { grid, show, reveal, value: () => value };
 }
 
-/** A prompt drawn line by line in the current theme's terminal ground and ANSI colours, so it follows theme changes. */
+/** The theme grid: System first, then the dark themes, then the light ones, each card in its terminal colours. */
+function themeGrid(onSelect: () => void, locked: () => boolean) {
+  const byId = new Map<string, Theme>(THEMES.map((t) => [t.id, t]));
+  const light = byId.get("tiili-light")!.tokens;
+  const dark = byId.get("tiili-dark")!.tokens;
+  const of = (kind: Theme["kind"]) => THEMES.filter((t) => t.kind === kind).map(({ id, name }) => ({ id, name }));
+  const items = [...of("system"), ...of("dark"), ...of("light")];
+  return cardGrid("Theme", "settings-theme-cards", items, onSelect, locked, (card, item) => {
+    const theme = byId.get(item.id)!;
+    // System shows the brand light and dark grounds side by side, named in the dark half's text colour.
+    const tokens = theme.kind === "system" ? dark : theme.tokens;
+    card.style.setProperty("--card-bg", theme.kind === "system"
+      ? `linear-gradient(115deg, ${light["--term-bg"]} 50%, ${dark["--term-bg"]} 50%)`
+      : tokens["--term-bg"]!);
+    card.style.setProperty("--card-fg", tokens["--term-fg"]!);
+    const stripe = element("span", { className: "settings-theme-stripe" },
+      ...[1, 2, 3, 4, 5, 6].map((i) => {
+        const dot = element("span");
+        dot.style.background = tokens[`--ansi-${i}` as "--ansi-1"]!;
+        return dot;
+      }));
+    stripe.setAttribute("aria-hidden", "true");
+    card.append(element("span", { className: "settings-card-name" }, item.name), stripe);
+    if (item.id === DEFAULT_SETTINGS.theme) card.append(defaultTag());
+  });
+}
+
+/** Runs of prompt text in the current theme's terminal colours, so they follow theme changes. */
+function promptRuns(line: PromptSegment[]): HTMLElement[] {
+  return line.map(({ text, ansi }) => {
+    const run = element("span", {}, text);
+    run.style.color = ansi === "fg" ? "var(--term-fg)" : `var(--ansi-${ansi})`;
+    return run;
+  });
+}
+
+/** A prompt drawn line by line in the current theme's terminal ground and ANSI colours. */
 function promptPreview(lines: PromptSegment[][]): HTMLElement {
   const preview = element("span", { className: "settings-prompt-preview" },
-    ...lines.map((line) => element("span", {},
-      ...line.map(({ text, ansi }) => {
-        const run = element("span", {}, text);
-        run.style.color = ansi === "fg" ? "var(--term-fg)" : `var(--ansi-${ansi})`;
-        return run;
-      }))));
+    ...lines.map((line) => element("span", {}, ...promptRuns(line))));
   preview.setAttribute("aria-hidden", "true");
   return preview;
 }
 
-/** The prompt list: Off first, then the One-line and Two-line styles, each row with a preview of its prompt. */
-function promptList(onSelect: () => void, locked: () => boolean) {
+/** The prompt grid: one row of cards, Off first, each showing what its prompt looks like. */
+function promptGrid(onSelect: () => void, locked: () => boolean) {
   const byId = new Map(PROMPT_STYLES.map((style) => [style.id as string, style]));
-  const picker = pickList("Prompt", onSelect, locked, (row, item) => {
+  const items = PROMPT_STYLES.map(({ id, label }) => ({ id, name: label }));
+  return cardGrid("Prompt", "settings-prompt-cards", items, onSelect, locked, (card, item) => {
     const style = byId.get(item.id)!;
-    row.append(element("span", {}, item.name));
-    if (style.preview.length > 0) row.append(promptPreview(style.preview));
-    if (style.preview.length > 1) row.classList.add("settings-option-tall");
-    if (item.id === DEFAULT_SETTINGS.prompt) markDefault(row);
+    const preview = style.preview.length > 0
+      ? promptPreview(style.preview)
+      : element("span", { className: "settings-prompt-preview settings-prompt-own" }, "your shell's own");
+    card.append(element("span", { className: "settings-card-name" }, item.name), preview);
+    if (item.id === DEFAULT_SETTINGS.prompt) card.append(defaultTag());
   });
-  const of = (group: string | undefined) =>
-    PROMPT_STYLES.filter((style) => style.group === group).map(({ id, label }) => ({ id, name: label }));
-  picker.setGroups([{ items: of(undefined) }, { label: "One-line", items: of("One-line") },
-    { label: "Two-line", items: of("Two-line") }]);
-  // Short enough to show whole, so no style hides below a scroll.
-  picker.list.classList.add("settings-list-whole");
-  return picker;
+}
+
+/** The lines a prompt draws before a command: its preview, or a plain `$` for the shell's own. */
+function promptLines(id: PromptId): PromptSegment[][] {
+  const style = PROMPT_STYLES.find((s) => s.id === id);
+  return style && style.preview.length > 0 ? style.preview : [[{ text: "$", ansi: "fg" }]];
+}
+
+type TermColour = number | "fg" | "dim";
+
+/** One terminal line from runs of text, each in an ANSI slot, the terminal text colour or its dim colour. */
+function termLine(...runs: [string, TermColour, boolean?][]): HTMLElement {
+  return element("div", { className: "settings-preview-line" }, ...runs.map(([text, colour, bold]) => {
+    const span = element("span", { className: bold ? "settings-preview-bold" : "" }, text);
+    span.style.color = colour === "fg" ? "var(--term-fg)" : colour === "dim" ? "var(--term-dim)" : `var(--ansi-${colour})`;
+    return span;
+  }));
+}
+
+/** The prompt with `command` typed after it, its output, then the prompt again, ending in `cursor` when given. */
+function terminalRun(prompt: PromptSegment[][], command: string, output: HTMLElement[], cursor?: HTMLElement) {
+  const promptWith = (text: string, end?: HTMLElement) => prompt.map((line, i) => {
+    const el = element("div", { className: "settings-preview-line" }, ...promptRuns(line));
+    if (i === prompt.length - 1) {
+      el.append(element("span", {}, ` ${text}`));
+      if (end) el.append(end);
+    }
+    return el;
+  });
+  return [...promptWith(command), ...output, ...promptWith("", cursor)];
 }
 
 /**
- * Builds the settings form: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab (Font) and a Behaviour
- * tab (Tiling, Responsive text, Panes, Remote shells, Updates, Startup), with Reset to defaults, Cancel and Save. Every change
- * applies at once as a preview; only Save writes it, and Cancel and × go back to the opening settings. Either one then
- * calls `close`.
+ * Builds the settings form: tabs for Style (Theme, Prompt, Terminal), Typography (Font) and Behaviour (Tiling, Panes,
+ * App, Remote shells) at the top, a live preview under them on Style and Typography, the selected tab's body, which
+ * alone scrolls, and a footer with Reset to defaults, Cancel and Save. Every change applies at once as a preview;
+ * only Save writes it, and Cancel and Esc go back to the opening settings. Either one then calls `close`.
  */
 function createSettingsForm(options: SettingsDialogOptions, close: () => void): SettingsForm {
   const session = createSettingsSession(options.initial);
+  const changed = () => change(read());
+  const locked = () => saving;
 
-  const theme = themeList(() => change(read()), () => saving);
-  const prompt = promptList(() => change(read()), () => saving);
+  const theme = themeGrid(changed, locked);
+  const prompt = promptGrid(changed, locked);
   let osFonts: string[] = [];
-  const family = pickList("Font family", () => change(read()), () => saving, (row, item) => {
+  const family = pickList("Font family", changed, locked, (row, item) => {
     row.style.fontFamily = `"${item.name}", monospace`;
-    row.textContent = item.name;
-    if (item.id === DEFAULT_FONT_FAMILY) markDefault(row);
+    row.append(element("span", {}, item.name));
+    if (item.id === DEFAULT_FONT_FAMILY) row.append(defaultTag());
   });
   /** Fills the family list: a Bundled and an OS group, with `selected` kept even if it is in neither. */
   const renderFamilies = (selected: string) => {
@@ -343,34 +538,33 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     family.setGroups([{ label: "Bundled", items: listed(BUNDLED_FONTS) }, { label: "OS", items: listed(os) }]);
     family.show(selected);
   };
-  const tiling = pickList("Tiling", () => change(read()), () => saving, (row, item) => {
-    row.append(tilingIcon(item.id as TilingMode), element("span", {}, item.name));
-    if (item.id === DEFAULT_SETTINGS.tiling.layout) markDefault(row);
+  const tilingItems = TILING_MODES.map((id) => ({ id, name: TILING_LABELS[id] }));
+  const tiling = cardGrid("Tiling", "settings-tiling-cards", tilingItems, changed, locked, (card, item) => {
+    card.append(tilingIcon(item.id as TilingMode), element("span", { className: "settings-card-name" }, item.name));
+    if (item.id === DEFAULT_SETTINGS.tiling.layout) card.append(defaultTag());
   });
-  tiling.setGroups([{ items: TILING_MODES.map((id) => ({ id, name: TILING_LABELS[id] })) }]);
   const responsiveOn = element("input", { type: "checkbox", name: "responsiveEnabled" });
-  const responsiveStrength = rangeInput("responsiveStrength", RESPONSIVE_STRENGTH);
-  const size = rangeInput("size", FONT_RANGES.size);
-  const weight = rangeInput("weight", FONT_RANGES.weight);
-  const weightBold = rangeInput("weightBold", FONT_RANGES.weightBold);
+  const responsiveStrength = rangeInput("responsiveStrength", "Strength", RESPONSIVE_STRENGTH);
+  const size = rangeInput("size", "Size", FONT_RANGES.size);
+  const weight = rangeInput("weight", "Weight", FONT_RANGES.weight);
+  const weightBold = rangeInput("weightBold", "Bold weight", FONT_RANGES.weightBold);
   const ligatures = element("input", { type: "checkbox", name: "ligatures" });
-  const lineHeight = rangeInput("lineHeight", FONT_RANGES.lineHeight);
-  const letterSpacing = rangeInput("letterSpacing", FONT_RANGES.letterSpacing);
-  const cursorStyle = element("select", { name: "cursorStyle" },
-    ...CURSOR_STYLES.map((style) => element("option", { value: style }, CURSOR_LABELS[style])));
+  const ligatureExample = element("span", { className: "settings-ligature-example" }, LIGATURE_SAMPLE);
+  ligatureExample.setAttribute("aria-hidden", "true");
+  const lineHeight = rangeInput("lineHeight", "Line height", FONT_RANGES.lineHeight);
+  const letterSpacing = rangeInput("letterSpacing", "Letter spacing", FONT_RANGES.letterSpacing);
+  const cursorStyle = segmented("Cursor style",
+    CURSOR_STYLES.map((value) => ({ value, label: CURSOR_LABELS[value] })), changed);
   const cursorBlink = element("input", { type: "checkbox", name: "cursorBlink" });
-  const inactiveOpacity = rangeInput("inactiveOpacity", INACTIVE_OPACITY);
+  const inactiveOpacity = rangeInput("inactiveOpacity", "Opacity", INACTIVE_OPACITY);
   const inactiveDesaturate = element("input", { type: "checkbox", name: "inactiveDesaturate" });
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const updatesAuto = element("input", { type: "checkbox", name: "updatesAutoCheck" });
-  const appIcon = element("select", { name: "appIcon" },
-    ...APP_ICONS.map((icon) => element("option", { value: icon }, APP_ICON_LABELS[icon])));
+  const appIcon = segmented("Dock icon", APP_ICONS.map((value) => ({ value, label: APP_ICON_LABELS[value] })), changed);
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
-  const closeButton = element("button", { type: "button", className: "settings-close", title: "Close" }, "×");
-  closeButton.setAttribute("aria-label", "Close");
   const reset = element("button", { type: "button", className: "settings-reset" }, "Reset to defaults");
   const confirmReset = element("button", { type: "button", className: "settings-reset" }, "Reset");
   const keepSettings = element("button", { type: "button", className: "settings-reset" }, "Keep");
@@ -382,91 +576,72 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const cancel = element("button", { type: "button", className: "settings-cancel" }, "Cancel");
   const save = element("button", { type: "button", className: "settings-save" }, "Save");
 
-  const fontFields = element("fieldset", {},
-    element("legend", {}, "Font"),
-    field("Family", family.list, true),
-    field("Size (px)", size.control),
-    field("Weight", weight.control),
-    field("Bold weight", weightBold.control),
-    field("Line height", lineHeight.control),
-    field("Letter spacing (px)", letterSpacing.control),
-    element("label", { className: "settings-check" }, ligatures, element("span", {}, "Ligatures")),
-  );
+  // The live preview: an active pane that ran git log and an inactive one running the dev server.
+  const preview = element("div", { className: "settings-preview" });
+  preview.setAttribute("aria-hidden", "true");
+  const renderPreview = (settings: Settings) => {
+    const { font, cursor, inactive } = settings;
+    preview.style.fontFamily = fontFamilyList(font.family);
+    preview.style.fontSize = `${Math.min(font.size, PREVIEW_MAX_SIZE)}px`;
+    preview.style.fontWeight = String(font.weight);
+    preview.style.setProperty("--preview-bold", String(font.weightBold));
+    preview.style.lineHeight = String(font.lineHeight);
+    preview.style.letterSpacing = `${font.letterSpacing}px`;
+    preview.style.fontVariantLigatures = font.ligatures ? "normal" : "none";
+    const lines = promptLines(settings.prompt);
+    const caret = element("span", { className: "settings-preview-cursor" });
+    caret.dataset.style = cursor.style;
+    caret.classList.toggle("settings-preview-blink", cursor.blink);
+    const active = element("div", { className: "settings-preview-pane settings-preview-active" },
+      ...terminalRun(lines, "git log --oneline -2", [
+        termLine(["3f9c2a1", 3], [" (", "fg"], ["HEAD -> main", 6, true], [") ", "fg"], ["Tile panes as bricks", "fg"]),
+        termLine(["a7d04e8", 3], [" Map keys => escape codes", "fg"]),
+      ], caret));
+    const idle = element("div", { className: "settings-preview-pane" },
+      ...terminalRun(lines, "npm run dev", [
+        termLine(["> tiili@", "dim"], [APP_VERSION, "dim"], [" dev", "dim"]),
+        termLine(["  VITE ", 2, true], ["ready in ", "fg"], ["312 ms", "fg", true]),
+        termLine(["  ➜  Local: ", "fg"], ["http://localhost:1420/", 4]),
+      ]));
+    idle.style.opacity = String(inactive.opacity);
+    idle.style.filter = inactive.desaturate ? "grayscale(1)" : "none";
+    preview.replaceChildren(active, idle);
+  };
 
-  const cursorFields = element("fieldset", {},
-    element("legend", {}, "Cursor"),
-    field("Style", cursorStyle),
-    element("label", { className: "settings-check" }, cursorBlink, element("span", {}, "Blink")),
-  );
+  const styleFields = [
+    section("Theme", undefined, theme.grid),
+    section("Prompt",
+      "Applies to open panes and new ones. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
+      "function) always wins.",
+      prompt.grid),
+    section("Terminal", undefined,
+      row("Cursor", cursorStyle.el, check(cursorBlink, "Blink")),
+      row("Inactive panes", element("span", { className: "settings-row-sub" }, "Opacity"), inactiveOpacity.control,
+        check(inactiveDesaturate, "Desaturate")),
+      ...(options.showAppIcon ? [row("Dock icon", appIcon.el)] : [])),
+  ];
 
-  const inactiveFields = element("fieldset", {},
-    element("legend", {}, "Inactive terminals"),
-    field("Opacity", inactiveOpacity.control),
-    element("label", { className: "settings-check" }, inactiveDesaturate, element("span", {}, "Desaturate")),
-  );
+  const familyColumn = element("div", { className: "settings-font-family" }, family.list);
+  const fontFields = section("Font", undefined,
+    element("div", { className: "settings-font" },
+      familyColumn,
+      element("div", { className: "settings-font-rows" },
+        row("Size (px)", size.control),
+        row("Weight", weight.control),
+        row("Bold weight", weightBold.control),
+        row("Line height", lineHeight.control),
+        row("Letter spacing (px)", letterSpacing.control),
+        row("Ligatures", check(ligatures, "On"), ligatureExample))));
 
-  const tilingFields = element("fieldset", {},
-    element("legend", {}, "Tiling"),
-    tiling.list,
-    element("p", { className: "settings-hint" }, "How panes are arranged as you open and close them."),
-  );
-
-  const appIconFields = element("fieldset", {},
-    element("legend", {}, "Dock icon"),
-    field("Icon", appIcon),
-  );
-
-  const responsiveFields = element("fieldset", {},
-    element("legend", {}, "Responsive text"),
-    element("label", { className: "settings-check" }, responsiveOn, element("span", {}, "Shrink text in small panes")),
-    field("Strength", responsiveStrength.control),
-    element("p", { className: "settings-hint" },
-      `Font size, line height and (slightly) letter spacing shrink as a pane gets smaller than the window, down to ` +
-      `${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks faster.`),
-  );
-
-  const paneFields = element("fieldset", {},
-    element("legend", {}, "Panes"),
-    element("label", { className: "settings-check" }, hoverHighlight,
-      element("span", {}, "Highlight the terminal under the mouse")),
-  );
-
-  // Nothing here is saved: each snippet is only shown and copied.
-  const remoteFields = element("fieldset", {},
-    element("legend", {}, "Remote shells"),
-    element("p", { className: "settings-hint" },
-      "Add the snippet for your shell to a remote machine's shell startup file, and a pane that connects there shows " +
-      "that machine's folder and repository. tmux and screen on the remote machine hide it."),
-    ...REMOTE_SNIPPETS.map(({ shell, text }) => {
-      const label = `Copy the ${shell} snippet`;
-      const copy = element("button", { type: "button", className: "settings-copy", title: label }, "Copy");
-      copy.setAttribute("aria-label", label);
-      copy.addEventListener("click", () => void options.copy(text).catch(() => {}));
-      return element("div", { className: "settings-snippet" },
-        element("div", { className: "settings-snippet-head" }, element("span", {}, shell), copy),
-        element("pre", { tabIndex: 0 }, text));
-    }),
-  );
-
-  const checkNow = element("button", { type: "button", className: "settings-check-updates" }, "Check for updates");
+  const checkNow = element("button", { type: "button", className: "settings-check-updates" }, "Check now");
   const checkResult = element("span", { className: "settings-update-result" });
   checkResult.setAttribute("role", "status");
-  const updateFields = element("fieldset", {},
-    element("legend", {}, "Updates"),
-    element("label", { className: "settings-check" }, updatesAuto,
-      element("span", {}, "Check for updates automatically")),
-    ...(options.checkForUpdates
-      ? [element("div", { className: "settings-update-check" }, checkNow, checkResult)]
-      : []),
-    element("p", { className: "settings-hint" },
-      "Once a day, when tiili opens, it asks GitHub for the latest version: one anonymous request."),
-  );
   checkNow.addEventListener("click", () => {
-    const check = options.checkForUpdates;
-    if (!check) return;
+    const run = options.checkForUpdates;
+    if (!run) return;
     checkNow.disabled = true;
     checkResult.textContent = "Checking…";
-    check()
+    run()
       .then((found) => {
         checkResult.textContent = found ? "" : "tiili is up to date.";
       })
@@ -478,29 +653,45 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       });
   });
 
-  const startupFields = element("fieldset", {},
-    element("legend", {}, "Startup"),
-    element("label", { className: "settings-check" }, startupSplash,
-      element("span", {}, "Play the tiili splash when tiili opens")),
-    element("p", { className: "settings-hint" }, "Any key or click skips it."),
-  );
+  // Nothing here is saved: the snippet is only shown and copied.
+  const snippet = element("pre", { className: "settings-snippet", tabIndex: 0 });
+  const shell = segmented<RemoteShell>("Shell",
+    REMOTE_SNIPPETS.map(({ shell: value }) => ({ value, label: value })), () => showSnippet());
+  const showSnippet = () => {
+    snippet.textContent = REMOTE_SNIPPETS.find((s) => s.shell === shell.value())?.text ?? "";
+  };
+  const copy = element("button", { type: "button", className: "settings-copy" }, "Copy");
+  copy.setAttribute("aria-label", "Copy the snippet");
+  copy.addEventListener("click", () => void options.copy(snippet.textContent ?? "").catch(() => {}));
 
-  const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" },
-    element("fieldset", {}, element("legend", {}, "Theme"), theme.list),
-    element("fieldset", {},
-      element("legend", {}, "Prompt"),
-      prompt.list,
-      element("p", { className: "settings-hint" },
-        "Applies to open panes and new ones. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
-        "function) always wins."),
-    ),
-    cursorFields,
-    inactiveFields,
-    ...(options.showAppIcon ? [appIconFields] : []),
-  );
+  const behaviourFields = [
+    section("Tiling", "How panes are arranged as you open and close them.", tiling.grid),
+    section("Panes", undefined,
+      row("Responsive text", check(responsiveOn, "Shrink text in small panes"),
+        element("span", { className: "settings-row-sub" }, "Strength"), responsiveStrength.control,
+        infoButton("Responsive text",
+          `Font size, line height and (slightly) letter spacing shrink as a pane gets smaller than the window, down ` +
+          `to ${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks ` +
+          "faster.")),
+      row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse"))),
+    section("App", undefined,
+      row("Startup", check(startupSplash, "Play the tiili splash when tiili opens"),
+        infoButton("Startup", "Any key or click skips it.")),
+      row("Updates", check(updatesAuto, "Check automatically"),
+        ...(options.checkForUpdates ? [checkNow, checkResult] : []),
+        infoButton("Updates",
+          "Once a day, when tiili opens, it asks GitHub for the latest version: one anonymous request."))),
+    section("Remote shells",
+      "Add the snippet for your shell to a remote machine's shell startup file, and a pane that connects there " +
+      "shows that machine's folder and repository. tmux and screen on the remote machine hide it.",
+      element("div", { className: "settings-snippet-head" }, shell.el, copy),
+      snippet),
+  ];
+
+  const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" }, ...styleFields);
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
-    tilingFields, responsiveFields, paneFields, remoteFields, updateFields, startupFields);
+    ...behaviourFields);
   const panels = [stylePanel, typography, behaviour];
   const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
@@ -514,13 +705,16 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     panel.setAttribute("role", "tabpanel");
     panel.setAttribute("aria-labelledby", tabs[i].id);
   });
-  /** Shows tab `index` and its panel; `focus` moves the keyboard to the tab too. */
+  const body = element("div", { className: "settings-body" }, stylePanel, typography, behaviour, status);
+  /** Shows tab `index` and its panel, with the preview on all but Behaviour; `focus` moves the keyboard to the tab. */
   const showTab = (index: number, focus = false) => {
     tabs.forEach((tab, i) => {
       tab.setAttribute("aria-selected", String(i === index));
       tab.tabIndex = i === index ? 0 : -1;
       panels[i].hidden = i !== index;
     });
+    preview.hidden = panels[index] === behaviour;
+    body.scrollTop = 0;
     if (focus) tabs[index].focus();
   };
   // Left and Right move between the tabs, wrapping round at either end.
@@ -535,14 +729,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   });
   showTab(0);
 
-  const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), closeButton);
-  const form = element("form", { method: "dialog" },
-    header,
+  const form = element("form", { method: "dialog", className: "settings-form" },
     tabList,
-    stylePanel,
-    typography,
-    behaviour,
-    status,
+    preview,
+    body,
     element("footer", { className: "settings-footer" },
       element("span", { className: "settings-version" }, `tiili ${APP_VERSION}`),
       reset, confirm, element("div", { className: "settings-actions" }, cancel, save)),
@@ -558,11 +748,13 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     weight.sync();
     weightBold.sync();
     ligatures.checked = settings.font.ligatures;
+    ligatureExample.style.fontFamily = fontFamilyList(settings.font.family);
+    ligatureExample.style.fontVariantLigatures = settings.font.ligatures ? "normal" : "none";
     lineHeight.input.value = String(settings.font.lineHeight);
     letterSpacing.input.value = String(settings.font.letterSpacing);
     lineHeight.sync();
     letterSpacing.sync();
-    cursorStyle.value = settings.cursor.style;
+    cursorStyle.set(settings.cursor.style);
     cursorBlink.checked = settings.cursor.blink;
     inactiveOpacity.input.value = String(settings.inactive.opacity);
     inactiveOpacity.sync();
@@ -570,12 +762,13 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
     startupSplash.checked = settings.behaviour.startupSplash;
     updatesAuto.checked = settings.updates.autoCheck;
-    appIcon.value = settings.appIcon;
+    appIcon.set(settings.appIcon);
     tiling.show(settings.tiling.layout);
     responsiveOn.checked = settings.responsive.enabled;
     responsiveStrength.input.value = String(settings.responsive.strength);
     responsiveStrength.input.disabled = !settings.responsive.enabled;
     responsiveStrength.sync();
+    renderPreview(settings);
   };
 
   const read = (): Settings => normalize({
@@ -589,12 +782,12 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       lineHeight: lineHeight.input.valueAsNumber,
       letterSpacing: letterSpacing.input.valueAsNumber,
     },
-    cursor: { style: cursorStyle.value, blink: cursorBlink.checked },
+    cursor: { style: cursorStyle.value(), blink: cursorBlink.checked },
     tiling: { layout: tiling.value() },
     responsive: { enabled: responsiveOn.checked, strength: responsiveStrength.input.valueAsNumber },
     behaviour: { hoverHighlight: hoverHighlight.checked, startupSplash: startupSplash.checked },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
-    appIcon: appIcon.value,
+    appIcon: appIcon.value(),
     prompt: prompt.value(),
     updates: { autoCheck: updatesAuto.checked },
   });
@@ -603,7 +796,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     status.textContent = String(error);
   };
 
-  const apply = (settings: Settings) => Promise.resolve(options.apply(settings)).catch(report);
+  /** Applies `settings` live and redraws the preview from them. */
+  const apply = (settings: Settings) => {
+    renderPreview(settings);
+    return Promise.resolve(options.apply(settings)).catch(report);
+  };
 
   const change = (next: Settings) => {
     if (session.edit(next)) void apply(next);
@@ -621,16 +818,15 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   /** While saving, nothing can be edited, so what is written is what stays applied. */
   const lock = (on: boolean) => {
     saving = on;
-    fontFields.disabled = cursorFields.disabled = inactiveFields.disabled = on;
-    responsiveFields.disabled = paneFields.disabled = startupFields.disabled = updateFields.disabled = on;
-    appIconFields.disabled = on;
+    // A disabled section disables its checkboxes, sliders, segment buttons, Copy and Check now.
+    for (const fields of [...styleFields, fontFields, ...behaviourFields]) fields.disabled = on;
+    for (const control of [cursorStyle, appIcon, shell]) control.setDisabled(on);
     if (on) ask(false);
     reset.disabled = save.disabled = cancel.disabled = on;
     confirmReset.disabled = keepSettings.disabled = on;
-    theme.list.setAttribute("aria-disabled", String(on));
-    prompt.list.setAttribute("aria-disabled", String(on));
-    family.list.setAttribute("aria-disabled", String(on));
-    tiling.list.setAttribute("aria-disabled", String(on));
+    for (const list of [theme.grid, prompt.grid, family.list, tiling.grid]) {
+      list.setAttribute("aria-disabled", String(on));
+    }
   };
 
   /** Back to the settings from when the form opened, unsaved; false while saving, when nothing changes. */
@@ -643,7 +839,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     return true;
   };
 
-  /** Cancel, Esc and ×: back to the opening settings, then close. */
+  /** Cancel and Esc: back to the opening settings, then close. */
   const revert = async () => {
     if (await discard()) close();
   };
@@ -666,9 +862,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   };
 
   // Apply while the user types; once a field is left, show the value that was actually applied.
-  form.addEventListener("input", () => change(read()));
+  form.addEventListener("input", changed);
   form.addEventListener("change", () => {
-    change(read());
+    changed();
     show(session.draft);
   });
   // Submitting the form would close the dialogue without deciding; only Save and Cancel close it.
@@ -692,13 +888,14 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   }, true);
   save.addEventListener("click", () => void commit());
   cancel.addEventListener("click", () => void revert());
-  closeButton.addEventListener("click", () => void revert());
 
   return {
     form,
     reset() {
       status.textContent = "";
       checkResult.textContent = "";
+      shell.set("bash");
+      showSnippet();
       ask(false);
       showTab(0);
       // The installed fonts are listed in the background; the list refills when they are known.
@@ -706,9 +903,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
         osFonts = names;
         if (form.isConnected) renderFamilies(family.value());
       });
-      // Shown once on screen, so the selected theme can scroll into view.
+      // Shown once on screen, so the selected theme card can scroll into view.
       show(session.saved);
-      theme.list.focus();
+      theme.grid.focus();
+      theme.reveal();
     },
     adopt(settings) {
       session.commit(settings);
@@ -726,7 +924,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
   const settings = createSettingsForm(options, () => dialog.close());
-  const dialog = element("dialog", { className: "settings" }, settings.form);
+  const dialog = element("dialog", { className: "settings settings-dialog" }, settings.form);
   dialog.setAttribute("aria-label", "Settings");
   document.body.append(dialog);
   dialog.addEventListener("cancel", (event) => {
