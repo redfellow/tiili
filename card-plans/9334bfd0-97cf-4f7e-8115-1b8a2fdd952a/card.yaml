@@ -1,0 +1,8 @@
+format: 1
+slug: bug-shells-in-the-linux-appimage-inherit
+title: "Bug: shells in the Linux AppImage inherit the AppImage's library paths,
+  breaking system tools (zypper tab completion ..."
+x-harvaaja-card: 9334bfd0-97cf-4f7e-8115-1b8a2fdd952a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
