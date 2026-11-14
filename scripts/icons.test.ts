@@ -112,14 +112,14 @@ describe("Appearance icon check: the macOS bundle icon has a light and a dark ap
   const dark = splitIcon(readFileSync(join(logoDir, "icon-dark.svg"), "utf8"));
 
   it("splits the tile colours off the brand icons", () => {
-    expect([light.tile, dark.tile]).toEqual(["#F6F1E9", "#182023"]);
-    expect(light.layer).not.toContain('fill="#F6F1E9"');
+    expect([light.tile, dark.tile]).toEqual(["#111617", "#111617"]);
+    expect(light.layer).not.toContain('fill="#111617"');
     expect(light.layer).not.toContain('rx="22.5"');
   });
 
   it("writes srgb colours the way Icon Composer does", () => {
     expect(srgb("#FFFFFF")).toBe("srgb:1.00000,1.00000,1.00000,1.00000");
-    expect(srgb("#182023")).toBe("srgb:0.09412,0.12549,0.13725,1.00000");
+    expect(srgb("#111617")).toBe("srgb:0.06667,0.08627,0.09020,1.00000");
   });
 
   it(`${ICON_NAME}.icon/icon.json matches the brand icons`, () => {
