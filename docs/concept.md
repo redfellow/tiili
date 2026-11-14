@@ -47,7 +47,6 @@ terminal ecosystem). The Rust side of the Tauri app (PTYs, git detection) would 
 
 ## Out of scope for now
 
-- Popping a pane out into its own window.
 - Remote sessions (SSH) and session persistence across restarts.
 - Any account, sync or telemetry.
 

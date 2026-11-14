@@ -4,6 +4,7 @@ import {
   APP_ICONS, type AppIcon, CURSOR_STYLES, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, INACTIVE_OPACITY, normalize, type Settings,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
+import { REMOTE_SNIPPETS } from "./remoteSnippets";
 import { createSettingsSession, same } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 
@@ -26,16 +27,37 @@ export interface SettingsDialogOptions {
   showAppIcon: boolean;
   /** Applies settings live; called on every change, and with the opening settings again on Cancel. */
   apply: (settings: Settings) => Promise<void> | void;
-  /** Saves settings; called when the user presses Save, and the dialogue closes once it resolves. */
+  /** Saves settings; called when the user presses Save, and the settings close once it resolves. */
   save: (settings: Settings) => Promise<void>;
-  /** Called after the dialogue closes, e.g. to give the terminal its focus back. */
+  /** Called after the settings close, e.g. to give the terminal its focus back or to close the settings window. */
   onClose: () => void;
+  /** Puts text on the clipboard, for the Remote shells snippets' Copy buttons. */
+  copy: (text: string) => Promise<void>;
 }
 
 export interface SettingsDialog {
   open(): void;
   /** Takes settings saved elsewhere (the splash's "tiili no-splash") as the saved and previewed settings. */
   adopt(settings: Settings): void;
+}
+
+export interface SettingsPage {
+  /** Takes settings saved elsewhere (another window) as the saved and previewed settings. */
+  adopt(settings: Settings): void;
+  /** Goes back to the settings from when the page opened, unsaved, without closing; for the OS close control. */
+  discard(): Promise<void>;
+}
+
+/** The settings form, ready to mount in a dialogue or a page. */
+interface SettingsForm {
+  form: HTMLFormElement;
+  /** Fills the form with the saved settings on its first tab, focuses the theme list and lists installed fonts. */
+  reset(): void;
+  adopt(settings: Settings): void;
+  /** Cancel, Esc and ×: back to the opening settings, unsaved, then closes. */
+  revert(): Promise<void>;
+  /** Back to the opening settings, unsaved, without closing. */
+  discard(): Promise<void>;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -292,11 +314,12 @@ function promptList(onSelect: () => void, locked: () => boolean) {
 }
 
 /**
- * Builds the settings dialogue into `document.body`: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab
- * (Font) and a Behaviour tab (Tiling, Responsive text, Panes, Startup), with Reset to defaults, Cancel and Save.
- * Every change applies at once as a preview; only Save writes it, and Cancel, Esc and × go back to the opening settings.
+ * Builds the settings form: a Style tab (Theme, Cursor, Inactive terminals), a Typography tab (Font) and a Behaviour
+ * tab (Tiling, Responsive text, Panes, Remote shells, Startup), with Reset to defaults, Cancel and Save. Every change
+ * applies at once as a preview; only Save writes it, and Cancel and × go back to the opening settings. Either one then
+ * calls `close`.
  */
-export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
+function createSettingsForm(options: SettingsDialogOptions, close: () => void): SettingsForm {
   const session = createSettingsSession(options.initial);
 
   const theme = themeList(() => change(read()), () => saving);
@@ -339,8 +362,8 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
-  const close = element("button", { type: "button", className: "settings-close", title: "Close" }, "×");
-  close.setAttribute("aria-label", "Close");
+  const closeButton = element("button", { type: "button", className: "settings-close", title: "Close" }, "×");
+  closeButton.setAttribute("aria-label", "Close");
   const reset = element("button", { type: "button", className: "settings-reset" }, "Reset to defaults");
   const cancel = element("button", { type: "button", className: "settings-cancel" }, "Cancel");
   const save = element("button", { type: "button", className: "settings-save" }, "Save");
@@ -394,6 +417,23 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("span", {}, "Highlight the terminal under the mouse")),
   );
 
+  // Nothing here is saved: each snippet is only shown and copied.
+  const remoteFields = element("fieldset", {},
+    element("legend", {}, "Remote shells"),
+    element("p", { className: "settings-hint" },
+      "Add the snippet for your shell to a remote machine's shell startup file, and a pane that connects there shows " +
+      "that machine's folder and repository. tmux and screen on the remote machine hide it."),
+    ...REMOTE_SNIPPETS.map(({ shell, text }) => {
+      const label = `Copy the ${shell} snippet`;
+      const copy = element("button", { type: "button", className: "settings-copy", title: label }, "Copy");
+      copy.setAttribute("aria-label", label);
+      copy.addEventListener("click", () => void options.copy(text).catch(() => {}));
+      return element("div", { className: "settings-snippet" },
+        element("div", { className: "settings-snippet-head" }, element("span", {}, shell), copy),
+        element("pre", { tabIndex: 0 }, text));
+    }),
+  );
+
   const startupFields = element("fieldset", {},
     element("legend", {}, "Startup"),
     element("label", { className: "settings-check" }, startupSplash,
@@ -407,7 +447,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       element("legend", {}, "Prompt"),
       prompt.list,
       element("p", { className: "settings-hint" },
-        "Applies to panes opened from now on. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
+        "Applies to open panes and new ones. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
         "function) always wins."),
     ),
     cursorFields,
@@ -416,7 +456,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   );
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
-    tilingFields, responsiveFields, paneFields, startupFields);
+    tilingFields, responsiveFields, paneFields, remoteFields, startupFields);
   const panels = [stylePanel, typography, behaviour];
   const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
@@ -451,7 +491,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   });
   showTab(0);
 
-  const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), close);
+  const header = element("header", { className: "settings-header" }, element("h2", {}, "Settings"), closeButton);
   const form = element("form", { method: "dialog" },
     header,
     tabList,
@@ -462,10 +502,6 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     element("footer", { className: "settings-footer" },
       reset, element("div", { className: "settings-actions" }, cancel, save)),
   );
-  const dialog = element("dialog", { className: "settings" }, form);
-  dialog.setAttribute("aria-label", "Settings");
-  document.body.append(dialog);
-
   const show = (settings: Settings) => {
     theme.show(settings.theme);
     prompt.show(settings.prompt);
@@ -520,12 +556,10 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     status.textContent = String(error);
   };
 
-  const apply = (settings: Settings) => {
-    Promise.resolve(options.apply(settings)).catch(report);
-  };
+  const apply = (settings: Settings) => Promise.resolve(options.apply(settings)).catch(report);
 
   const change = (next: Settings) => {
-    if (session.edit(next)) apply(next);
+    if (session.edit(next)) void apply(next);
   };
 
   let saving = false;
@@ -542,13 +576,18 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     tiling.list.setAttribute("aria-disabled", String(on));
   };
 
-  /** Cancel, Esc and ×: back to the settings from when the dialogue opened, unsaved. */
-  const revert = () => {
-    if (saving) return;
+  /** Back to the settings from when the form opened, unsaved; false while saving, when nothing changes. */
+  const discard = async () => {
+    if (saving) return false;
     const draft = session.draft;
     const saved = session.cancel();
-    if (!same(draft, saved)) apply(saved);
-    dialog.close();
+    if (!same(draft, saved)) await apply(saved);
+    return true;
+  };
+
+  /** Cancel, Esc and ×: back to the opening settings, then close. */
+  const revert = async () => {
+    if (await discard()) close();
   };
 
   /** Save: write the previewed settings and close; on failure stay open with the error. */
@@ -560,7 +599,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
       await options.save(written);
       session.commit(written);
       status.textContent = "";
-      dialog.close();
+      close();
     } catch (error) {
       report(error);
     } finally {
@@ -581,61 +620,71 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
     show(session.draft);
   });
   save.addEventListener("click", () => void commit());
-  cancel.addEventListener("click", revert);
-  close.addEventListener("click", revert);
-  dialog.addEventListener("cancel", (event) => {
-    event.preventDefault();
-    revert();
-  });
-  dialog.addEventListener("close", () => options.onClose());
-
-  // Drag the dialogue by its header, kept inside the window, so the terminal behind can be seen.
-  let offset = { x: 0, y: 0 };
-  const place = () => { dialog.style.transform = `translate(${offset.x}px, ${offset.y}px)`; };
-  header.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || (event.target as Element).closest("button")) return;
-    const start = { x: event.clientX, y: event.clientY, offset };
-    const rect = dialog.getBoundingClientRect();
-    header.setPointerCapture(event.pointerId);
-    header.setAttribute("data-dragging", "");
-    const move = (e: PointerEvent) => {
-      const dx = Math.min(Math.max(e.clientX - start.x, -rect.left), window.innerWidth - rect.right);
-      const dy = Math.min(Math.max(e.clientY - start.y, -rect.top), window.innerHeight - rect.bottom);
-      offset = { x: start.offset.x + dx, y: start.offset.y + dy };
-      place();
-    };
-    const stop = () => {
-      header.removeAttribute("data-dragging");
-      header.removeEventListener("pointermove", move);
-      header.removeEventListener("pointerup", stop);
-      header.removeEventListener("pointercancel", stop);
-    };
-    header.addEventListener("pointermove", move);
-    header.addEventListener("pointerup", stop);
-    header.addEventListener("pointercancel", stop);
-  });
+  cancel.addEventListener("click", () => void revert());
+  closeButton.addEventListener("click", () => void revert());
 
   return {
-    open() {
-      if (dialog.open) return;
+    form,
+    reset() {
       status.textContent = "";
       showTab(0);
-      offset = { x: 0, y: 0 };
-      place();
-      dialog.showModal();
-      // The installed fonts are listed in the background; the dropdown refills when they are known.
+      // The installed fonts are listed in the background; the list refills when they are known.
       void installedMonospaceFonts().then((names) => {
         osFonts = names;
-        if (dialog.open) renderFamilies(family.value());
+        if (form.isConnected) renderFamilies(family.value());
       });
-      // Shown once open, so the selected theme can scroll into view.
+      // Shown once on screen, so the selected theme can scroll into view.
       show(session.saved);
       theme.list.focus();
     },
     adopt(settings) {
       session.commit(settings);
       session.edit(settings);
-      if (dialog.open) show(settings);
+      if (form.isConnected) show(settings);
     },
+    revert,
+    discard: async () => void (await discard()),
   };
+}
+
+/**
+ * Builds the settings dialogue into `document.body`, drawn inside the window: where the backend cannot open a
+ * settings window of its own (the dev server). Esc goes back to the opening settings like Cancel.
+ */
+export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
+  const settings = createSettingsForm(options, () => dialog.close());
+  const dialog = element("dialog", { className: "settings" }, settings.form);
+  dialog.setAttribute("aria-label", "Settings");
+  document.body.append(dialog);
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    void settings.revert();
+  });
+  dialog.addEventListener("close", () => options.onClose());
+  return {
+    open() {
+      if (dialog.open) return;
+      dialog.showModal();
+      settings.reset();
+    },
+    adopt: (next) => settings.adopt(next),
+  };
+}
+
+/**
+ * Builds the settings form as the whole of `parent`, the page of a settings window: the window's own title bar
+ * moves and closes it. Esc goes back to the opening settings like Cancel.
+ */
+export function mountSettingsPage(parent: HTMLElement, options: SettingsDialogOptions): SettingsPage {
+  const settings = createSettingsForm(options, () => options.onClose());
+  const page = element("main", { className: "settings settings-page" }, settings.form);
+  page.setAttribute("aria-label", "Settings");
+  parent.replaceChildren(page);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    event.preventDefault();
+    void settings.revert();
+  });
+  settings.reset();
+  return { adopt: (next) => settings.adopt(next), discard: () => settings.discard() };
 }

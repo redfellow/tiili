@@ -17,11 +17,27 @@ The app SHALL open a settings dialogue with ⌘, on macOS (also from the app men
 - **THEN** the settings dialogue opens
 
 ### Requirement: Settings dialogue placement
-The dialogue SHALL NOT dim the window behind it, so the terminal stays readable, and SHALL be movable by dragging its header within the window, opening centred each time.
+The settings dialogue SHALL open in its own OS window, separate from the tiili window that opened it, so the user can move it anywhere on screen and resize it, including larger than the tiili window. It SHALL open centred over the tiili window that opened it and SHALL NOT dim or block that window.
+
+#### Scenario: Larger than the tiili window
+- **WHEN** the tiili window is smaller than the settings dialogue and the user opens settings
+- **THEN** the settings window opens at its own size, extending beyond the tiili window's bounds
 
 #### Scenario: Drag the dialogue
-- **WHEN** the user drags the dialogue's header towards the window's edge
-- **THEN** the dialogue follows the pointer and stops at the window's edge
+- **WHEN** the user drags the settings window's title bar past the tiili window's edge
+- **THEN** the settings window follows the pointer outside the tiili window
+
+#### Scenario: Open settings twice
+- **WHEN** the settings window is open and the user presses the settings shortcut in the same tiili window
+- **THEN** the existing settings window comes to the front and no second one opens
+
+#### Scenario: Closing the tiili window closes settings
+- **WHEN** the settings window is open and the user closes the tiili window that opened it
+- **THEN** the settings window closes without saving
+
+#### Scenario: Previews show in the owning window
+- **WHEN** the user changes the theme in the settings window
+- **THEN** the tiili window that opened it shows the new theme immediately
 
 ### Requirement: Save and cancel
 The dialogue SHALL have Cancel and Save buttons: Save SHALL save the previewed settings and close the dialogue; Cancel, Esc and the × button SHALL restore and apply the settings from when the dialogue was opened and close it without saving. A failed save SHALL keep the dialogue open and show the error.
@@ -144,19 +160,49 @@ The Behaviour tab SHALL have a "Shrink text in small panes" checkbox (default on
 - **THEN** every pane uses the chosen font size
 
 ### Requirement: Prompt choice
-The user SHALL be able to choose the shell prompt tiili gives new shells: Off (the shell's own prompt), Classic, Minimal or Tiili. Off SHALL be the default and SHALL be marked "(default)"; an unknown or wrong-typed saved value SHALL load as Off. The choice SHALL apply to shells opened after it, not to shells already open.
+The user SHALL be able to choose the shell prompt tiili gives its shells: Off (the shell's own prompt), Classic, Minimal or Tiili. Off SHALL be the default and SHALL be marked "(default)"; an unknown or wrong-typed saved value SHALL load as Off. The choice SHALL apply to shells opened after it and to the local zsh, bash and PowerShell shells already open in the app, where those shells' own config left the default prompt.
 
 #### Scenario: Off by default
 - **WHEN** tiili starts with no saved settings, or the saved prompt is unknown
-- **THEN** the prompt setting is Off and shells start as they did before
+- **THEN** the prompt setting is Off and shells show their own prompt
 
 #### Scenario: New panes use the choice
 - **WHEN** the user chooses Classic and opens a new pane
-- **THEN** the new pane's shell starts with the Classic prompt and open panes keep theirs
+- **THEN** the new pane's shell starts with the Classic prompt
+
+#### Scenario: Open panes switch
+- **WHEN** a zsh pane started with Off is idle at its prompt and the user saves Tiili
+- **THEN** the pane's prompt redraws as the Tiili prompt without anything typed into the shell
+
+#### Scenario: Other shells switch at next prompt
+- **WHEN** a bash or PowerShell pane started with Off is running a command and the user saves Tiili
+- **THEN** the pane switches to the Tiili prompt at its next prompt, and nothing is typed into the shell
+
+#### Scenario: Own prompt wins
+- **WHEN** a pane's shell config sets its own prompt and the user saves Classic
+- **THEN** that pane keeps its own prompt
 
 ### Requirement: Prompt list
-The prompt choices SHALL be shown on the Style tab under Theme as a list like the theme list, each row showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours, with a hint saying the choice applies to new panes and that a prompt set in the user's own shell config wins.
+The prompt choices SHALL be shown on the Style tab under Theme as a list like the theme list, each row showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours, with a hint saying the choice applies to open and new panes and that a prompt set in the user's own shell config wins. Selecting a row SHALL preview that prompt in the open panes; Cancel, Esc and × SHALL put the saved prompt back.
 
 #### Scenario: Preview follows the theme
 - **WHEN** the user moves the theme list from Nord to Dracula
 - **THEN** the prompt previews redraw in Dracula's colours
+
+#### Scenario: Live preview in open panes
+- **WHEN** a zsh pane is idle at its prompt and the user moves the prompt list from Off to Minimal, then cancels
+- **THEN** the pane shows the Minimal prompt while Minimal is selected and its own prompt again after Cancel
+
+### Requirement: Saved settings apply in every window
+Saving settings in any window SHALL apply them in every open window.
+
+#### Scenario: Theme saved in one window
+- **WHEN** two windows are open and the user saves a new theme in one
+- **THEN** both windows show the new theme
+
+### Requirement: Closing the settings window cancels
+Closing the settings window with the OS close control SHALL act as Cancel: the owning tiili window SHALL return to the settings from when the window opened and nothing SHALL be saved.
+
+#### Scenario: Close with the OS control
+- **WHEN** the user previews Dracula and closes the settings window with its OS close button
+- **THEN** the tiili window shows the previous theme again and the settings file is unchanged

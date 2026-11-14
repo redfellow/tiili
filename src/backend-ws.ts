@@ -140,6 +140,8 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
         };
         socket.onerror = () => undefined;
       }),
+    // The dev bridge's shells keep the prompt they started with.
+    setPrompt: async () => undefined,
     write: async (id, data) => socketOf(id).send(encodeClient({ type: "input", data })),
     resize: async (id, rows, cols) => socketOf(id).send(encodeClient({ type: "resize", rows, cols })),
     close: async (id) => {
@@ -165,5 +167,9 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     // The dev server has no files of its own for notes: the browser keeps them.
     notes: localNoteStore(localStorage),
     closeWindow: async () => undefined,
+    // The dev server is one browser page: no other windows, so no pane moves and no settings window; settings show
+    // in the page instead.
+    newWindow: async () => undefined,
+    settingsWindows: undefined,
   };
 }

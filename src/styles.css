@@ -423,6 +423,24 @@ dialog.settings::backdrop {
   background: transparent;
 }
 
+/* The settings window: the form is the whole page, as big as the window, which scrolls when the form is taller. */
+html:has(body.settings-window),
+body.settings-window {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  background: var(--surface);
+}
+
+.settings-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: var(--space-5);
+  background: var(--surface);
+  color: var(--fg);
+  font: 400 13.5px/1.5 var(--font-sans);
+}
+
 .settings form {
   display: flex;
   flex-direction: column;
@@ -435,17 +453,6 @@ dialog.settings::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.settings-header {
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.settings-header[data-dragging] {
-  cursor: grabbing;
 }
 
 .settings-header button {
@@ -747,6 +754,27 @@ dialog.settings::backdrop {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* Remote shells: each snippet read-only in a sunken block, its shell name and Copy button above it. */
+.settings-snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.settings-snippet pre {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: text;
 }
 
 .settings-layout-icon {

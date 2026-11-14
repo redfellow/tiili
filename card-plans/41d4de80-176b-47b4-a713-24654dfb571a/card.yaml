@@ -1,0 +1,19 @@
+format: 1
+slug: implement-remote-panes-build-the-existin
+title: "Implement remote panes: build the existing OpenSpec change
+  `remote-panes` (openspec/changes/remote-panes, landed thro..."
+x-harvaaja-card: 41d4de80-176b-47b4-a713-24654dfb571a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: The spec deltas already exist in openspec/changes/remote-panes
+    (landed via fast lane, owned by no card, so polish has no target card). This
+    card builds that change's tasks without new contracts; the user asked not to
+    create a new change.
+  citations:
+    - openspec/changes/remote-panes/proposal.md
+    - openspec/changes/remote-panes/specs/repository-colours/spec.md
+    - openspec/changes/remote-panes/tasks.md
+  revision: 81f43356-5283-4c16-805c-90319617df4b

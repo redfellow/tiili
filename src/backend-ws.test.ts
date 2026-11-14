@@ -48,6 +48,17 @@ function setup(opening: Opening = startsShell) {
 }
 
 describe("WebSocket backend", () => {
+  it("Move to New Window in the dev browser: the dev server has one window, so there are no pane moves", () => {
+    expect(setup().backend.moves).toBeUndefined();
+  });
+
+  it("Open panes keep their prompt in the dev browser: setPrompt sends nothing to the shells", async () => {
+    const { backend, sockets } = setup();
+    await backend.spawn(24, 80, undefined, "off", () => undefined);
+    await backend.setPrompt("tiili");
+    expect(sockets[0].sent).toEqual([]);
+  });
+
   it.each(PROMPT_IDS)("New panes use the choice: the URL carries prompt %s", async (prompt) => {
     const { backend, sockets } = setup();
     await backend.spawn(24, 80, undefined, prompt, () => undefined);
