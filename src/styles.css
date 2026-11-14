@@ -405,6 +405,7 @@ html[data-pane-dragging] * {
 
 /* Settings dialogue */
 
+/* Shared by the settings and update dialogues: the surface, its border and the lifting shadow. */
 dialog.settings {
   box-sizing: border-box;
   width: min(420px, calc(100vw - var(--space-6)));
@@ -423,19 +424,33 @@ dialog.settings::backdrop {
   background: transparent;
 }
 
-/* The settings window: the form is the whole page, as big as the window, which scrolls when the form is taller. */
+/* The dev server's settings dialogue: as wide as the settings window, with the form's own edges and pinned footer. */
+dialog.settings-dialog {
+  width: min(720px, calc(100vw - var(--space-6)));
+  height: min(640px, calc(100vh - var(--space-6)));
+  padding: 0;
+  overflow: hidden;
+}
+
+dialog.settings-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The settings window: the form is exactly the window's height, and only the tab's body scrolls. */
 html:has(body.settings-window),
 body.settings-window {
-  height: auto;
-  min-height: 100%;
-  overflow: auto;
+  height: 100%;
+  overflow: hidden;
   background: var(--surface);
 }
 
 .settings-page {
   box-sizing: border-box;
-  min-height: 100vh;
-  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
   background: var(--surface);
   color: var(--fg);
   font: 400 12.5px/1.5 var(--font-sans);
@@ -447,6 +462,13 @@ body.settings-window {
   gap: var(--space-4);
 }
 
+/* The settings form: tabs, preview, the scrolling body, then the footer, edge to edge. */
+.settings .settings-form {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
 .settings-header,
 .settings-footer {
   display: flex;
@@ -455,13 +477,15 @@ body.settings-window {
   gap: var(--space-3);
 }
 
+.settings-form .settings-footer {
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+}
+
 .settings-version {
   color: var(--muted);
   font: 12px/1.4 var(--font-mono);
-}
-
-.settings-header button {
-  cursor: pointer;
 }
 
 .settings h2 {
@@ -472,16 +496,27 @@ body.settings-window {
   letter-spacing: -0.025em;
 }
 
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
 .settings fieldset {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
 .settings legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   margin-bottom: var(--space-2);
   padding: 0;
   color: var(--muted);
@@ -490,16 +525,34 @@ body.settings-window {
   text-transform: uppercase;
 }
 
-.settings-field {
+/* A row: its label in a fixed column, its controls in a line beside it. */
+.settings-row {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  grid-template-columns: 112px 1fr;
   align-items: center;
   gap: var(--space-3);
+  min-height: 30px;
 }
 
-.settings-field-stacked {
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
+.settings-row-label {
+  color: var(--fg);
+}
+
+.settings-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.settings-row-controls .settings-range {
+  flex: 1;
+  min-width: 120px;
+}
+
+.settings-row-sub {
+  color: var(--muted);
 }
 
 .settings-check {
@@ -623,12 +676,8 @@ body.settings-window {
   background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
-.settings .settings-close {
-  height: auto;
-  padding: 0 var(--space-2);
-  border-color: transparent;
-  font-size: 18px;
-  line-height: 1.2;
+.settings-row-controls button {
+  height: 26px;
 }
 
 .settings .settings-reset {
@@ -665,19 +714,259 @@ body.settings-window {
   display: none;
 }
 
-/* Pick lists (themes, font families): about five rows tall, scrolling beyond that. */
-.settings-list {
-  box-sizing: border-box;
-  max-height: calc(5 * 28px + 2 * var(--space-1) + 2px);
-  overflow-y: auto;
-  padding: var(--space-1);
+/* Segmented control: the choices side by side in one sunken frame, the checked one raised. */
+.settings-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--bg);
 }
 
-.settings-list-whole {
-  max-height: none;
+.settings .settings-segment {
+  height: 24px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  color: var(--muted);
+}
+
+.settings .settings-segment[aria-checked="true"] {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  color: var(--fg);
+}
+
+/* The ⓘ beside a heading or row; its tooltip shows on hover and keyboard focus. */
+.settings-info-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.settings .settings-info {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  font: 400 13px/1 var(--font-sans);
+}
+
+.settings .settings-info:hover {
+  color: var(--fg);
+}
+
+.settings-tooltip {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 10;
+  display: none;
+  width: max-content;
+  max-width: 280px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg);
+  font: 400 11.5px/1.45 var(--font-sans);
+  letter-spacing: normal;
+  text-transform: none;
+  box-shadow: 0 4px 16px color-mix(in srgb, #000 30%, transparent);
+}
+
+/* In a row the ⓘ sits at the right, so its tooltip opens above it, leftwards. */
+.settings-row .settings-tooltip {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  left: auto;
+}
+
+.settings-info-wrap:hover .settings-tooltip,
+.settings-info:focus-visible + .settings-tooltip {
+  display: block;
+}
+
+/* The DEFAULT tag: on a card's top edge, or after a list row's name. */
+.settings-tag {
+  position: absolute;
+  top: -7px;
+  right: var(--space-2);
+  padding: 1px var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-brick);
+  background: var(--surface);
+  color: var(--muted);
+  font: 600 8.5px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.settings-option .settings-tag {
+  position: static;
+}
+
+/* Card grids (themes, prompts, tiling): the selected card is outlined in the focus colour. */
+.settings-cards {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.settings-cards:focus-visible {
+  outline: none;
+}
+
+.settings-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.settings-card:hover {
+  border-color: color-mix(in srgb, var(--fg) 35%, var(--line));
+}
+
+.settings-card[aria-selected="true"] {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.settings-cards:focus-visible .settings-card[aria-selected="true"] {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.settings-cards[aria-disabled="true"] .settings-card {
+  cursor: default;
+}
+
+.settings-card-name {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Theme cards: the theme's terminal ground and text, with its first six ANSI colours along the bottom. */
+.settings-theme-cards {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+}
+
+.settings-theme-cards .settings-card {
+  justify-content: center;
+  height: 34px;
+  padding-bottom: var(--space-2);
+  background: var(--card-bg);
+  color: var(--card-fg);
+}
+
+.settings-theme-stripe {
+  position: absolute;
+  bottom: 5px;
+  left: var(--space-2);
+  display: flex;
+  gap: 2px;
+}
+
+.settings-theme-stripe span {
+  width: 8px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+/* Prompt cards: one row, each prompt drawn in the selected theme's terminal ground and ANSI colours. */
+.settings-prompt-cards {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.settings-prompt-cards .settings-card {
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+}
+
+.settings-prompt-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(2 * 1.3em);
+  padding: 2px var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-brick);
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: pre;
+}
+
+.settings-prompt-own {
+  color: var(--term-dim);
+}
+
+/* Tiling cards: the arrangement's picture above its name. */
+.settings-tiling-cards {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.settings-tiling-cards .settings-card {
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.settings-layout-icon {
+  display: flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.settings-card[aria-selected="true"] .settings-layout-icon {
+  color: var(--fg);
+}
+
+/* The font family list, as tall as the rows beside it, scrolling within. */
+.settings-font {
+  display: grid;
+  grid-template-columns: 268px 1fr;
+  gap: var(--space-4);
+}
+
+.settings-font-family {
+  position: relative;
+  min-height: 160px;
+}
+
+.settings-font-family .settings-list {
+  position: absolute;
+  inset: 0;
+}
+
+.settings-font-rows .settings-row {
+  grid-template-columns: 120px 1fr;
+}
+
+.settings-ligature-example {
+  color: var(--muted);
+}
+
+.settings-list {
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg);
 }
 
 .settings-list-heading {
@@ -727,16 +1016,17 @@ body.settings-window {
   transform: translateY(-50%);
 }
 
-/* Tabs: Style, Typography and Behaviour, the selected one underlined in the focus colour. */
+/* Tabs: Style, Typography and Behaviour flush at the top, the selected one underlined in the focus colour. */
 .settings-tabs {
   display: flex;
+  flex: none;
   gap: var(--space-4);
-  margin-top: calc(-1 * var(--space-2));
+  padding: 0 var(--space-5);
   border-bottom: 1px solid var(--line);
 }
 
 .settings .settings-tab {
-  height: 34px;
+  height: 36px;
   margin-bottom: -1px;
   padding: 0 var(--space-1);
   border: 0;
@@ -766,24 +1056,82 @@ body.settings-window {
   display: none;
 }
 
-.settings-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11.5px;
+/* Live preview: two terminal panes on the mortar colour, the left one focused, the right one faded as inactive. */
+.settings-preview {
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--pane-gap, 3px);
+  height: 104px;
+  margin: var(--space-3) var(--space-5) 0;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--term-gap);
 }
 
-/* Remote shells: each snippet read-only in a sunken block, its shell name and Copy button above it. */
+.settings-preview[hidden] {
+  display: none;
+}
+
+.settings-preview-pane {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow: hidden;
+  background: var(--term-bg);
+  color: var(--term-fg);
+}
+
+.settings-preview-active {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.settings-preview-line {
+  white-space: pre;
+}
+
+.settings-preview-bold {
+  font-weight: var(--preview-bold);
+}
+
+.settings-preview-cursor {
+  display: inline-block;
+  width: 1ch;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--term-fg);
+}
+
+.settings-preview-cursor[data-style="underline"] {
+  height: 2px;
+  vertical-align: baseline;
+}
+
+.settings-preview-cursor[data-style="bar"] {
+  width: 2px;
+}
+
+.settings-preview-blink {
+  animation: settings-preview-blink 1s steps(1) infinite;
+}
+
+@keyframes settings-preview-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Remote shells: the shell switch and Copy above the chosen snippet, read-only in a sunken block. */
 .settings-snippet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--muted);
 }
 
-.settings-snippet pre {
+.settings-snippet {
+  max-height: 150px;
   margin: var(--space-1) 0 0;
   padding: var(--space-2) var(--space-3);
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--sunken);
@@ -791,13 +1139,6 @@ body.settings-window {
   font-size: 11.5px;
   line-height: 1.4;
   user-select: text;
-}
-
-/* Updates: the Check for updates button with its result beside it. */
-.settings-update-check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
 }
 
 .settings-update-result {
@@ -836,57 +1177,6 @@ dialog.update-dialog {
 .update-progress {
   width: 100%;
   accent-color: var(--focus);
-}
-
-.settings-layout-icon {
-  display: flex;
-  flex: none;
-  color: var(--muted);
-}
-
-.settings-option[aria-selected="true"] .settings-layout-icon {
-  color: var(--fg);
-}
-
-/* A row whose prompt preview takes two lines. */
-.settings-option-tall {
-  height: auto;
-  min-height: 28px;
-  padding-top: var(--space-1);
-  padding-bottom: var(--space-1);
-}
-
-/* A prompt drawn in the selected theme's terminal ground and ANSI colours, one line per block. */
-.settings-prompt-preview {
-  display: inline-flex;
-  flex-direction: column;
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-brick);
-  background: var(--term-bg);
-  color: var(--term-fg);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.3;
-  white-space: pre;
-}
-
-.settings-default {
-  color: var(--muted);
-  font-size: 11.5px;
-}
-
-/* A theme's colours: its terminal ground with sample text, and an accent line along the bottom. */
-.settings-swatch {
-  flex: none;
-  box-sizing: border-box;
-  width: 30px;
-  height: 18px;
-  border-radius: var(--radius-brick);
-  background: var(--sw-bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 25%, transparent), inset 0 -3px 0 var(--sw-accent);
-  color: var(--sw-fg);
-  font: 600 10px/14px var(--font-mono);
-  text-align: center;
 }
 
 .settings-actions {
