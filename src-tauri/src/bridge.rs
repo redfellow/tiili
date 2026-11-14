@@ -58,7 +58,7 @@ pub fn valid_token(token: &str) -> bool {
 }
 
 /// Compares two byte strings in time that depends only on their lengths, not where they differ.
-fn same(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn same(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }

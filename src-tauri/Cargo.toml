@@ -26,6 +26,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
+# The control channel's per-run token (src/control.rs).
+getrandom = "0.3"
 
 [features]
 # The browser dev server's shell bridge (src/bin/dev-bridge.rs) and its test. On by default, so cargo build, test and
@@ -48,14 +50,14 @@ required-features = ["dev-bridge"]
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# The control channel's named pipe, the CLI's console (src/control_server.rs, src/cli.rs), and attaching
+# `tiili <subcommand>` to the calling console (src/main.rs): release builds are GUI-subsystem apps, which start without one.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Console", "Win32_System_IO", "Win32_System_Threading"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.14"
 # Swapping the Dock icon at run time (src/app_icon.rs); tauri already depends on these versions.
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSImage"] }
 objc2-foundation = { version = "0.3", features = ["NSData"] }
-
-# Attaching `tiili <subcommand>` to the calling console (src/main.rs): release builds are GUI-subsystem apps, which
-# start without one. tauri already depends on this version.
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_Console"] }

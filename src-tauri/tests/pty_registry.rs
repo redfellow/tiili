@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use tiili_lib::pty::{SessionId, SessionRegistry};
+use tiili_lib::pty::{pane_command, ControlEnv, PaneCommand, SessionId, SessionRegistry};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -162,4 +162,217 @@ fn sessions_keep_their_own_size_input_and_directory() {
             out.text(id)
         );
     }
+}
+
+fn control() -> ControlEnv {
+    ControlEnv {
+        socket: "/run/tiili/tiili-1.sock".into(),
+        token: "f00d".repeat(16),
+        bin_dir: std::env::temp_dir().join("tiili-test-bin"),
+    }
+}
+
+fn joined(dirs: &[std::path::PathBuf]) -> std::ffi::OsString {
+    std::env::join_paths(dirs).expect("joinable")
+}
+
+/// Shell sees the variables, Command found on the caller's PATH: what a pane is started with, without starting it.
+#[test]
+fn shell_sees_the_variables_and_commands_get_the_callers_path() {
+    let control = control();
+    let bin = control.bin_dir.clone();
+    let caller = [
+        std::path::PathBuf::from("/opt/tools/bin"),
+        "/usr/bin".into(),
+    ];
+    let app_path: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|p| {
+            std::env::split_paths(&p)
+                .filter(|d| !d.as_os_str().is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    let with_bin = |rest: &[std::path::PathBuf]| {
+        joined(
+            &std::iter::once(bin.clone())
+                .chain(rest.iter().cloned())
+                .collect::<Vec<_>>(),
+        )
+    };
+    let npm = PaneCommand {
+        argv: vec!["npm".into(), "run".into(), "dev".into()],
+        path: Some(joined(&caller)),
+    };
+    let ls = PaneCommand {
+        argv: vec!["ls".into()],
+        path: None,
+    };
+    // tiili's folder already on the caller's PATH is not repeated.
+    let again = PaneCommand {
+        argv: vec!["ls".into()],
+        path: Some(joined(&[caller[0].clone(), bin.clone()])),
+    };
+    struct Case<'a> {
+        id: SessionId,
+        command: Option<&'a PaneCommand>,
+        control: Option<&'a ControlEnv>,
+        argv: Option<Vec<&'a str>>,
+        path: Option<std::ffi::OsString>,
+    }
+    let cases = [
+        Case {
+            id: 4,
+            command: None,
+            control: Some(&control),
+            argv: None,
+            path: Some(with_bin(&app_path)),
+        },
+        Case {
+            id: 5,
+            command: Some(&npm),
+            control: Some(&control),
+            argv: Some(vec!["npm", "run", "dev"]),
+            path: Some(with_bin(&caller)),
+        },
+        Case {
+            id: 6,
+            command: Some(&ls),
+            control: Some(&control),
+            argv: Some(vec!["ls"]),
+            path: Some(with_bin(&app_path)),
+        },
+        Case {
+            id: 7,
+            command: Some(&again),
+            control: Some(&control),
+            argv: Some(vec!["ls"]),
+            path: Some(with_bin(&caller[..1])),
+        },
+        Case {
+            id: 8,
+            command: Some(&npm),
+            control: None,
+            argv: Some(vec!["npm", "run", "dev"]),
+            path: Some(joined(&caller)),
+        },
+    ];
+    for case in cases {
+        let (cmd, redraws) = pane_command(
+            case.id,
+            Some(std::path::Path::new("/tmp")),
+            "off",
+            case.command,
+            case.control,
+        );
+        let var = |name: &str| cmd.get_env(name).map(|v| v.to_os_string());
+        assert_eq!(
+            var("TIILI_PANE"),
+            Some(case.id.to_string().into()),
+            "pane {}",
+            case.id
+        );
+        assert_eq!(
+            var("TIILI_SOCKET"),
+            case.control.map(|c| c.socket.clone()),
+            "pane {}",
+            case.id
+        );
+        assert_eq!(
+            var("TIILI_TOKEN"),
+            case.control.map(|c| c.token.clone().into()),
+            "pane {}",
+            case.id
+        );
+        assert_eq!(var("PATH"), case.path, "pane {}", case.id);
+        assert_eq!(
+            var("TERM"),
+            Some("xterm-256color".into()),
+            "pane {}",
+            case.id
+        );
+        assert_eq!(
+            cmd.get_cwd(),
+            Some(&std::ffi::OsString::from("/tmp")),
+            "pane {}",
+            case.id
+        );
+        if let Some(argv) = case.argv {
+            let got: Vec<_> = cmd
+                .get_argv()
+                .iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(got, argv, "pane {}", case.id);
+            assert!(!redraws, "pane {}", case.id);
+        } else {
+            assert!(
+                cmd.is_default_prog() || !cmd.get_argv().is_empty(),
+                "pane {} starts a shell",
+                case.id
+            );
+        }
+    }
+}
+
+/// Command found on the caller's PATH, Command exits: a command started in a pane finds its program on the
+/// caller's PATH, sees its variables, and its exit is reported with its code.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn command_found_on_the_callers_path_runs_with_the_variables_and_its_exit_is_reported() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tools = std::env::temp_dir().join(format!("tiili-pty-tools-{}", std::process::id()));
+    std::fs::create_dir_all(&tools).expect("tools folder");
+    let probe = tools.join("tiili-probe");
+    std::fs::write(
+        &probe,
+        "#!/bin/sh\necho \"seen:$TIILI_PANE|$TIILI_SOCKET|$TIILI_TOKEN|${PATH%%:*}|$1\"\nexit 3\n",
+    )
+    .expect("probe written");
+    std::fs::set_permissions(&probe, std::fs::Permissions::from_mode(0o755)).expect("probe runs");
+
+    let control = control();
+    let registry = SessionRegistry::new();
+    registry.set_control(control.clone());
+    let (tx, rx) = mpsc::channel();
+    let (exit_tx, exit_rx) = mpsc::channel();
+    let mut out = Outputs {
+        rx,
+        seen: HashMap::new(),
+    };
+    let command = PaneCommand {
+        argv: vec!["tiili-probe".into(), "arg one".into()],
+        path: Some(joined(&[tools.clone(), "/usr/bin".into(), "/bin".into()])),
+    };
+    let id = registry
+        .spawn_tracked(
+            None,
+            "off",
+            Some(&command),
+            24,
+            80,
+            Box::new(move |id, data| {
+                let _ = tx.send((id, data.to_vec()));
+            }),
+            None,
+            None,
+            Box::new(move |id, code| {
+                let _ = exit_tx.send((id, code));
+            }),
+        )
+        .expect("command starts");
+    let expected = format!(
+        "seen:{id}|{}|{}|{}|arg one",
+        control.socket.to_string_lossy(),
+        control.token,
+        control.bin_dir.display()
+    );
+    assert!(
+        out.wait_for(id, &expected),
+        "the command saw something else: {:?}",
+        out.text(id)
+    );
+    assert_eq!(exit_rx.recv_timeout(TIMEOUT), Ok((id, 3)));
+    let _ = std::fs::remove_dir_all(&tools);
 }

@@ -4,13 +4,14 @@ import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
 import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
-import type { Backend, SessionId } from "./backend";
+import type { Backend, PaneLaunch, SessionId } from "./backend";
 import { createFindBar, type FindBar } from "./findBar";
 import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
 import { SEARCH_LIMIT, searchDecorations } from "./search";
 import { fontFamilyList, type FontSettings, type Settings } from "./settings";
+import { attachLinks, type PaneLinks } from "./terminalLinks";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
 /** Resizing settles this long before a pane re-fits and tells its shell the new size. */
@@ -19,6 +20,8 @@ const RESIZE_SETTLE_MS = 50;
 /** One pane's terminal and the shell session behind it. */
 export interface PaneTerminal {
   term: Terminal;
+  /** The pane's clickable links: URLs, OSC 8 hyperlinks and existing paths. */
+  links: PaneLinks;
   /** The pane's find bar over the terminal, which searches its scrollback. */
   find: FindBar;
   /** The working directory of the pane's shell, when it runs and the platform can read it. */
@@ -140,7 +143,9 @@ export function refreshTheme(term: Terminal): void {
  * `onExit` is called when a shell exits. With `adopt` the terminal starts no shell: it shows the adopted scrollback,
  * then takes over that running session, whose output kept during the move follows, and resizes it so full-screen
  * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
- * shell sends, with its message made safe; an adopted scrollback rings nothing.
+ * shell sends, with its message made safe; an adopted scrollback rings nothing. With `launch` the session runs that
+ * program instead of a shell, and a failure to start it rejects (after freeing the terminal) instead of being written
+ * into the terminal.
  */
 export async function openTerminal(
   backend: Backend,
@@ -152,6 +157,7 @@ export async function openTerminal(
   onExit: () => void = () => {},
   adopt?: AdoptedSession,
   onSignal: (signal: AttentionSignal) => void = () => {},
+  launch?: PaneLaunch,
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -221,8 +227,12 @@ export async function openTerminal(
     term.write(`\r\n${String(error)}\r\n`);
   };
 
+  const links = attachLinks(term, container, backend, currentPlatform(), () => (running ? session : undefined), (error) =>
+    term.write(`\r\nCouldn't open the link: ${String(error)}\r\n`),
+  );
+
   const spawn = async (dir?: string) => {
-    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes));
+    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes), launch);
     running = true;
     onSession(session);
   };
@@ -273,9 +283,6 @@ export async function openTerminal(
     await backend.resize(id, term.rows, term.cols);
   };
 
-  if (adopt) await take(adopt).catch(reportError);
-  else await spawn(cwd).catch(reportError);
-
   const free = () => {
     observer.disconnect();
     reporter.cancel();
@@ -284,12 +291,22 @@ export async function openTerminal(
     term.textarea?.removeEventListener("focus", onFocus);
     term.textarea?.removeEventListener("blur", onBlur);
     running = false;
+    links.dispose();
     find.dispose();
     term.dispose();
   };
 
+  if (adopt) await take(adopt).catch(reportError);
+  else if (launch) {
+    await spawn(cwd).catch((error: unknown) => {
+      free();
+      throw error;
+    });
+  } else await spawn(cwd).catch(reportError);
+
   return {
     term,
+    links,
     find,
     cwd: async () => {
       if (!running || session === undefined) return undefined;

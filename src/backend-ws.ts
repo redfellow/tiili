@@ -1,6 +1,7 @@
 import type { Backend, SessionId } from "./backend";
 import { showContextMenu } from "./context-menu";
 import { localNoteStore } from "./heynoteStore";
+import { schemeOf } from "./links";
 import type { PromptId } from "./settings";
 
 /** A message the page sends the dev bridge: typed input, or the terminal's new size. */
@@ -66,6 +67,8 @@ export interface WsOptions {
   page: { protocol: string; host: string };
   token: string;
   clipboard: { readText(): Promise<string>; writeText(text: string): Promise<void> };
+  /** Opens `url` in a new browser tab, cut off from this page; `window.open` when absent. */
+  openTab?: (url: string) => void;
 }
 
 function defaultOptions(): WsOptions {
@@ -156,6 +159,14 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     },
     readClipboard: () => options.clipboard.readText(),
     writeClipboard: (text) => options.clipboard.writeText(text),
+    // The dev server has no opener: web links open in a new tab, nothing else opens, and no path is a link.
+    openLink: async (uri) => {
+      if (!["http", "https"].includes(schemeOf(uri))) throw new Error(`The dev browser opens only web links: ${uri}`);
+      (options.openTab ?? ((url) => window.open(url, "_blank", "noopener,noreferrer")))(uri);
+    },
+    resolvePaths: async (_id, candidates) => candidates.map(() => null),
+    openPath: async () => undefined,
+    revealPath: async () => undefined,
     contextMenu: async (items) => async (event) => {
       event.preventDefault();
       showContextMenu(items, event.clientX, event.clientY);

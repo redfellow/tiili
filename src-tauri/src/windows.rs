@@ -101,6 +101,15 @@ impl WindowSessions {
         self.add(to, id);
     }
 
+    /// Window `label`'s sessions, in the order they joined it.
+    pub fn sessions(&self, label: &str) -> Vec<SessionId> {
+        self.0
+            .lock()
+            .ok()
+            .and_then(|map| map.get(label).cloned())
+            .unwrap_or_default()
+    }
+
     /// Window `label`'s remaining sessions, which then belong to no window.
     pub fn take(&self, label: &str) -> Vec<SessionId> {
         self.0
