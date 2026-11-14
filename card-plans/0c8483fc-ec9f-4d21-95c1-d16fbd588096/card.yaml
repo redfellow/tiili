@@ -5,3 +5,14 @@ x-harvaaja-card: 0c8483fc-ec9f-4d21-95c1-d16fbd588096
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new observable contracts (Move to New Window / Move to Window
+    menu items, shortcut, session handoff between windows); no active change
+    covers multi-window pane moves.
+  citations:
+    - "openspec/specs/pane-tiling/spec.md#Requirement: New window"
+    - "openspec/specs/pane-tiling/spec.md#Requirement: Closing a window"
+    - src-tauri/src/lib.rs pty_spawn
+    - docs/concept.md Out of scope for now
+  revision: fbfb556e-6aaf-4af9-bbed-f33e2ca7d420
