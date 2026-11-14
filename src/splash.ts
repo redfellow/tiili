@@ -6,6 +6,8 @@
  * Explored in docs/brand/explorations/splash-preview.html.
  */
 
+import { APP_VERSION } from "./version";
+
 /** Brand bricks (docs/brand/tiili.css). */
 const BRICK = { tiili: "#A4472B", klinkkeri: "#6B2A1E", savi: "#C9764F", laasti: "#E8DECD", graniitti: "#8D877D", koski: "#111617" };
 
@@ -152,7 +154,10 @@ export function playSplash(options: SplashOptions): Splash {
   hint.className = "splash-hint";
   hint.textContent = "tiili no-splash";
   hint.title = "Don't show this splash again (Settings → Behaviour)";
-  overlay.append(canvas, hint);
+  const version = document.createElement("span");
+  version.className = "splash-version";
+  version.textContent = `v${APP_VERSION}`;
+  overlay.append(canvas, hint, version);
   overlay.setAttribute("aria-hidden", "true");
   document.body.append(overlay);
 

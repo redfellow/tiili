@@ -414,7 +414,7 @@ dialog.settings {
   border-radius: var(--radius-window);
   background: var(--surface);
   color: var(--fg);
-  font: 400 13.5px/1.5 var(--font-sans);
+  font: 400 12.5px/1.5 var(--font-sans);
   box-shadow: 0 8px 32px color-mix(in srgb, #000 45%, transparent), 0 2px 8px color-mix(in srgb, #000 30%, transparent);
 }
 
@@ -438,7 +438,7 @@ body.settings-window {
   padding: var(--space-5);
   background: var(--surface);
   color: var(--fg);
-  font: 400 13.5px/1.5 var(--font-sans);
+  font: 400 12.5px/1.5 var(--font-sans);
 }
 
 .settings form {
@@ -455,13 +455,18 @@ body.settings-window {
   gap: var(--space-3);
 }
 
+.settings-version {
+  color: var(--muted);
+  font: 12px/1.4 var(--font-mono);
+}
+
 .settings-header button {
   cursor: pointer;
 }
 
 .settings h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.025em;
@@ -480,7 +485,7 @@ body.settings-window {
   margin-bottom: var(--space-2);
   padding: 0;
   color: var(--muted);
-  font: 500 11.5px var(--font-mono);
+  font: 500 11px var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -595,7 +600,7 @@ body.settings-window {
 .settings-range output {
   min-width: 4ch;
   text-align: right;
-  font: 500 12px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
@@ -622,7 +627,7 @@ body.settings-window {
   height: auto;
   padding: 0 var(--space-2);
   border-color: transparent;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.2;
 }
 
@@ -678,7 +683,7 @@ body.settings-window {
 .settings-list-heading {
   padding: var(--space-2) var(--space-2) var(--space-1) 20px;
   color: var(--muted);
-  font: 500 11px/16px var(--font-mono);
+  font: 500 10.5px/16px var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   cursor: default;
@@ -764,7 +769,7 @@ body.settings-window {
 .settings-hint {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 /* Remote shells: each snippet read-only in a sunken block, its shell name and Copy button above it. */
@@ -783,7 +788,7 @@ body.settings-window {
   border-radius: var(--radius-control);
   background: var(--sunken);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.4;
   user-select: text;
 }
@@ -815,14 +820,14 @@ body.settings-window {
   background: var(--term-bg);
   color: var(--term-fg);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.3;
   white-space: pre;
 }
 
 .settings-default {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 /* A theme's colours: its terminal ground with sample text, and an accent line along the bottom. */
@@ -932,6 +937,16 @@ body.settings-window {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.6s ease, color 0.15s ease;
+}
+
+.splash-version {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  color: var(--splash-muted);
+  font: 11px/1.4 var(--font-mono);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .splash-hint:not(:disabled)::before {

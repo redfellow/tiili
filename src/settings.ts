@@ -107,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "koski",
   font: {
     family: DEFAULT_FONT_FAMILY,
-    size: 12,
+    size: 13,
     weight: 100,
     weightBold: 700,
     ligatures: true,
