@@ -5,7 +5,7 @@
   - Tests to update: src-tauri/src/cwd.rs (tests module), src-tauri/src/tints.rs (tests module)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cwd::`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib tints::`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test repo_tracking`
 
 ## 2. Frontend
 - [ ] 2.1 `src/paneChip.ts`: `PaneCwd.repo.worktree`, `placeLabel` adds ` › <worktree>`; extend the table in `src/paneChip.test.ts`
