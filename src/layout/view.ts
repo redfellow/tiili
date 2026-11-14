@@ -1,4 +1,5 @@
 import { resizeTrack, type Axis, type LayoutState, type PaneId } from "./model";
+import { flipFrames, MOTION_EASING, MOTION_MS, prefersReducedMotion, type Rect } from "./motion";
 
 /** What the view asks of the panes it lays out. */
 export interface TileHooks {
@@ -12,6 +13,10 @@ export interface TileHooks {
   resizeEnd(before: LayoutState, after: LayoutState): void;
   /** Pane `from`'s grab strip was dropped on pane `to`. */
   swap(from: PaneId, to: PaneId): void;
+  /** Panes start moving to a new layout: terminals hold their size until `motionEnd`. */
+  motionStart(): void;
+  /** The panes have reached their new places: terminals refit once to their final size. */
+  motionEnd(): void;
 }
 
 /** The pane id stored on each pane element. */
@@ -36,6 +41,14 @@ function trackEdge(fraction: number, before: number, count: number): string {
  */
 export class TileView {
   private state: LayoutState | undefined;
+  /** The pane animations now playing. */
+  private running: Animation[] = [];
+  /** Closing panes pinned at their last rect while they fade out. */
+  private leaving: HTMLElement[] = [];
+  /** Counts layout changes, so only the latest one's animations end the motion. */
+  private generation = 0;
+  /** True between `motionStart` and `motionEnd`. */
+  private moving = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -44,8 +57,103 @@ export class TileView {
     root.addEventListener("pointerdown", (event) => this.onPointerDown(event));
   }
 
-  /** Lays `state` out again, moving the pane elements into place. */
+  /**
+   * Lays `state` out again, moving the pane elements into place. Panes that move glide from their old rect to the
+   * new one, new panes grow in and panes no longer in `state` shrink and fade out, unless the OS asks for reduced
+   * motion. A change while panes are still moving starts from where they are on screen.
+   */
   render(state: LayoutState): void {
+    const animate = !prefersReducedMotion();
+    // Measured before the running animations stop, so the panes start from where they are seen.
+    const before = animate ? this.measure() : new Map<PaneId, Rect>();
+    const elements = new Map<PaneId, HTMLElement>();
+    this.panes().forEach((element) => elements.set(Number(element.dataset[PANE_ID]), element));
+    this.stopMotion();
+    if (!animate) {
+      this.endMotion();
+      this.layOut(state);
+      return;
+    }
+    if (!this.moving) {
+      this.moving = true;
+      this.hooks.motionStart();
+    }
+    this.layOut(state);
+    const generation = ++this.generation;
+    const rootRect = this.root.getBoundingClientRect();
+    const options = { duration: MOTION_MS, easing: MOTION_EASING };
+    for (const [id, motion] of flipFrames(before, this.measure())) {
+      if (motion.kind !== "exit") {
+        const element = this.root.querySelector<HTMLElement>(`.pane[data-pane-id="${id}"]`);
+        if (element) this.running.push(element.animate(motion.frames, options));
+        continue;
+      }
+      const element = elements.get(id);
+      const rect = before.get(id);
+      if (!element || !rect) continue;
+      // Kept at its last rect, beneath the other panes, until it has faded out.
+      Object.assign(element.style, {
+        position: "absolute",
+        left: `${rect.left - rootRect.left}px`,
+        top: `${rect.top - rootRect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        pointerEvents: "none",
+      });
+      this.root.prepend(element);
+      this.leaving.push(element);
+      const animation = element.animate(motion.frames, { ...options, fill: "forwards" });
+      animation.finished.then(() => this.unpin(element)).catch(() => undefined);
+      this.running.push(animation);
+    }
+    Promise.all(this.running.map((animation) => animation.finished))
+      .then(() => {
+        if (generation === this.generation) this.endMotion();
+      })
+      .catch(() => undefined);
+  }
+
+  /** The pane elements laid out in the grid, without the ones fading out. */
+  private panes(): HTMLElement[] {
+    return Array.from(this.root.querySelectorAll<HTMLElement>(":scope > .pane-row > .pane"));
+  }
+
+  /** Each laid-out pane's rect on screen, by pane id. */
+  private measure(): Map<PaneId, Rect> {
+    const rects = new Map<PaneId, Rect>();
+    for (const element of this.panes()) {
+      const { left, top, width, height } = element.getBoundingClientRect();
+      rects.set(Number(element.dataset[PANE_ID]), { left, top, width, height });
+    }
+    return rects;
+  }
+
+  /** Stops the animations playing and drops the panes still fading out. */
+  private stopMotion(): void {
+    const running = this.running;
+    this.running = [];
+    running.forEach((animation) => animation.cancel());
+    this.leaving.forEach((element) => this.unpin(element));
+  }
+
+  /** Takes a faded-out pane out of the view and clears its pinning. */
+  private unpin(element: HTMLElement): void {
+    this.leaving = this.leaving.filter((e) => e !== element);
+    element.remove();
+    for (const property of ["position", "left", "top", "width", "height", "pointer-events"]) {
+      element.style.removeProperty(property);
+    }
+  }
+
+  /** The panes are at rest: terminals may refit. */
+  private endMotion(): void {
+    if (!this.moving) return;
+    this.moving = false;
+    this.hooks.motionEnd();
+  }
+
+  /** Builds the rows, panes and dividers for `state`. */
+  private layOut(state: LayoutState): void {
     this.state = state;
     const rows = Array.from({ length: state.rows }, (_, r) => {
       const row = document.createElement("div");
