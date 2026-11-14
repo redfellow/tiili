@@ -1,9 +1,12 @@
 // Builds tiili.app for this Mac's chip, installs it in /Applications and pins it to the Dock. Run with
 // `npm run install-app` (macOS only). See docs/packaging.md.
 //
+// It runs `npm ci` first when node_modules does not match package-lock.json, so it also works right after a pull or
+// a promotion that added or changed dependencies (härvääjä runs it after each Release).
+//
 // The steps are pure helpers, exported for scripts/install-app.test.ts; `main` runs them in order.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,11 +15,21 @@ export const APP_IDENTIFIER = "app.tiili";
 export const INSTALL_PATH = `/Applications/${APP_NAME}`;
 
 /**
- * Arguments for `tauri build`: the host architecture only, the .app only (no .dmg, no universal binary), and cargo
+ * Arguments for `tauri build`: the host architecture only, the .app only (no .dmg, no universal binary), no updater
+ * bundle (a local install never ships one, and `tauri build` can't sign it without the release key), and cargo
  * without default features so the dev-only dev-bridge binary stays out of the app.
  */
 export function buildArgs() {
-  return ["tauri", "build", "--bundles", "app", "--", "--no-default-features"];
+  return [
+    "tauri",
+    "build",
+    "--bundles",
+    "app",
+    "--config",
+    JSON.stringify({ bundle: { createUpdaterArtifacts: false } }),
+    "--",
+    "--no-default-features",
+  ];
 }
 
 /** Where `tauri build --bundles app` leaves the app, for a repository root. */
@@ -37,6 +50,20 @@ export function dockEntryXml() {
     `<key>_CFURLString</key><string>${INSTALL_PATH}</string>` +
     "<key>_CFURLStringType</key><integer>0</integer>" +
     "</dict></dict></dict>"
+  );
+}
+
+/**
+ * Whether node_modules is out of date: `installedLock` is node_modules/.package-lock.json (what npm last installed;
+ * undefined when it is missing) and `lock` is package-lock.json. Optional packages are skipped, since npm leaves out
+ * the ones for other platforms.
+ */
+export function dependenciesStale(lock, installedLock) {
+  if (!installedLock) return true;
+  const wanted = JSON.parse(lock).packages ?? {};
+  const installed = JSON.parse(installedLock).packages ?? {};
+  return Object.entries(wanted).some(
+    ([path, entry]) => path !== "" && !entry.optional && installed[path]?.version !== entry.version,
   );
 }
 
@@ -69,6 +96,12 @@ function main() {
     process.exit(1);
   }
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const installedLock = resolve(root, "node_modules/.package-lock.json");
+  const lock = readFileSync(resolve(root, "package-lock.json"), "utf8");
+  if (dependenciesStale(lock, existsSync(installedLock) ? readFileSync(installedLock, "utf8") : undefined)) {
+    console.log("Dependencies changed: running npm ci...");
+    run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: root });
+  }
   run("npx", buildArgs(), { cwd: root });
 
   const built = builtAppPath(root);

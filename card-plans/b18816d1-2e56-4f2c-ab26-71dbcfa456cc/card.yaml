@@ -1,0 +1,19 @@
+format: 1
+slug: compact-settings-window-theme-and-prompt
+title: "Compact settings window: theme and prompt card grids, live preview,
+  every tab fits 720×640 without scrolling"
+x-harvaaja-card: b18816d1-2e56-4f2c-ab26-71dbcfa456cc
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes observable settings contracts (× button removed, theme
+    list→grid, prompt cards, segmented controls, tab contents, new live preview
+    and compact-fit requirements); no active changes exist.
+  citations:
+    - "openspec/specs/settings/spec.md: Save and cancel, Theme list, Default
+      theme, Cursor settings, Settings tab contents, Tiling setting, Prompt
+      list, Remote shells snippets, Update settings"
+    - openspec/changes/ has only archive/
+  revision: 3ea89074-5de6-4f93-aa6d-ef5fbfa15759
