@@ -125,13 +125,13 @@ export function refreshTheme(term: Terminal): void {
  * Opens a terminal in `container` connected to a new default shell of its own, started in `cwd` (home folder
  * when absent), styled by `settings()`, which the terminal asks again whenever the system switches light and
  * dark. While the terminal has focus the cursor has the chosen shape (the brick block by default) and blinks if
- * chosen; otherwise it is a steady outline that never blinks, whatever the Blink setting. The shell runs on `backend`; `onSession` hears the id of each shell session
- * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
- * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits. With `adopt`
- * the terminal starts no shell: it shows the adopted scrollback, then takes over that running session, whose output
- * kept during the move follows, and resizes it so full-screen programs redraw. `onSignal` hears each bell and each
- * notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the shell sends, with its message made safe; an adopted
- * scrollback rings nothing.
+ * chosen; otherwise it is a steady outline that never blinks, whatever the Blink setting. The shell runs on
+ * `backend`; `onSession` hears the id of each shell session the terminal starts, the first and any after the shell
+ * exits. `zoom()` is the pane's zoom offset in pixels, added to the font size whenever the terminal refits, and
+ * `onExit` is called when a shell exits. With `adopt` the terminal starts no shell: it shows the adopted scrollback,
+ * then takes over that running session, whose output kept during the move follows, and resizes it so full-screen
+ * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
+ * shell sends, with its message made safe; an adopted scrollback rings nothing.
  */
 export async function openTerminal(
   backend: Backend,
