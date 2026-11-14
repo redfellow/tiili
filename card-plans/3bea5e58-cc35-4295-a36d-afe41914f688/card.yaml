@@ -5,3 +5,13 @@ x-harvaaja-card: 3bea5e58-cc35-4295-a36d-afe41914f688
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds a new saved setting and a new selection behaviour: observable
+    contracts in settings and terminal-session; no active change covers them."
+  citations:
+    - openspec/specs/settings/spec.md#Settings tab contents
+    - openspec/specs/terminal-session/spec.md
+    - src/terminal.ts new Terminal options
+    - src-tauri/src/windows.rs MovePayload
+  revision: 077715d9-e6a8-4696-ba99-6cdefa5a5cef
