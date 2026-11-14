@@ -46,9 +46,11 @@ pub fn scrub(appdir: Option<&str>, env: impl Iterator<Item = (String, String)>) 
                 .copied()
                 .filter(|entry| !inside(appdir, entry))
                 .collect();
-            if kept.iter().all(|entry| entry.is_empty()) {
+            if kept.len() == entries.len() {
+                // Nothing of the AppImage's in it: leave it as it was.
+            } else if kept.iter().all(|entry| entry.is_empty()) {
                 edits.push(EnvEdit::Remove(key));
-            } else if kept.len() < entries.len() {
+            } else {
                 edits.push(EnvEdit::Set(key, kept.join(":")));
             }
         } else if inside(appdir, &value) {
@@ -185,6 +187,12 @@ mod tests {
                 Some(APPDIR),
                 vec![("XDG_DATA_DIRS", "/tmp/.mount_ABC/usr/share/:/usr/share:")],
                 vec![set("XDG_DATA_DIRS", "/usr/share:")],
+            ),
+            (
+                "list of only colons without AppImage entries is untouched",
+                Some(APPDIR),
+                vec![("FOO", ":"), ("MANPATH", "::")],
+                vec![],
             ),
             (
                 "trailing slash on APPDIR still matches",
