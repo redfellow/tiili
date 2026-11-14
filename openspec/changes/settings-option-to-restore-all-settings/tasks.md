@@ -1,6 +1,6 @@
 ## 1. Confirm reset
 
-- [ ] 1.1 In `src/settingsDialog.ts`, replace the reset button's direct reset with the inline "Reset all settings?" Reset/Keep group in the footer: Esc while it is shown cancels the question and not the dialogue, the form's `reset()` hides it, and `lock()` hides and disables it. Add its styling in `src/styles.css`.
+- [x] 1.1 In `src/settingsDialog.ts`, replace the reset button's direct reset with the inline "Reset all settings?" Reset/Keep group in the footer: Esc while it is shown cancels the question and not the dialogue, the form's `reset()` hides it, and `lock()` hides and disables it. Add its styling in `src/styles.css`.
   - proof: `npx eslint src/settingsDialog.ts`
   - proof: `npm run typecheck`
 
