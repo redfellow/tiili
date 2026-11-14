@@ -82,9 +82,13 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   }
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
-  // A window New Window opened names its first pane's folder in its address.
-  const startCwd = new URLSearchParams(window.location.search).get("cwd") ?? undefined;
-  await panes.open(startCwd || undefined);
+  // A window New Window opened names its first pane's folder in its address; one Move to New Window opened names
+  // the pane it is to take over, which falls back to a fresh shell if that pane is no longer waiting.
+  const params = new URLSearchParams(window.location.search);
+  const startCwd = params.get("cwd") ?? undefined;
+  const moveToken = params.get("move");
+  const arrived = moveToken ? await panes.arrive(moveToken).catch(() => false) : false;
+  if (!arrived) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 }
 

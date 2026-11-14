@@ -1,22 +1,53 @@
 import type { NoteStore } from "./heynoteStore";
 import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { AppIcon, PromptId } from "./settings";
+import type { WindowEntry } from "./windowMenu";
 
 /** Identifies one shell session of a backend. */
 export type SessionId = number;
 
-/** An item of the right-click menu: a labelled action, or a separator line. */
-export type MenuItem = { label: string; action: () => void } | { separator: true };
+/** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
+export type MenuItem =
+  | { label: string; action: () => void }
+  | { separator: true }
+  | { label: string; items: MenuItem[] };
+
+/**
+ * A pane on its way to another window: a terminal with its running session, its serialized scrollback and its
+ * zoom offset, or the Heynote pane (whose notes are already saved).
+ */
+export type MovePayload =
+  | { kind: "terminal"; session: SessionId; scrollback: string; zoom: number }
+  | { kind: "heynote" };
+
+/** Moving panes between windows, where the backend has more than one window. */
+export interface PaneMoves {
+  /** Session `id`'s output is kept, not sent, from now until a pane attaches it. */
+  detach(id: SessionId): Promise<void>;
+  /** This window's pane takes session `id`: the output kept since `detach`, then all after it, goes to `onOutput`. */
+  attach(id: SessionId, onOutput: (bytes: Uint8Array) => void): Promise<void>;
+  /** The other open windows, in open order, each named by its focused pane. */
+  list(): Promise<WindowEntry[]>;
+  /** Tells the app this window's name: its focused pane's chip text. */
+  setName(name: string): Promise<void>;
+  /** Sends `payload` to window `target`, or to a new window when absent. */
+  move(target: string | undefined, payload: MovePayload): Promise<void>;
+  /** The pane sent to this window under `token`, once; undefined when there is none. */
+  take(token: string): Promise<MovePayload | undefined>;
+}
 
 /**
  * Events the app sends this window: native menu items (when this window is focused), the app menu's Settings…, a
  * shell's working directory report and what runs in a pane (for this window's shells), settings another window
- * saved, and the ask to focus this window's Heynote pane.
+ * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label) and a
+ * pane arriving from another window.
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll";
-  pane: "new" | "close";
+  pane: "new" | "close" | "moveToNewWindow";
   "new-window": undefined;
+  "move-to-window": string;
+  "pane-arrive": { token: string };
   "open-settings": undefined;
   "pane-cwd": PaneCwd;
   "pane-command": PaneCommand;
@@ -68,6 +99,8 @@ export interface Backend {
   closeWindow(): Promise<void>;
   /** Opens a full tiili window, cascaded from this one, whose first pane starts in `cwd` (home folder when absent). */
   newWindow(cwd: string | undefined): Promise<void>;
+  /** Moving panes between windows; absent where there is one window only (the dev server). */
+  readonly moves?: PaneMoves;
 }
 
 export type BackendKind = "tauri" | "dev";

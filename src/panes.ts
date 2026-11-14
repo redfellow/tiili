@@ -1,4 +1,4 @@
-import type { Backend } from "./backend";
+import type { Backend, MenuItem, MovePayload } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import {
   layoutAction,
@@ -36,8 +36,9 @@ import {
 } from "./paneChip";
 import type { Settings } from "./settings";
 import { zoomedSize } from "./responsive";
-import { applyFont, openTerminal, refreshTheme, type PaneTerminal } from "./terminal";
+import { applyFont, openTerminal, refreshTheme, type AdoptedSession, type PaneTerminal } from "./terminal";
 import { paneTint } from "./tints";
+import { menuEntries } from "./windowMenu";
 
 /** A pane can't be resized below this many columns and rows of its terminal. */
 const MIN_COLS = 20;
@@ -79,6 +80,8 @@ export class Panes {
   private readonly places = new Map<number, PaneCwd>();
   /** The latest `pane-command` report per session, kept like `places`. */
   private readonly commands = new Map<number, string>();
+  /** The window name last told to the app, so an unchanged one is not sent again. */
+  private reportedName = "";
 
   private constructor(
     private readonly backend: Backend,
@@ -134,11 +137,19 @@ export class Panes {
         note?.clipboard(action).catch((error: unknown) => console.error(error));
         return note !== undefined;
       },
+      backend.moves ? () => panes.moveItems() : undefined,
     );
+    if (backend.moves) {
+      const report = (error: unknown) => panes.report(error);
+      // The Shell menu's Move to Window ▸ choice, sent to the focused window with the target's label.
+      await backend.onAppEvent("move-to-window", (label) => panes.movePane(label).catch(report));
+      // A pane another window sent to this one, already open.
+      await backend.onAppEvent("pane-arrive", ({ token }) => panes.arrive(token).catch(report));
+    }
     if (panes.viaMenu()) {
-      // ⌘T and ⌘W are Shell menu items on macOS, so the webview may never see those keys.
+      // ⌘T, ⌘W and ⌃⌘N are Shell menu items on macOS, so the webview may never see those keys.
       await backend.onAppEvent("pane", (payload) => {
-        panes.act(payload === "new" ? { type: "new" } : { type: "close" });
+        panes.act({ type: payload });
       });
       // The Shell menu's New Window (⌘N), sent to the focused window only.
       await backend.onAppEvent("new-window", () => panes.act({ type: "newWindow" }));
@@ -199,6 +210,7 @@ export class Panes {
     else if (action.type === "heynote") this.openHeynote().catch(report);
     else if (action.type === "close") this.close(this.focused).catch(report);
     else if (action.type === "newWindow") this.newWindow().catch(report);
+    else if (action.type === "moveToNewWindow") this.movePane(undefined).catch(report);
     else this.focus(action.index);
   }
 
@@ -212,6 +224,73 @@ export class Panes {
   /** Opens a new tiili window, cascaded from this one, whose pane starts in the focused pane's folder. */
   async newWindow(): Promise<void> {
     await this.backend.newWindow(await this.currentCwd());
+  }
+
+  /** The right-click menu's move items: Move to New Window, and Move to Window ▸ when other windows are open. */
+  private async moveItems(): Promise<MenuItem[]> {
+    const moves = this.backend.moves;
+    if (!moves) return [];
+    const windows = await moves.list().catch(() => []);
+    const items: MenuItem[] = [
+      { separator: true },
+      { label: "Move to New Window", action: () => this.act({ type: "moveToNewWindow" }) },
+    ];
+    if (windows.length > 0) {
+      items.push({
+        label: "Move to Window",
+        items: menuEntries(windows).map(({ label, text }) => ({
+          label: text,
+          action: () => this.movePane(label).catch((error: unknown) => this.report(error)),
+        })),
+      });
+    }
+    return items;
+  }
+
+  /**
+   * Moves the focused pane to window `target`, or to a new window when absent. A terminal pane's shell keeps
+   * running: its output is kept from the moment the scrollback is read until the target pane attaches. A Heynote
+   * pane saves its notes and reopens there. Moving a window's only pane to a new window does nothing; moving it to
+   * another window closes this one.
+   */
+  async movePane(target: string | undefined): Promise<void> {
+    const moves = this.backend.moves;
+    const pane = this.current();
+    if (!moves || !pane) return;
+    if (target === undefined && this.panes.length === 1) return;
+    const terminal = pane.terminal;
+    if (pane.note) {
+      pane.note.flush();
+      await moves.move(target, { kind: "heynote" });
+    } else {
+      const session = terminal?.session();
+      if (!terminal || session === undefined) return;
+      // Output from here on waits in the core, so none lands after the scrollback is read and none is lost.
+      await moves.detach(session);
+      const payload: MovePayload = { kind: "terminal", session, scrollback: "", zoom: pane.zoom };
+      try {
+        payload.scrollback = await terminal.serialize();
+        await moves.move(target, payload);
+      } catch (error) {
+        await moves.attach(session, (bytes) => terminal.term.write(bytes)).catch(() => undefined);
+        throw error;
+      }
+    }
+    this.remove(pane);
+    terminal?.detach();
+    if (this.panes.length === 0) await this.backend.closeWindow();
+  }
+
+  /**
+   * Opens the pane another window sent here under `token`, focused: the Heynote pane, or a terminal pane that takes
+   * over the moved shell with its scrollback and zoom. Resolves to false when nothing waits under `token`.
+   */
+  async arrive(token: string): Promise<boolean> {
+    const payload = await this.backend.moves?.take(token);
+    if (!payload) return false;
+    if (payload.kind === "heynote") await this.openHeynote();
+    else await this.open(undefined, payload);
+    return true;
   }
 
   /**
@@ -266,10 +345,11 @@ export class Panes {
 
   /**
    * Opens a pane after the others and focuses it: in `start` when given (a new window's first pane), else in the
-   * focused pane's working directory.
+   * focused pane's working directory. With `adopt` the pane takes over a shell moved from another window instead,
+   * at that pane's zoom.
    */
-  async open(start?: string): Promise<void> {
-    const cwd = start ?? (await this.currentCwd());
+  async open(start?: string, adopt?: AdoptedSession & { zoom: number }): Promise<void> {
+    const cwd = adopt ? undefined : (start ?? (await this.currentCwd()));
 
     const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -277,7 +357,13 @@ export class Panes {
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
-    const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: new Promise((r) => (resolve = r)) };
+    const pane: Pane = {
+      id: this.nextId++,
+      element,
+      chip,
+      zoom: adopt?.zoom ?? 0,
+      ready: new Promise((r) => (resolve = r)),
+    };
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
     // Laid out first, so the terminal opens at its pane's size.
@@ -293,6 +379,7 @@ export class Panes {
         (session) => this.onSession(pane, session),
         () => pane.zoom,
         () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
+        adopt,
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       pane.terminal = opened;
@@ -387,6 +474,15 @@ export class Panes {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
     pane.tint = paneTint(place);
     showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
+    if (pane === this.current()) this.reportName();
+  }
+
+  /** Tells the app this window's name, its focused pane's chip text, for other windows' Move to Window ▸. */
+  private reportName(): void {
+    const name = this.current()?.chip.textContent ?? "";
+    if (!this.backend.moves || name === "" || name === this.reportedName) return;
+    this.reportedName = name;
+    this.backend.moves.setName(name).catch(() => undefined);
   }
 
   private remove(pane: Pane): void {
@@ -413,6 +509,7 @@ export class Panes {
     this.panes.forEach((pane, i) => {
       pane.element.toggleAttribute("data-focused", i === index);
     });
+    this.reportName();
   }
 
   /** Lays the panes out again: one row element per grid row, panes in order, with the dividers. */

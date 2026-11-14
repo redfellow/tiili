@@ -1,5 +1,5 @@
 import type { Terminal } from "@xterm/xterm";
-import type { Backend } from "./backend";
+import type { Backend, MenuItem } from "./backend";
 import { clipboardAction, type ClipboardAction, type KeyChord, type Platform } from "./keymap";
 
 /** Carries out a clipboard action on the terminal. Copy with nothing selected does nothing. */
@@ -46,6 +46,7 @@ export function handleClipboardKey(
  * Wires the native Edit menu (where the backend has one) and a right-click menu on every platform to
  * `target`, the focused pane's terminal. The right-click menu's Settings… item calls `openSettings`.
  * `elsewhere` gets each action first and returns true when it carried it out in a pane without a terminal.
+ * `more` adds items after those; when given, the menu is built afresh each time it opens, so they can change.
  * Returns the handler for a pane's `contextmenu` event.
  */
 export async function attachClipboardMenus(
@@ -54,6 +55,7 @@ export async function attachClipboardMenus(
   platform: Platform,
   openSettings: () => void,
   elsewhere: (action: ClipboardAction) => boolean = () => false,
+  more?: () => Promise<MenuItem[]>,
 ): Promise<(event: MouseEvent) => void> {
   const act = (action: ClipboardAction) => {
     if (elsewhere(action)) return;
@@ -65,13 +67,25 @@ export async function attachClipboardMenus(
     await backend.onAppEvent("clipboard", act);
   }
 
-  const showMenu = await backend.contextMenu([
+  const items: MenuItem[] = [
     { label: "Copy", action: () => act("copy") },
     { label: "Paste", action: () => act("paste") },
     { separator: true },
     { label: "Settings…", action: () => openSettings() },
-  ]);
+  ];
+  const fail = (error: unknown) => target()?.write(`\r\nCopy or paste failed: ${String(error)}\r\n`);
+  if (!more) {
+    const showMenu = await backend.contextMenu(items);
+    return (event) => {
+      showMenu(event).catch(fail);
+    };
+  }
   return (event) => {
-    showMenu(event).catch((error: unknown) => target()?.write(`\r\nCopy or paste failed: ${String(error)}\r\n`));
+    // Kept from the webview's own menu now: the items are built after a wait.
+    event.preventDefault();
+    (async () => {
+      const showMenu = await backend.contextMenu([...items, ...(await more())]);
+      await showMenu(event);
+    })().catch(fail);
   };
 }
