@@ -142,11 +142,11 @@ The settings dialogue SHALL show three tabs, Style, Typography and Behaviour in 
 - **THEN** the Behaviour tab is selected and its panel is shown
 
 ### Requirement: Settings tab contents
-Style SHALL hold Theme, Cursor and Inactive terminals. Typography SHALL hold Font (with Family on its own row above its list, then Size as a slider, Weight, Bold weight, Line height, Letter spacing and Ligatures). Behaviour SHALL hold Tiling, Responsive text, Panes and Remote shells.
+Style SHALL hold Theme, Cursor and Inactive terminals. Typography SHALL hold Font (with Family on its own row above its list, then Size as a slider, Weight, Bold weight, Line height, Letter spacing and Ligatures). Behaviour SHALL hold Tiling, Responsive text, Panes, Remote shells and Updates.
 
 #### Scenario: Behaviour tab sections
 - **WHEN** the user opens the Behaviour tab
-- **THEN** it shows the Tiling, Responsive text, Panes and Remote shells sections
+- **THEN** it shows the Tiling, Responsive text, Panes, Remote shells and Updates sections
 
 ### Requirement: Tiling setting
 The Behaviour tab SHALL have a Tiling list. Each row SHALL have an icon, and the rows SHALL be Grid (default), Wide grid, Tall grid, Side by side and Stacked, with the hint "How panes are arranged as you open and close them." Choosing a mode SHALL re-lay out the open panes live, and the mode SHALL be saved with the settings. A missing or invalid saved mode SHALL fall back to Grid.
@@ -239,3 +239,10 @@ The Behaviour tab SHALL have a Remote shells section with a hint saying that add
 #### Scenario: Snippet outside a repository
 - **WHEN** the user runs `cd /tmp` on the remote machine with the snippet sourced
 - **THEN** the next prompt sends `tiili_repo` with an empty value
+
+### Requirement: Update settings
+The Updates section SHALL have a "Check for updates automatically" checkbox, default on and saved with the settings, and a "Check for updates" button that checks immediately (ignoring the daily limit and a skipped version) and shows the result inline or opens the update dialog. A missing or invalid saved value SHALL fall back to on.
+
+#### Scenario: Invalid saved update setting
+- **WHEN** the settings file has an automatic update check of `"yes"`
+- **THEN** automatic checks are on and the other settings load

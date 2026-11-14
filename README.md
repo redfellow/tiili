@@ -42,7 +42,8 @@ brick: each terminal is a brick, the window is the wall.
 - **Heynote scratchpad.** The note button next to **+** opens [Heynote](https://heynote.com) in a pane of its own,
   with notes saved as plain files. Its currency conversion fetches rates from Heynote's server.
 - **Small and native.** Tauri 2 and xterm.js, around 10 MB, no Electron. It reopens where you left the window, and
-  its icon follows light and dark mode. No accounts, no sync, no telemetry.
+  its icon follows light and dark mode. No accounts, no sync, no telemetry. tiili checks GitHub once a day for a new
+  version: one anonymous request, which you can turn off in Settings.
 
 ## Install
 

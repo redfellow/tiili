@@ -33,6 +33,7 @@ const cases: [string, unknown, Settings][] = [
     inactive: { opacity: 0.5, desaturate: true },
     appIcon: "dark",
     prompt: "tiili",
+    updates: { autoCheck: false },
   }, {
     theme: "nord",
     font: { family: "JetBrains Mono", size: 16, weight: 310, weightBold: 800, ligatures: true, lineHeight: 1.2, letterSpacing: 1.5 },
@@ -43,6 +44,7 @@ const cases: [string, unknown, Settings][] = [
     inactive: { opacity: 0.5, desaturate: true },
     appIcon: "dark",
     prompt: "tiili",
+    updates: { autoCheck: false },
   }],
   ["Koski by default: unknown theme id becomes Koski", { theme: "neon" }, DEFAULT_SETTINGS],
   ["Koski by default: theme of the wrong type becomes Koski", { theme: 3 }, DEFAULT_SETTINGS],
@@ -105,6 +107,9 @@ const cases: [string, unknown, Settings][] = [
   ["Tiili prompt is kept", { prompt: "tiili" }, { ...DEFAULT_SETTINGS, prompt: "tiili" }],
   ["unknown prompt is off, the rest loads", { theme: "nord", prompt: "powerline" }, { ...DEFAULT_SETTINGS, theme: "nord" }],
   ["prompt of the wrong type is off", { prompt: true }, DEFAULT_SETTINGS],
+  ["Invalid saved update setting: automatic check \"yes\" is on, the rest loads",
+    { theme: "nord", updates: { autoCheck: "yes" } }, { ...DEFAULT_SETTINGS, theme: "nord" }],
+  ["updates of the wrong type give automatic checks on", { updates: false }, DEFAULT_SETTINGS],
   ["font of the wrong type gives the default font", { theme: "dracula", font: [] }, { ...DEFAULT_SETTINGS, theme: "dracula" }],
 ];
 
