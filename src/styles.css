@@ -304,14 +304,112 @@ body {
   background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
-/* No overview ruler track beside the scrollbar: it only draws a hairline border, as we use no decorations. */
-.xterm-decoration-overview-ruler {
+/* The overview ruler lies over the 8 px scrollbar and shows only the search matches' marks; its border takes the
+   terminal ground's colour (the xterm theme), so no hairline shows beside the scrollbar. */
+
+.pane-terminal {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* The find bar overlays the top right of the terminal area, so the terminal and its shell keep their size. Its frame
+   spans the area's width, as a container the bar measures: under 360 px the bar takes the whole width. */
+.find-bar-frame {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  height: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.find-bar {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  max-width: calc(100% - var(--space-3));
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11.5px/16px var(--font-sans);
+  box-shadow: 0 4px 12px color-mix(in srgb, #000 25%, transparent);
+  pointer-events: auto;
+}
+
+.find-bar[hidden] {
   display: none;
 }
 
-.pane-terminal {
-  flex: 1 1 0;
-  min-height: 0;
+@container (max-width: 359px) {
+  .find-bar {
+    right: 0;
+    left: 0;
+    max-width: none;
+  }
+}
+
+.find-bar-field {
+  flex: 1 1 160px;
+  min-width: 0;
+  width: 160px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-brick);
+  outline: none;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px var(--font-mono);
+}
+
+.find-bar-field:focus {
+  border-color: var(--focus);
+}
+
+.find-bar-error .find-bar-field {
+  border-color: var(--ansi-1);
+  color: var(--ansi-1);
+}
+
+.find-bar-count {
+  min-width: 44px;
+  padding: 0 var(--space-1);
+  font: 500 11px/16px var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.find-bar-button {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-brick);
+  background: none;
+  color: inherit;
+  font: 500 11px/16px var(--font-mono);
+  cursor: pointer;
+}
+
+.find-bar-button:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.find-bar-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg);
 }
 
 /* The Heynote pane's frame fills the pane's content area; Heynote draws its own background. */

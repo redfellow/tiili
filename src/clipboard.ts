@@ -1,6 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import type { Backend, MenuItem } from "./backend";
-import { clipboardAction, type ClipboardAction, type KeyChord, type Platform } from "./keymap";
+import { clipboardAction, FIND_MENU_ITEMS, type ClipboardAction, type KeyChord, type Platform } from "./keymap";
 
 /** Carries out a clipboard action on the terminal. Copy with nothing selected does nothing. */
 async function run(backend: Backend, term: Terminal, action: ClipboardAction): Promise<void> {
@@ -64,7 +64,10 @@ export async function attachClipboardMenus(
   };
 
   if (platform === "macos" && backend.nativeMenus) {
-    await backend.onAppEvent("clipboard", act);
+    // The Edit menu's find items share the event; the panes carry those out.
+    await backend.onAppEvent("clipboard", (payload) => {
+      if (!(payload in FIND_MENU_ITEMS)) act(payload as ClipboardAction);
+    });
   }
 
   const items: MenuItem[] = [

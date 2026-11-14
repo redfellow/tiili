@@ -30,7 +30,8 @@ use windows::WindowSessions;
 
 /// Event sent when a shell exits; its payload names the session.
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
-/// Event sent when a clipboard menu item is chosen; its payload is `copy`, `paste` or `selectAll`.
+/// Event sent when an Edit menu item is chosen; its payload is `copy`, `paste`, `selectAll`, `find`, `findNext` or
+/// `findPrevious`.
 pub const CLIPBOARD_EVENT: &str = "clipboard";
 /// Event sent when a pane menu item is chosen; its payload is `new`, `close` or `moveToNewWindow`.
 pub const PANE_EVENT: &str = "pane";
@@ -413,6 +414,22 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
                 .accelerator("Cmd+A")
                 .build(app)?,
         )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("find", "Find…")
+                .accelerator("Cmd+F")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("findNext", "Find Next")
+                .accelerator("Cmd+G")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("findPrevious", "Find Previous")
+                .accelerator("Shift+Cmd+G")
+                .build(app)?,
+        )
         .build()?;
     let window_menu = SubmenuBuilder::new(app, "Window")
         .item(&PredefinedMenuItem::minimize(app, None)?)
@@ -527,7 +544,10 @@ pub fn run() {
                     };
                     let label = label.as_str();
                     let id = event.id().as_ref();
-                    if matches!(id, "copy" | "paste" | "selectAll") {
+                    if matches!(
+                        id,
+                        "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious"
+                    ) {
                         let _ = app.emit_to(label, CLIPBOARD_EVENT, id);
                     } else if matches!(id, "new" | "close" | "moveToNewWindow") {
                         let _ = app.emit_to(label, PANE_EVENT, id);

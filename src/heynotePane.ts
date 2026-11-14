@@ -1,5 +1,5 @@
 import type { Backend } from "./backend";
-import type { ClipboardAction, Platform } from "./keymap";
+import type { ClipboardAction, FindAction, Platform } from "./keymap";
 
 /** Where the Heynote app is served from: `public/heynote/`, built by `npm run heynote`. */
 export const HEYNOTE_URL = "heynote/index.html";
@@ -14,6 +14,8 @@ export interface HeynoteFrame {
   focus(): void;
   /** Carries out a clipboard action from the native Edit menu or the right-click menu on the editor. */
   clipboard(action: ClipboardAction): Promise<void>;
+  /** Opens Heynote's own search, or goes to its next or previous match, for the native Edit menu's find items. */
+  find(action: FindAction): void;
   /** Saves every open note now, before the pane closes. */
   flush(): void;
 }
@@ -80,6 +82,26 @@ export function openHeynote(
       } else {
         win.document.execCommand("selectAll");
       }
+    },
+    find: (action) => {
+      const win = page();
+      const editor = win?.document.querySelector<HTMLElement>(".cm-content");
+      if (!win || !editor) return;
+      // The keys Heynote's editor already handles: Mod-f opens its search, Mod-g and Shift-Mod-g step through it.
+      const mac = platform === "macos";
+      const key = action === "find" ? "f" : "g";
+      editor.focus();
+      editor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key,
+          code: `Key${key.toUpperCase()}`,
+          metaKey: mac,
+          ctrlKey: !mac,
+          shiftKey: action === "previous",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     },
     flush: () => page()?.tiiliFlush?.(),
   };
