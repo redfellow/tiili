@@ -52,11 +52,12 @@ struct PtyExit {
     code: u32,
 }
 
-/// A repository as the frontend sees it: root folder and name.
+/// A repository as the frontend sees it: root folder, name and, in a linked worktree, its branch or worktree name.
 #[derive(Clone, Serialize)]
 struct RepoInfo {
     root: String,
     name: String,
+    worktree: Option<String>,
 }
 
 /// Where session `pane_id`'s shell is now, its repository (`None` outside any) and its host (`None` when local).
@@ -83,8 +84,8 @@ struct PaneCommandEvent {
 
 impl PaneCwdEvent {
     fn new(pane_id: SessionId, at: &cwd::PaneCwd, tints: &Tints) -> Self {
-        let root = at.repo.as_ref().map(|r| r.root.to_string_lossy());
-        let key = tints::tint_key(root.as_deref(), at.host.as_deref());
+        let repo_key = at.repo.as_ref().map(|r| r.key.to_string_lossy());
+        let key = tints::tint_key(repo_key.as_deref(), at.host.as_deref());
         Self {
             tint: tints.tint_for(pane_id, key.as_deref()),
             pane_id,
@@ -92,6 +93,7 @@ impl PaneCwdEvent {
             repo: at.repo.as_ref().map(|r| RepoInfo {
                 root: r.root.to_string_lossy().into_owned(),
                 name: r.name.clone(),
+                worktree: r.worktree.clone(),
             }),
             host: at.host.clone(),
         }

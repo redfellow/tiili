@@ -235,16 +235,23 @@ fn read_hostname() -> String {
     std::env::var("COMPUTERNAME").unwrap_or_default()
 }
 
-/// A remote repository named after its root's last folder (`/` or `\` separated).
+/// A remote repository named after its root's last folder (`/` or `\` separated) without a trailing `.git`, and
+/// keyed by its root.
 fn remote_repo(root: String) -> Repo {
-    let name = root
+    let last = root
         .split(['/', '\\'])
         .rfind(|s| !s.is_empty())
-        .unwrap_or(&root)
+        .unwrap_or(&root);
+    let name = last
+        .strip_suffix(".git")
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or(last)
         .to_string();
     Repo {
-        root: PathBuf::from(root),
+        root: PathBuf::from(&root),
+        key: PathBuf::from(root),
         name,
+        worktree: None,
     }
 }
 
@@ -369,10 +376,18 @@ impl CwdTracker {
         }
     }
 
-    /// A working directory read from the shell process (or the folder it started in).
+    /// A working directory read from the shell process (or the folder it started in). While an OSC 7 stands it
+    /// wins, but a local one's repository is looked up again, so a branch switched mid-run shows.
     pub fn report_polled(&mut self, cwd: PathBuf) {
-        if self.osc7.is_none() {
-            self.emit(local(cwd));
+        match &self.osc7 {
+            None => self.emit(local(cwd)),
+            Some(Osc7State {
+                path, host: None, ..
+            }) => {
+                let next = local(path.clone());
+                self.emit(next);
+            }
+            Some(_) => {}
         }
     }
 
@@ -753,10 +768,59 @@ mod tests {
             ("/srv/api/", "api"),
             (r"C:\code\tiili", "tiili"),
             ("/", "/"),
+            ("/srv/api.git", "api"),
+            ("/srv/api.git/", "api"),
+            ("/srv/.git", ".git"),
         ];
         for (root, name) in cases {
             assert_eq!(remote_repo(root.to_string()).name, name, "{root}");
         }
+    }
+
+    #[test]
+    fn mid_run_git_switch_shows_while_a_local_osc7_stands() {
+        let base = std::env::temp_dir().join(format!("tiili-cwd-switch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let common = base.join("tiili/.git");
+        let git_dir = common.join("worktrees/wt");
+        let checkout = base.join("wt");
+        std::fs::create_dir_all(&git_dir).expect("git dir");
+        std::fs::create_dir_all(&checkout).expect("checkout");
+        std::fs::write(git_dir.join("commondir"), "../..\n").expect("commondir");
+        std::fs::write(git_dir.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD");
+        std::fs::write(
+            checkout.join(".git"),
+            format!("gitdir: {}\n", git_dir.display()),
+        )
+        .expect(".git file");
+        let branch = |seen: &Arc<Mutex<Vec<PaneCwd>>>| {
+            seen.lock()
+                .unwrap()
+                .last()
+                .and_then(|c| c.repo.as_ref())
+                .and_then(|r| r.worktree.clone())
+        };
+
+        let (mut tracker, seen) = tracker();
+        let osc7 = format!("\x1b]7;file://mac{}\x07", checkout.display());
+        tracker.feed_output(osc7.as_bytes(), || Some(fg(SHELL)));
+        assert_eq!(branch(&seen).as_deref(), Some("main"));
+        std::fs::write(git_dir.join("HEAD"), "ref: refs/heads/other\n").expect("HEAD");
+        tracker.report_polled(PathBuf::from("/polled"));
+        assert_eq!(branch(&seen).as_deref(), Some("other"));
+        assert_eq!(
+            seen.lock().unwrap().last().map(|c| c.cwd.clone()),
+            Some(checkout),
+            "the OSC 7 folder still wins over the polled one"
+        );
+        let reports = seen.lock().unwrap().len();
+        tracker.report_polled(PathBuf::from("/polled"));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            reports,
+            "nothing new, nothing sent"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

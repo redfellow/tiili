@@ -49,11 +49,12 @@ impl TintAssigner {
     }
 }
 
-/// The key a pane's tint is assigned by: a local repository's root; for a remote pane, its host and repository
-/// root, else its host alone. A local pane outside any repository has none and stays untinted. NUL can't occur in
-/// a path or a host, so remote keys never equal a local root or another host's key.
-pub fn tint_key(repo_root: Option<&str>, host: Option<&str>) -> Option<String> {
-    match (host, repo_root) {
+/// The key a pane's tint is assigned by: a local repository's key (its canonicalised common git folder, so a main
+/// checkout and its linked worktrees share it); for a remote pane, its host and repository root, else its host
+/// alone. A local pane outside any repository has none and stays untinted. NUL can't occur in a path or a host, so
+/// remote keys never equal a local key or another host's key.
+pub fn tint_key(repo_key: Option<&str>, host: Option<&str>) -> Option<String> {
+    match (host, repo_key) {
         (None, root) => root.map(str::to_string),
         (Some(host), Some(root)) => Some(format!("remote\0{host}\0{root}")),
         (Some(host), None) => Some(format!("remote\0{host}")),
@@ -263,10 +264,16 @@ mod tests {
                 false,
             ),
             (
-                "Local panes in one repository: same tint",
-                local(Some("/a")),
-                local(Some("/a")),
+                "Worktree and main checkout share a tint: same common git folder",
+                local(Some("/a/.git")),
+                local(Some("/a/.git")),
                 true,
+            ),
+            (
+                "Submodule keeps its own tint: its own git folder",
+                local(Some("/a/.git/modules/lib")),
+                local(Some("/a/.git")),
+                false,
             ),
         ];
         for (name, first, second, shared) in pairs {
