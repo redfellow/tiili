@@ -1,8 +1,10 @@
+import type { Platform } from "./keymap";
 import { gridFor, TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
-  APP_ICONS, type AppIcon, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES,
-  fontFamilyList, INACTIVE_OPACITY, normalize, type PromptId, type Settings,
+  APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY,
+  DEFAULT_SETTINGS, FONT_RANGES, fontFamilyList, INACTIVE_OPACITY, normalize, NOTIFY_MODES, type NotifyMode,
+  type PromptId, type Settings,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
@@ -23,6 +25,9 @@ const COMMON_MONO_FONTS = [
   "IBM Plex Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "DejaVu Sans Mono", "Ubuntu Mono",
 ];
 
+/** The Claude Code setting that makes it send its notifications as escape codes tiili hears. */
+const CLAUDE_CODE_SETTING = '"preferredNotifChannel": "iterm2"';
+
 /** The text the Ligatures example and the preview draw, rich in the pairs coding fonts join. */
 const LIGATURE_SAMPLE = "-> => != === <= >= ::";
 
@@ -31,6 +36,8 @@ const PREVIEW_MAX_SIZE = 18;
 
 export interface SettingsDialogOptions {
   initial: Settings;
+  /** Names the app icon's place (Dock, Taskbar or Launcher) and shows the Windows notification hint. */
+  platform: Platform;
   /** Shows the Dock icon choice; only macOS lets the user pick it. */
   showAppIcon: boolean;
   /** Applies settings live; called on every change, and with the opening settings again on Cancel. */
@@ -39,7 +46,7 @@ export interface SettingsDialogOptions {
   save: (settings: Settings) => Promise<void>;
   /** Called after the settings close, e.g. to give the terminal its focus back or to close the settings window. */
   onClose: () => void;
-  /** Puts text on the clipboard, for the Remote shells snippet's Copy button. */
+  /** Puts text on the clipboard, for the Remote shells snippet's and the Agents line's Copy buttons. */
   copy: (text: string) => Promise<void>;
   /**
    * Checks for a new version now, ignoring the daily limit and a skipped version, and opens the update dialog when
@@ -171,6 +178,16 @@ function tilingIcon(mode: TilingMode): HTMLElement {
 
 const CURSOR_LABELS: Record<CursorStyle, string> = { block: "Brick", underline: "Underline", bar: "Bar" };
 const APP_ICON_LABELS: Record<AppIcon, string> = { system: "System", light: "Light", dark: "Dark" };
+const NOTIFY_LABELS: Record<NotifyMode, string> = {
+  messages: "Messages", messagesAndBells: "Messages and bells", off: "Off",
+};
+const BOUNCE_LABELS: Record<BounceMode, string> = { once: "Once", untilReturn: "Until I return", never: "Never" };
+/** Where each platform shows the app icon, and what its icon does to ask for attention. */
+const APP_ICON_PLACES: Record<Platform, { place: string; asks: string }> = {
+  macos: { place: "Dock", asks: "Bounce" },
+  windows: { place: "Taskbar", asks: "Flash" },
+  linux: { place: "Launcher", asks: "Urgency" },
+};
 
 /** The "DEFAULT" tag on the default choice's card or row. */
 function defaultTag(): HTMLElement {
@@ -515,7 +532,7 @@ function terminalRun(prompt: PromptSegment[][], command: string, output: HTMLEle
 
 /**
  * Builds the settings form: tabs for Style (Theme, Prompt, Terminal), Typography (Font) and Behaviour (Tiling, Panes,
- * App, Remote shells) at the top, a live preview under them on Style and Typography, the selected tab's body, which
+ * Attention, App, Remote shells) at the top, a live preview under them on Style and Typography, the selected tab's body, which
  * alone scrolls, and a footer with Reset to defaults, Cancel and Save. Every change applies at once as a preview;
  * only Save writes it, and Cancel and Esc go back to the opening settings. Either one then calls `close`.
  */
@@ -563,6 +580,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const updatesAuto = element("input", { type: "checkbox", name: "updatesAutoCheck" });
   const appIcon = segmented("Dock icon", APP_ICONS.map((value) => ({ value, label: APP_ICON_LABELS[value] })), changed);
+  const { place, asks } = APP_ICON_PLACES[options.platform];
+  const notify = segmented("Notify", NOTIFY_MODES.map((value) => ({ value, label: NOTIFY_LABELS[value] })), changed);
+  const badge = element("input", { type: "checkbox", name: "attentionBadge" });
+  const bounce = segmented(asks, BOUNCE_MODES.map((value) => ({ value, label: BOUNCE_LABELS[value] })), changed);
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
 
@@ -667,6 +688,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   copy.setAttribute("aria-label", "Copy the snippet");
   copy.addEventListener("click", () => void options.copy(snippet.textContent ?? "").catch(() => {}));
 
+  const copyAgents = element("button", { type: "button", className: "settings-copy" }, "Copy");
+  copyAgents.setAttribute("aria-label", "Copy the Claude Code setting");
+  copyAgents.addEventListener("click", () => void options.copy(CLAUDE_CODE_SETTING).catch(() => {}));
+
   const behaviourFields = [
     section("Tiling", "How panes are arranged as you open and close them.", tiling.grid),
     section("Panes", undefined,
@@ -677,6 +702,18 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           `to ${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks ` +
           "faster.")),
       row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse"))),
+    section("Attention",
+      "A pane whose program rings the bell or sends a notification gets a brick on its title until you look at it. " +
+      `${options.platform === "macos" ? "⌘J" : "Ctrl+Shift+J"} goes to the oldest one.`,
+      row("Notify", notify.el,
+        infoButton("Notify",
+          "A desktop notification while no tiili window is in front: for messages only, or for bells too." +
+          (options.platform === "windows" ? " Windows shows them only in installed builds of tiili." : ""))),
+      row(place, check(badge, "Badge the app icon"), element("span", { className: "settings-row-sub" }, asks),
+        bounce.el),
+      row("Agents", element("span", {}, "Claude Code needs one setting"), copyAgents,
+        infoButton("Agents",
+          `Add ${CLAUDE_CODE_SETTING} to Claude Code's global config so it tells tiili when it is waiting for you.`))),
     section("App", undefined,
       row("Startup", check(startupSplash, "Play the tiili splash when tiili opens"),
         infoButton("Startup", "Any key or click skips it.")),
@@ -765,6 +802,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     startupSplash.checked = settings.behaviour.startupSplash;
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
+    notify.set(settings.attention.notify);
+    badge.checked = settings.attention.badge;
+    bounce.set(settings.attention.bounce);
     tiling.show(settings.tiling.layout);
     responsiveOn.checked = settings.responsive.enabled;
     responsiveStrength.input.value = String(settings.responsive.strength);
@@ -792,6 +832,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     appIcon: appIcon.value(),
     prompt: prompt.value(),
     updates: { autoCheck: updatesAuto.checked },
+    attention: { notify: notify.value(), badge: badge.checked, bounce: bounce.value() },
   });
 
   const report = (error: unknown) => {
@@ -822,7 +863,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     saving = on;
     // A disabled section disables its checkboxes, sliders, segment buttons, Copy and Check now.
     for (const fields of [...styleFields, fontFields, ...behaviourFields]) fields.disabled = on;
-    for (const control of [cursorStyle, appIcon, shell]) control.setDisabled(on);
+    for (const control of [cursorStyle, appIcon, notify, bounce, shell]) control.setDisabled(on);
     if (on) ask(false);
     reset.disabled = save.disabled = cancel.disabled = on;
     confirmReset.disabled = keepSettings.disabled = on;

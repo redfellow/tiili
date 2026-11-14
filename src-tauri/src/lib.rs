@@ -1,5 +1,6 @@
 pub mod app_icon;
 pub mod appimage_env;
+pub mod attention;
 pub mod bridge;
 pub mod command;
 pub mod cwd;
@@ -152,6 +153,7 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
     app.state::<SessionReports>().forget(id);
+    attention::forget(app, id);
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
@@ -293,6 +295,7 @@ fn window_destroyed(app: &AppHandle, label: &str) {
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
+        attention::forget(app, id);
         let _ = registry.close(id);
     }
     app.state::<windows::LastFocused>().forget(label);
@@ -462,6 +465,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_filter(windows::is_remembered)
@@ -484,11 +488,16 @@ pub fn run() {
         .manage(SessionSinks::default())
         .manage(SessionReports::default())
         .manage(MoveMenu::default())
+        .manage(attention::Attention::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
                 window.state::<windows::LastFocused>().set(window.label());
                 refresh_move_menu(window.app_handle());
+                attention::focus_changed(window.app_handle(), true);
+            }
+            tauri::WindowEvent::Focused(false) => {
+                attention::focus_changed(window.app_handle(), false);
             }
             // Tauri quits once the last window is gone, on macOS too.
             tauri::WindowEvent::Destroyed => window_destroyed(window.app_handle(), window.label()),
@@ -496,6 +505,16 @@ pub fn run() {
         })
         .setup(|app| {
             app_icon::apply(app.handle());
+            {
+                use tauri_plugin_notification::NotificationExt;
+                let handle = app.handle().clone();
+                app.notification().on_action(move |performed| {
+                    if performed.action_id() == "tap" {
+                        let id = performed.notification().map(|n| n.id());
+                        attention::notification_clicked(&handle, id);
+                    }
+                })?;
+            }
             reset_off_screen_window(app)?;
             #[cfg(target_os = "macos")]
             {
@@ -548,7 +567,11 @@ pub fn run() {
             windows::window_list,
             windows::window_set_name,
             windows::pane_move,
-            windows::pane_move_take
+            windows::pane_move_take,
+            attention::attention_mark,
+            attention::attention_clear,
+            attention::attention_list,
+            attention::attention_next
         ])
         .run(tauri::generate_context!())
         .expect("error while running tiili");

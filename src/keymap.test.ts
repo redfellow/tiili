@@ -1,6 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import {
+  attentionShortcut,
   clipboardAction,
   layoutAction,
   paneAction,
@@ -108,6 +109,33 @@ const settingsCases: [string, Platform, KeyChord, "settings" | null][] = [
 describe("settingsShortcut", () => {
   it.each(settingsCases)("%s", (_name, platform, event, expected) => {
     expect(settingsShortcut(event, platform)).toBe(expected);
+  });
+});
+
+const attentionCases: [string, Platform, KeyChord, "next" | null][] = [
+  ["Next pane in another window: ⌘J on macOS", "macos", chord("j", { metaKey: true }), "next"],
+  ["Next pane in another window: Ctrl+Shift+J on Windows", "windows", chord("J", { ctrlKey: true, shiftKey: true }), "next"],
+  ["Next pane in another window: Ctrl+Shift+J on Linux", "linux", chord("J", { ctrlKey: true, shiftKey: true }), "next"],
+  ["macOS: Ctrl+J (newline) reaches the shell", "macos", chord("j", { ctrlKey: true }), null],
+  ["Linux: Ctrl+J (newline) reaches the shell", "linux", chord("j", { ctrlKey: true }), null],
+  ["Windows: Win+J is not the shortcut", "windows", chord("j", { metaKey: true }), null],
+  ["macOS: ⌘⇧J is not the shortcut", "macos", chord("J", { metaKey: true, shiftKey: true }), null],
+  ["A plain j reaches the shell", "linux", chord("j"), null],
+];
+
+describe("attentionShortcut", () => {
+  it.each(attentionCases)("%s", (_name, platform, event, expected) => {
+    expect(attentionShortcut(event, platform)).toBe(expected);
+  });
+
+  it("Next pane: the shortcut is not a pane, layout, settings or clipboard key", () => {
+    for (const [, platform, event, expected] of attentionCases) {
+      if (expected === null) continue;
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(settingsShortcut(event, platform)).toBeNull();
+      expect(clipboardAction(event, platform)).toBeNull();
+    }
   });
 });
 

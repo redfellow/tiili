@@ -2,6 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal, type FontWeight } from "@xterm/xterm";
+import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
 import type { Backend, SessionId } from "./backend";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
@@ -123,7 +124,9 @@ export function refreshTheme(term: Terminal): void {
  * the terminal starts, the first and any after the shell exits. `zoom()` is the pane's zoom offset in pixels,
  * added to the font size whenever the terminal refits, and `onExit` is called when a shell exits. With `adopt`
  * the terminal starts no shell: it shows the adopted scrollback, then takes over that running session, whose output
- * kept during the move follows, and resizes it so full-screen programs redraw.
+ * kept during the move follows, and resizes it so full-screen programs redraw. `onSignal` hears each bell and each
+ * notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the shell sends, with its message made safe; an adopted
+ * scrollback rings nothing.
  */
 export async function openTerminal(
   backend: Backend,
@@ -134,6 +137,7 @@ export async function openTerminal(
   zoom: () => number = () => 0,
   onExit: () => void = () => {},
   adopt?: AdoptedSession,
+  onSignal: (signal: AttentionSignal) => void = () => {},
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -163,6 +167,22 @@ export async function openTerminal(
 
   let session: SessionId | undefined;
   let running = false;
+
+  // Bells and notifications from the shell; not while a moved pane's scrollback is replayed.
+  let replaying = false;
+  const hear = (signal: AttentionSignal) => {
+    if (!replaying) onSignal(signal);
+  };
+  term.onBell(() => hear({ kind: "bell" }));
+  const notification = (parse: (data: string) => string | undefined) => (data: string) => {
+    const parsed = parse(data);
+    const text = parsed === undefined ? undefined : sanitizeMessage(parsed);
+    if (text !== undefined) hear({ kind: "message", text });
+    return true;
+  };
+  term.parser.registerOscHandler(9, notification(parseOsc9));
+  term.parser.registerOscHandler(777, notification(parseOsc777));
+  term.parser.registerOscHandler(99, notification(parseOsc99));
 
   const reportError = (error: unknown) => {
     term.write(`\r\n${String(error)}\r\n`);
@@ -208,7 +228,10 @@ export async function openTerminal(
   // Takes over a session moved here from another window. Shrinking it by a row and back sends the program two
   // size changes, so a full-screen one (vim, a coding agent) redraws itself for this terminal.
   const take = async ({ session: id, scrollback }: AdoptedSession) => {
-    await written(term, scrollback);
+    replaying = true;
+    await written(term, scrollback).finally(() => {
+      replaying = false;
+    });
     session = id;
     running = true;
     onSession(id);

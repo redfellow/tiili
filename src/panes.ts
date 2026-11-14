@@ -1,6 +1,8 @@
+import { AttentionGate, type AttentionMark, type AttentionSignal } from "./attention";
 import type { Backend, MenuItem, MovePayload } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import {
+  attentionShortcut,
   layoutAction,
   paneAction,
   settingsShortcut,
@@ -30,6 +32,7 @@ import {
   PANE_COMMAND_EVENT,
   PANE_CWD_EVENT,
   placeLabel,
+  showPaneAttention,
   showPaneChip,
   type PaneCommand,
   type PaneCwd,
@@ -63,6 +66,8 @@ interface Pane {
   note?: HeynoteFrame;
   /** Pixels added to the Settings font size by the zoom keys; not saved, so a new pane starts at 0. */
   zoom: number;
+  /** Merges and rate-limits the bells and notifications of a terminal pane's shell. */
+  gate?: AttentionGate;
 }
 
 /**
@@ -85,6 +90,8 @@ export class Panes {
   private reportedName = "";
   /** The window title last set, so an unchanged one is not set again. */
   private shownTitle = "tiili >_";
+  /** Every marked session app-wide, so a pane that arrives from another window shows its mark. */
+  private marks = new Map<number, AttentionMark>();
 
   private constructor(
     private readonly backend: Backend,
@@ -130,6 +137,13 @@ export class Panes {
     const panes = new Panes(backend, root, platform, settings, openSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
+    if (backend.attention) {
+      await backend.onAppEvent("attention-changed", ({ marks }) => panes.showMarks(marks));
+      await backend.onAppEvent("attention-focus", (session) => panes.focusSession(session));
+      // Coming back to the window is looking at its focused pane.
+      window.addEventListener("focus", () => panes.clearCurrent());
+      panes.showMarks(await backend.attention.list().catch(() => []));
+    }
     panes.contextMenu = await attachClipboardMenus(
       backend,
       () => panes.current()?.terminal?.term,
@@ -366,6 +380,7 @@ export class Panes {
       chip,
       zoom: adopt?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
+      gate: new AttentionGate(),
     };
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
@@ -383,6 +398,7 @@ export class Panes {
         () => pane.zoom,
         () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
         adopt,
+        (signal) => this.onSignal(pane, signal),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       pane.terminal = opened;
@@ -400,6 +416,7 @@ export class Panes {
     const pane = this.panes[index];
     if (!pane) return;
     pane.note?.flush();
+    if (pane.session !== undefined) this.clearMark(pane.session);
     this.remove(pane);
     if (this.panes.length === 0) {
       await this.backend.closeWindow();
@@ -459,6 +476,7 @@ export class Panes {
   private onSession(pane: Pane, session: number): void {
     if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
+    showPaneAttention(pane.element, pane.chip, this.marks.get(session));
     if (pane === this.current()) this.showTitle();
     const place = this.places.get(session);
     if (place) this.showPlace(pane, place);
@@ -525,8 +543,53 @@ export class Panes {
     this.panes.forEach((pane, i) => {
       pane.element.toggleAttribute("data-focused", i === index);
     });
+    if (document.hasFocus()) this.clearCurrent();
     this.reportName();
     this.showTitle();
+  }
+
+  /**
+   * A bell or notification from pane `pane`'s shell: marks the pane unless the user is looking at it (it is the
+   * focused pane of the focused window), once its gate lets the signal through.
+   */
+  private onSignal(pane: Pane, signal: AttentionSignal): void {
+    const attention = this.backend.attention;
+    const session = pane.session;
+    if (!attention || !pane.gate || session === undefined) return;
+    if (pane === this.current() && document.hasFocus()) return;
+    const result = pane.gate.signal(signal, performance.now());
+    if (!result) return;
+    attention.mark(session, result.message, pane.chip.textContent ?? "").catch(() => undefined);
+  }
+
+  /** Shows `marks`, every marked session app-wide, on this window's panes. */
+  private showMarks(marks: AttentionMark[]): void {
+    this.marks = new Map(marks.map((mark) => [mark.session, mark]));
+    for (const pane of this.panes) {
+      const mark = pane.session === undefined ? undefined : this.marks.get(pane.session);
+      showPaneAttention(pane.element, pane.chip, mark);
+    }
+  }
+
+  /** Clears session `session`'s mark, if it has one; the app ignores a session without one. */
+  private clearMark(session: number): void {
+    // Asked even when no mark is known yet: one may be on its way from the app.
+    this.marks.delete(session);
+    this.backend.attention?.clear(session).catch(() => undefined);
+  }
+
+  /** The user looks at the focused pane: its mark clears. */
+  private clearCurrent(): void {
+    const session = this.current()?.session;
+    if (session !== undefined) this.clearMark(session);
+  }
+
+  /** Focuses the pane running session `session`, for the next-pane shortcut; its mark clears. */
+  private focusSession(session: number): void {
+    const index = this.panes.findIndex((pane) => pane.session === session);
+    if (index < 0) return;
+    this.focus(index);
+    this.clearMark(session);
   }
 
   /** Lays the panes out again: one row element per grid row, panes in order, with the dividers. */
@@ -557,8 +620,8 @@ export class Panes {
   }
 
   /**
-   * Carries out a layout, pane, settings or zoom shortcut on keydown. Returns true when `event` is one of those
-   * keys, which then must not reach the pane's shell or Heynote. Zoom keys act only in terminal panes; in a
+   * Carries out a layout, next-pane, pane, settings or zoom shortcut on keydown. Returns true when `event` is one of
+   * those keys, which then must not reach the pane's shell or Heynote. Zoom keys act only in terminal panes; in a
    * Heynote pane they reach Heynote.
    */
   private shortcut(event: KeyboardEvent): boolean {
@@ -567,6 +630,13 @@ export class Panes {
       if (event.type === "keydown") {
         event.preventDefault();
         this.actLayout(layout);
+      }
+      return true;
+    }
+    if (this.backend.attention && attentionShortcut(event, this.platform)) {
+      if (event.type === "keydown") {
+        event.preventDefault();
+        this.backend.attention.next().catch(() => undefined);
       }
       return true;
     }
