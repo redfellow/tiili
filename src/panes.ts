@@ -1,5 +1,5 @@
 import { AttentionGate, type AttentionMark, type AttentionSignal } from "./attention";
-import type { Backend, MenuItem, MovePayload } from "./backend";
+import type { Backend, MenuItem, MovePayload, PaneLaunch, PaneOpenRequest, SessionId } from "./backend";
 import { attachClipboardMenus, handleClipboardKey } from "./clipboard";
 import {
   attentionShortcut,
@@ -71,6 +71,13 @@ interface Pane {
   zoom: number;
   /** Merges and rate-limits the bells and notifications of a terminal pane's shell. */
   gate?: AttentionGate;
+  /** The name `tiili open --title` gave the pane, which its chip shows instead of its place. */
+  title?: string;
+}
+
+/** A pane `tiili open` asked for: the program it runs and the title its chip shows. */
+interface Requested extends PaneLaunch {
+  title?: string;
 }
 
 /**
@@ -176,6 +183,18 @@ export class Panes {
       await backend.onAppEvent("move-to-window", (label) => panes.movePane(label).catch(report));
       // A pane another window sent to this one, already open.
       await backend.onAppEvent("pane-arrive", ({ token }) => panes.arrive(token).catch(report));
+    }
+    if (backend.paneControl) {
+      const control = backend.paneControl;
+      await backend.onAppEvent("pane-open-request", (request) => {
+        panes
+          .openRequested(request)
+          .then(
+            (pane) => control.done(request.requestId, { pane }),
+            (error: unknown) => control.done(request.requestId, { error: String(error) }),
+          )
+          .catch((error: unknown) => console.error(error));
+      });
     }
     if (panes.viaMenu()) {
       // ⌘T, ⌘W and ⌃⌘N are Shell menu items on macOS, so the webview may never see those keys.
@@ -401,7 +420,32 @@ export class Panes {
    * at that pane's zoom.
    */
   async open(start?: string, adopt?: AdoptedSession & { zoom: number }): Promise<void> {
-    const cwd = adopt ? undefined : (start ?? (await this.currentCwd()));
+    await this.openPane(adopt ? undefined : (start ?? (await this.currentCwd())), adopt);
+  }
+
+  /**
+   * Opens the pane `tiili open` asked for after the others, as {@link open} does, but leaves the focus where it is.
+   * Resolves to its session; rejects when the program could not start, after removing the pane.
+   */
+  async openRequested(request: PaneOpenRequest): Promise<SessionId> {
+    const pane = await this.openPane(request.cwd ?? undefined, undefined, {
+      command: request.command,
+      path: request.path ?? undefined,
+      title: request.title ?? undefined,
+    });
+    if (pane.session === undefined) throw new Error("the pane's program did not start");
+    return pane.session;
+  }
+
+  /**
+   * Opens a terminal pane after the others in `cwd`: focused, unless it is a `requested` one, which also runs that
+   * program instead of a shell.
+   */
+  private async openPane(
+    cwd: string | undefined,
+    adopt?: AdoptedSession & { zoom: number },
+    requested?: Requested,
+  ): Promise<Pane> {
 
     const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
@@ -416,12 +460,18 @@ export class Panes {
       zoom: adopt?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
       gate: new AttentionGate(),
+      title: requested?.title,
     };
+    if (pane.title !== undefined) showPaneChip(element, chip, pane.title);
+    const focused = this.current();
+    const hadKeyboard = focused !== undefined && focused.element.contains(document.activeElement);
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
     // Laid out first, so the terminal opens at its pane's size.
     this.render();
-    this.markFocused(this.panes.length - 1);
+    if (!requested) this.markFocused(this.panes.length - 1);
+    // Re-rendering the grid can take the keyboard from the focused pane's terminal.
+    else if (focused && hadKeyboard) this.give(focused);
 
     try {
       const opened = await openTerminal(
@@ -434,6 +484,7 @@ export class Panes {
         () => this.close(this.panes.indexOf(pane)).catch((error) => this.report(error)),
         adopt,
         (signal) => this.onSignal(pane, signal),
+        requested,
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       opened.find.interceptKeys((event) => this.shortcut(event));
@@ -445,6 +496,7 @@ export class Panes {
       throw error;
     }
     if (this.current() === pane) this.give(pane);
+    return pane;
   }
 
   /** Closes pane `index` without asking. Focus moves to the pane that takes its place, else the one before. */
@@ -532,7 +584,7 @@ export class Panes {
   private showPlace(pane: Pane, place: PaneCwd): void {
     const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
     pane.tint = paneTint(place);
-    showPaneChip(pane.element, pane.chip, chipLabel(placeLabel(place), command), pane.tint);
+    showPaneChip(pane.element, pane.chip, pane.title ?? chipLabel(placeLabel(place), command), pane.tint);
     if (pane === this.current()) this.reportName();
   }
 

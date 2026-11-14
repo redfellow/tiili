@@ -2,6 +2,7 @@
 //! drive them.
 
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -13,6 +14,7 @@ use std::time::Duration;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
 use crate::command::{CommandTracker, Foreground};
+use crate::control::{PANE_VAR, SOCKET_VAR, TOKEN_VAR};
 use crate::cwd::{CwdTracker, PaneCwd};
 
 /// Called with each chunk the shell writes.
@@ -92,6 +94,87 @@ pub fn set_colour_env(cmd: &mut CommandBuilder) {
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "tiili");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+}
+
+/// What a pane runs instead of the default shell: `argv`, started directly, looked up on and run with `path`, the
+/// `PATH` of whoever asked for it (the app's own when `None`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaneCommand {
+    pub argv: Vec<String>,
+    pub path: Option<OsString>,
+}
+
+/// The control channel every pane is told about (see [`crate::control`]): its endpoint, this run's token, and the
+/// folder holding the `tiili` command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ControlEnv {
+    pub socket: OsString,
+    pub token: String,
+    pub bin_dir: PathBuf,
+}
+
+/// Tells pane `id`'s process who it is in `TIILI_PANE` and, with `control`, where the control channel is
+/// (`TIILI_SOCKET`, `TIILI_TOKEN`) with the `tiili` command's folder first on its `PATH`. `path`, when given,
+/// replaces the `PATH` it would otherwise get.
+pub fn set_pane_env(
+    cmd: &mut CommandBuilder,
+    id: SessionId,
+    control: Option<&ControlEnv>,
+    path: Option<&OsStr>,
+) {
+    cmd.env(PANE_VAR, id.to_string());
+    let path = path
+        .or_else(|| cmd.get_env("PATH"))
+        .map(OsStr::to_os_string);
+    let Some(control) = control else {
+        if let Some(path) = path {
+            cmd.env("PATH", path);
+        }
+        return;
+    };
+    cmd.env(SOCKET_VAR, &control.socket);
+    cmd.env(TOKEN_VAR, &control.token);
+    let rest = path
+        .iter()
+        .flat_map(std::env::split_paths)
+        .filter(|dir| !dir.as_os_str().is_empty() && dir != &control.bin_dir);
+    if let Ok(joined) = std::env::join_paths(std::iter::once(control.bin_dir.clone()).chain(rest)) {
+        cmd.env("PATH", joined);
+    }
+}
+
+/// How pane `id` starts in `cwd`: `command` when given, else the default shell with `prompt` through tiili's
+/// integration (see [`PtySession::spawn_in`]), either way with the terminal's variables (see [`set_colour_env`])
+/// and the pane's (see [`set_pane_env`]). With it comes whether the shell redraws its prompt on request.
+pub fn pane_command(
+    id: SessionId,
+    cwd: Option<&Path>,
+    prompt: &str,
+    command: Option<&PaneCommand>,
+    control: Option<&ControlEnv>,
+) -> (CommandBuilder, bool) {
+    let (mut cmd, redraws) = match command {
+        Some(command) => (
+            CommandBuilder::from_argv(command.argv.iter().map(OsString::from).collect()),
+            false,
+        ),
+        None => {
+            let dir = crate::shell_integration::default_dir();
+            crate::shell_integration::shell_command(prompt, dir.as_deref())
+        }
+    };
+    set_colour_env(&mut cmd);
+    set_pane_env(
+        &mut cmd,
+        id,
+        control,
+        command.and_then(|c| c.path.as_deref()),
+    );
+    // portable-pty starts in the home folder when no cwd is set or the given one is not a folder.
+    if let Some(dir) = cwd {
+        cmd.cwd(dir);
+    }
+    (cmd, redraws)
 }
 
 fn to_io(err: impl std::fmt::Display) -> io::Error {
@@ -357,6 +440,7 @@ fn unknown(id: SessionId) -> io::Error {
 pub struct SessionRegistry {
     next_id: AtomicU32,
     sessions: Mutex<HashMap<SessionId, PtySession>>,
+    control: OnceLock<ControlEnv>,
 }
 
 impl SessionRegistry {
@@ -375,10 +459,19 @@ impl SessionRegistry {
         on_output: SessionOutputFn,
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
-        self.spawn_tracked(cwd, prompt, rows, cols, on_output, None, None, on_exit)
+        self.spawn_tracked(
+            cwd, prompt, None, rows, cols, on_output, None, None, on_exit,
+        )
     }
 
-    /// Like [`spawn`](Self::spawn), and with `on_cwd` follows the shell's working directory and
+    /// Tells every pane started from now on about the control channel (see [`set_pane_env`]). Only the first call
+    /// counts.
+    pub fn set_control(&self, control: ControlEnv) {
+        let _ = self.control.set(control);
+    }
+
+    /// Like [`spawn`](Self::spawn), running `command` directly instead of the shell when given (its exit ends the
+    /// session as a shell's does), and with `on_cwd` follows the shell's working directory and
     /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
     /// on macOS and Linux, the shell process's working directory about once a second. An OSC 7
     /// naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
@@ -390,6 +483,7 @@ impl SessionRegistry {
         &self,
         cwd: Option<&Path>,
         prompt: &str,
+        command: Option<&PaneCommand>,
         rows: u16,
         cols: u16,
         mut on_output: SessionOutputFn,
@@ -405,8 +499,13 @@ impl SessionRegistry {
         });
         let output_tracker = tracker.clone();
         let commands = on_command.map(|mut on_command| {
+            let name = command
+                .and_then(|c| c.argv.first())
+                .and_then(|program| Path::new(program).file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(crate::command::shell_name);
             Arc::new(Mutex::new(CommandTracker::new(
-                crate::command::shell_name(),
+                name,
                 Box::new(move |c| on_command(id, c)),
             )))
         });
@@ -416,9 +515,10 @@ impl SessionRegistry {
         let output_reader = Arc::clone(&reader);
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
-        let session = PtySession::spawn_in(
-            cwd,
-            prompt,
+        let (cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        let session = PtySession::spawn_integrated(
+            cmd,
+            redraws,
             rows,
             cols,
             Box::new(move |data| {

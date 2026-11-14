@@ -7,6 +7,30 @@ import type { WindowEntry } from "./windowMenu";
 /** Identifies one shell session of a backend. */
 export type SessionId = number;
 
+/** A program a pane runs directly instead of a shell, found on `path` when given, else on the app's own `PATH`. */
+export interface PaneLaunch {
+  command: string[];
+  path?: string;
+}
+
+/**
+ * The window is asked for a pane by `tiili open`: one running `command` in `cwd` (home folder when null), its chip
+ * reading `title` when given. The window answers through {@link PaneControl.done} with `requestId`.
+ */
+export interface PaneOpenRequest {
+  requestId: number;
+  cwd: string | null;
+  title: string | null;
+  command: string[];
+  path: string | null;
+}
+
+/** Answering the `tiili` command line, where the backend runs it (the Tauri app). */
+export interface PaneControl {
+  /** Answers request `requestId`: the session of the pane it opened, else why it could not. */
+  done(requestId: number, result: { pane: SessionId } | { error: string }): Promise<void>;
+}
+
 /** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
 export type MenuItem =
   | { label: string; action: () => void }
@@ -67,7 +91,8 @@ export interface SettingsWindows {
  * shell's working directory report and what runs in a pane (for this window's shells), settings another window
  * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label), a
  * pane arriving from another window, settings this window's settings window previews and that window having closed,
- * the panes that need the user (every window hears these) and the ask to focus one of this window's marked panes.
+ * the panes that need the user (every window hears these), the ask to focus one of this window's marked panes and
+ * `tiili open` asking this window for a pane.
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
@@ -83,6 +108,7 @@ export interface AppEvents {
   "settings-closed": undefined;
   "attention-changed": { marks: AttentionMark[] };
   "attention-focus": SessionId;
+  "pane-open-request": PaneOpenRequest;
 }
 
 /**
@@ -94,7 +120,8 @@ export interface Backend {
   readonly nativeMenus: boolean;
   /**
    * Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own
-   * config leaves the shell's default one; its output goes to `onOutput`.
+   * config leaves the shell's default one; its output goes to `onOutput`. With `launch` the session runs that
+   * program instead of a shell, where the backend can (the dev server always starts a shell).
    */
   spawn(
     rows: number,
@@ -102,6 +129,7 @@ export interface Backend {
     cwd: string | undefined,
     prompt: PromptId,
     onOutput: (bytes: Uint8Array) => void,
+    launch?: PaneLaunch,
   ): Promise<SessionId>;
   /**
    * Makes `prompt` the current choice for new shells and the open local zsh, bash and PowerShell shells, where their
@@ -143,6 +171,8 @@ export interface Backend {
   readonly attention?: PaneAttention;
   /** Settings in their own OS window; absent where there is one window only (the dev server shows them in the page). */
   readonly settingsWindows?: SettingsWindows;
+  /** Answering `tiili open`; absent where nothing runs the command line (the dev server). */
+  readonly paneControl?: PaneControl;
 }
 
 export type BackendKind = "tauri" | "dev";

@@ -40,6 +40,10 @@ Every process tiili starts in a pane SHALL get `TIILI_SOCKET` (the endpoint's pa
 - **WHEN** a process runs `tiili open --cwd /tmp --title logs -- tail -f x.log`
 - **THEN** the new pane runs in `/tmp` and its title reads `logs`
 
+#### Scenario: Command found on the caller's PATH
+- **WHEN** a process whose `PATH` holds a folder the app's own `PATH` lacks runs `tiili open -- CMD` with CMD in that folder
+- **THEN** CMD starts in the new pane, which gets the caller's `PATH` (with `tiili`'s folder first) and otherwise the app's environment plus its own `TIILI_SOCKET`, `TIILI_TOKEN` and `TIILI_PANE`
+
 #### Scenario: Command exits
 - **WHEN** the command started by `tiili open` exits
 - **THEN** its pane closes as when a shell exits, with the last-pane rule unchanged
