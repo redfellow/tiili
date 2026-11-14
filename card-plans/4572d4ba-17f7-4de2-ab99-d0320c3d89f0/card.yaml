@@ -6,3 +6,12 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: new-change
+  rationale: Fixing the failing check means splitting the over-long "Remote shells
+    snippets" requirement in the main settings spec. Main specs change only
+    through an OpenSpec change. The behaviour stays the same.
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement: Remote shells snippets
+      (requirements[19], >500 chars)"
+  revision: 955b7282-7b94-41ba-bd77-ae8e80f301f3
