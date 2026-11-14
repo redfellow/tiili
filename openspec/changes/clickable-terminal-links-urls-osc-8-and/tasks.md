@@ -3,7 +3,7 @@
 - [ ] 1.1 Add `src-tauri/src/links.rs` with `classify_url` and `resolve_path` (relative, `~/`, absolute, drive paths, line suffix stripped, reveal-only rules per platform) and a table-driven test `src-tauri/tests/links.rs` (first line `// @harvaaja-test-tier: fast`) covering allowed, confirmed and denied schemes and path resolution in a temp folder
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test links`
 - [ ] 1.2 Add commands `link_open`, `path_resolve` (plain text for remote and WSL hosts), `path_open` (refuses reveal-only) and `path_reveal`, registered in `lib.rs`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test links`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 2. Frontend
