@@ -23,8 +23,8 @@ fn tiili(args: &[&str], env: &[(&str, &str)]) -> Output {
 }
 
 /// Outside a pane with a hint, Unknown command, Missing command, Help from a pane, Version, Describe outside a
-/// pane: a failure exits with its code, prints nothing on stdout and a message and a hint on stderr; help, version
-/// and describe print on stdout and exit 0 without a pane or the app.
+/// pane, Prompt fragment: a failure exits with its code, prints nothing on stdout and a message and a hint on stderr;
+/// help, version, describe and prompt print on stdout and exit 0 without a pane or the app.
 #[test]
 fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     let nowhere = std::env::temp_dir()
@@ -40,7 +40,13 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     let cases: &[(&[&str], Vars, i32)] = &[
         (&["open", "--", "ls"], &[], 3),
         (&["list"], &[], 3),
+        (&["attention", "hi"], &[], 3),
+        (&["close", "8"], &[], 3),
         (&["open"], &inside, 2),
+        (&["open", "--key", "", "--", "ls"], &inside, 2),
+        (&["attention", "--clear", "hi"], &inside, 2),
+        (&["close", "abc"], &inside, 2),
+        (&["prompt", "now"], &[], 2),
         (&["open", "--"], &inside, 2),
         (&["list", "extra"], &inside, 2),
         (&["frobnicate"], &[], 2),
@@ -53,6 +59,7 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
         (&["--version"], &[], 0),
         (&["describe"], &[], 0),
         (&["describe", "open"], &[], 0),
+        (&["prompt"], &[], 0),
     ];
     for (args, env, code) in cases {
         let out = tiili(args, env);
@@ -94,7 +101,7 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
 mod listener {
     use std::sync::{Arc, Mutex};
 
-    use tiili_lib::control::{Op, PaneInfo, RunningRecord};
+    use tiili_lib::control::{CliError, Op, PaneInfo, RunningRecord};
     use tiili_lib::control_server::{bind, Handler};
     use tiili_lib::pty::SessionId;
 
@@ -116,8 +123,11 @@ mod listener {
             title: Option<String>,
             command: Vec<String>,
             path: Option<String>,
-        ) -> Result<SessionId, String> {
+            key: Option<String>,
+        ) -> Result<(SessionId, bool), String> {
             let failing = command.first().map(String::as_str) == Some("fail");
+            // The key "again" stands for one already open.
+            let reused = key.as_deref() == Some("again");
             self.0.lock().unwrap().push((
                 caller,
                 Op::Open {
@@ -125,43 +135,78 @@ mod listener {
                     title,
                     command,
                     path,
+                    key,
                 },
             ));
             if failing {
                 return Err("no such program".into());
             }
-            Ok(caller + 40)
+            Ok((caller + 40, reused))
         }
 
         fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String> {
             self.0.lock().unwrap().push((caller, Op::List));
-            Ok(vec![
-                PaneInfo {
-                    id: caller,
-                    is_self: true,
-                    window: "main".into(),
-                    cwd: "/work/app".into(),
-                    label: "app".into(),
-                    ..PaneInfo::default()
-                },
-                PaneInfo {
-                    id: caller + 1,
-                    window: "main".into(),
-                    cwd: "/tmp".into(),
-                    title: Some("logs".into()),
-                    label: "tmp".into(),
-                    running: Some(RunningRecord {
-                        command: Some("npm run dev".into()),
-                        program: None,
-                    }),
-                    ..PaneInfo::default()
-                },
-            ])
+            Ok(panes(caller))
+        }
+
+        fn attention(
+            &self,
+            caller: SessionId,
+            message: Option<String>,
+            clear: bool,
+        ) -> Result<(), String> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((caller, Op::Attention { message, clear }));
+            Ok(())
+        }
+
+        fn close(&self, caller: SessionId, target: SessionId) -> Result<(), CliError> {
+            self.0.lock().unwrap().push((caller, Op::Close { target }));
+            // Pane 5 stands for one the caller did not open.
+            match target {
+                5 => Err(CliError::NotOpenedByYou(
+                    "pane 5 was not opened by this pane".into(),
+                )),
+                _ => Ok(()),
+            }
         }
     }
 
-    /// Open a pane, Open in another folder with a title, List panes, Request without the token is refused: what
-    /// `tiili` prints and exits with, and what reaches the app.
+    /// The panes the recorder lists for `caller`: its own, and a dev server it opened with key dev.
+    fn panes(caller: SessionId) -> Vec<PaneInfo> {
+        vec![
+            PaneInfo {
+                id: caller,
+                is_self: true,
+                window: "main".into(),
+                cwd: "/work/app".into(),
+                label: "app".into(),
+                tab: Some(1),
+                ..PaneInfo::default()
+            },
+            PaneInfo {
+                id: caller + 1,
+                window: "main".into(),
+                cwd: "/tmp".into(),
+                title: Some("logs".into()),
+                label: "tmp".into(),
+                running: Some(RunningRecord {
+                    command: Some("npm run dev".into()),
+                    program: None,
+                }),
+                tab: Some(1),
+                key: Some("dev".into()),
+                opened_by_you: true,
+                ..PaneInfo::default()
+            },
+        ]
+    }
+
+    /// Open a pane, Open in another folder with a title, List panes, Request without the token is refused, Second
+    /// call reuses, Own and opened panes, Agent asks for the user, Agent clears, Close own pane, Refuse another
+    /// pane: what `tiili` prints and exits with, and what reaches the app.
     #[test]
     #[ignore = "host: binds a Unix socket, which the sandbox refuses; the cargo-test-host release check runs it"]
     fn open_and_list_reach_the_app_and_print_its_answer() {
@@ -189,6 +234,23 @@ mod listener {
             title: title.map(String::from),
             command: command.iter().map(|c| c.to_string()).collect(),
             path: Some(path.clone()),
+            key: None,
+        };
+        let keyed = |key: &str, command: &[&str]| match open(Some(&here), None, command) {
+            Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                ..
+            } => Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                key: Some(key.to_string()),
+            },
+            other => other,
         };
         // Arguments, token, exit code, stdout, and what the app has seen by then.
         let cases: Vec<(&[&str], &'static str, i32, &str, Reached)> = vec![
@@ -229,13 +291,78 @@ mod listener {
                 concat!(
                     r#"{"ok":true,"protocol":1,"panes":["#,
                     r#"{"id":2,"self":true,"window":"main","cwd":"/work/app","host":null,"repo":null,"#,
-                    r#""title":null,"label":"app","running":null,"attention":null},"#,
+                    r#""title":null,"label":"app","running":null,"attention":null,"#,
+                    r#""tab":1,"key":null,"opened_by_you":false},"#,
                     r#"{"id":3,"self":false,"window":"main","cwd":"/tmp","host":null,"repo":null,"#,
                     r#""title":"logs","label":"tmp","running":{"command":"npm run dev","program":null},"#,
-                    r#""attention":null}]}"#,
+                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true}]}"#,
                     "\n"
                 ),
                 Some((2, Op::List)),
+            ),
+            (
+                &["open", "--key", "dev", "--", "npm", "run", "dev"],
+                TOKEN,
+                0,
+                "opened 42\n",
+                Some((2, keyed("dev", &["npm", "run", "dev"]))),
+            ),
+            (
+                &["open", "--key", "again", "--", "npm", "run", "dev"],
+                TOKEN,
+                0,
+                "reused 42\n",
+                Some((2, keyed("again", &["npm", "run", "dev"]))),
+            ),
+            // Second call reuses, as JSON.
+            (
+                &[
+                    "open", "--key", "again", "--json", "--", "npm", "run", "dev",
+                ],
+                TOKEN,
+                0,
+                "{\"ok\":true,\"protocol\":1,\"pane\":42,\"reused\":true}\n",
+                Some((2, keyed("again", &["npm", "run", "dev"]))),
+            ),
+            (
+                &["attention", "Review ready"],
+                TOKEN,
+                0,
+                "",
+                Some((
+                    2,
+                    Op::Attention {
+                        message: Some("Review ready".into()),
+                        clear: false,
+                    },
+                )),
+            ),
+            (
+                &["attention", "--clear"],
+                TOKEN,
+                0,
+                "",
+                Some((
+                    2,
+                    Op::Attention {
+                        message: None,
+                        clear: true,
+                    },
+                )),
+            ),
+            (
+                &["close", "3"],
+                TOKEN,
+                0,
+                "",
+                Some((2, Op::Close { target: 3 })),
+            ),
+            (
+                &["close", "5"],
+                TOKEN,
+                1,
+                "",
+                Some((2, Op::Close { target: 5 })),
             ),
             (
                 &["open", "--", "fail"],
@@ -259,6 +386,7 @@ mod listener {
             let out = tiili(args, &vars);
             assert_eq!(out.status.code(), Some(code), "{args:?}");
             assert_eq!(String::from_utf8_lossy(&out.stdout), stdout, "{args:?}");
+            // Attention and close print nothing on success.
             assert_eq!(out.stderr.is_empty(), code == 0, "{args:?}");
             if code != 0 {
                 // Refused request carries a code: the CLI prints the app's suggestion.

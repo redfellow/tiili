@@ -18,6 +18,13 @@
         },
         {
           "kind": "option",
+          "name": "--key",
+          "required": false,
+          "summary": "reuse the live pane this pane opened with KEY instead of opening another",
+          "value": "KEY"
+        },
+        {
+          "kind": "option",
           "name": "--json",
           "required": false,
           "summary": "print one JSON object instead of text, also when it fails"
@@ -100,6 +107,9 @@
                 },
                 "protocol": {
                   "type": "integer"
+                },
+                "reused": {
+                  "const": true
                 }
               },
               "required": [
@@ -134,10 +144,10 @@
             }
           ]
         },
-        "text": "the new pane's id on one line; with --json, one JSON object"
+        "text": "the new pane's id on one line; with --key, opened ID or reused ID; with --json, one JSON object"
       },
       "summary": "Open a pane in this pane's window running a command",
-      "usage": "tiili open [--cwd DIR] [--title TITLE] [--json] -- CMD [ARGS...]"
+      "usage": "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--json] -- CMD [ARGS...]"
     },
     {
       "args": [
@@ -246,8 +256,17 @@
                       "id": {
                         "type": "integer"
                       },
+                      "key": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "label": {
                         "type": "string"
+                      },
+                      "opened_by_you": {
+                        "type": "boolean"
                       },
                       "repo": {
                         "properties": {
@@ -301,6 +320,12 @@
                       "self": {
                         "type": "boolean"
                       },
+                      "tab": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
                       "title": {
                         "type": [
                           "string",
@@ -321,7 +346,10 @@
                       "title",
                       "label",
                       "running",
-                      "attention"
+                      "attention",
+                      "tab",
+                      "key",
+                      "opened_by_you"
                     ],
                     "type": "object"
                   },
@@ -367,6 +395,193 @@
       },
       "summary": "List the panes of this pane's window in grid order",
       "usage": "tiili list [--json]"
+    },
+    {
+      "args": [
+        {
+          "kind": "option",
+          "name": "--clear",
+          "required": false,
+          "summary": "clear this pane's mark instead"
+        },
+        {
+          "kind": "positional",
+          "name": "MSG",
+          "required": false,
+          "summary": "what the user is needed for, shown with the mark"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "attention_failed",
+          "exit": 1,
+          "suggestion": "check that this pane is still open in a tiili window",
+          "summary": "the app could not mark or clear this pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "attention",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "nothing"
+      },
+      "summary": "Mark this pane for the user's attention, or clear its mark",
+      "usage": "tiili attention [MSG] | tiili attention --clear"
+    },
+    {
+      "args": [
+        {
+          "kind": "positional",
+          "name": "PANE",
+          "required": true,
+          "summary": "the id of the pane to close"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "not_opened_by_you",
+          "exit": 1,
+          "suggestion": "ask the user to close it",
+          "summary": "the pane to close was not opened by this pane with tiili open"
+        },
+        {
+          "code": "no_such_pane",
+          "exit": 1,
+          "suggestion": "run tiili list to see the open panes",
+          "summary": "no open pane has that id"
+        },
+        {
+          "code": "close_failed",
+          "exit": 1,
+          "suggestion": "check that the pane is still open, or ask the user to close it",
+          "summary": "the app could not close the pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "close",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "nothing"
+      },
+      "summary": "Close a pane this pane opened with tiili open",
+      "usage": "tiili close PANE"
+    },
+    {
+      "args": [],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        }
+      ],
+      "exit_codes": [
+        0,
+        2
+      ],
+      "name": "prompt",
+      "needs": [],
+      "output": {
+        "json": null,
+        "text": "the intents and their recipes as plain text"
+      },
+      "summary": "Print the agent intents as text to paste into an agent's prompt, without contacting the app",
+      "usage": "tiili prompt"
     },
     {
       "args": [],
@@ -561,6 +776,32 @@
               },
               "type": "array"
             },
+            "intents": {
+              "items": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "recipe": {
+                    "type": "string"
+                  },
+                  "when": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "when",
+                  "recipe",
+                  "notes"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
             "protocol": {
               "type": "integer"
             },
@@ -576,7 +817,8 @@
             "version",
             "protocol",
             "env",
-            "commands"
+            "commands",
+            "intents"
           ],
           "type": "object"
         },
@@ -636,6 +878,32 @@
     {
       "name": "HOME",
       "summary": "the home folder install-claude-skill writes under (USERPROFILE on Windows when unset)"
+    }
+  ],
+  "intents": [
+    {
+      "name": "fan-out",
+      "notes": "the new session does not see this conversation, so PROMPT says everything the task needs",
+      "recipe": "tiili open --cwd DIR -- claude \"PROMPT\"",
+      "when": "a task should run in its own pane, one agent session per task"
+    },
+    {
+      "name": "run-beside",
+      "notes": "then read FILE; it prints opened ID, and running it again with the same --key prints reused ID instead of opening a second pane; tiili close ID closes it",
+      "recipe": "tiili open --key dev -- sh -c 'CMD 2>&1 | tee FILE'",
+      "when": "a long-running command (a dev server, a watcher, tests) should run beside you while you read its output"
+    },
+    {
+      "name": "need-you",
+      "notes": "marks your own pane with MSG while the user is elsewhere; it clears when they focus the pane, or with tiili attention --clear",
+      "recipe": "tiili attention \"MSG\"",
+      "when": "you need the user: a question, a finished task, something to review"
+    },
+    {
+      "name": "find-reuse",
+      "notes": "each pane in panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
+      "recipe": "tiili list --json",
+      "when": "you want to find a pane to reuse, read or close"
     }
   ],
   "protocol": 1,

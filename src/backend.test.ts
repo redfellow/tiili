@@ -71,10 +71,20 @@ describe("Tauri backend pane control", () => {
     expect(invoke.mock.calls).toEqual([["pane_open_done", args]]);
   });
 
-  it("List panes: the window reports its sessions in grid order", async () => {
+  it("Own and opened panes: the window reports its sessions tab by tab in grid order", async () => {
     invoke.mockClear();
-    await tauriBackend().paneControl?.setOrder([4, 2, 7]);
-    expect(invoke.mock.calls).toEqual([["pane_order_set", { sessions: [4, 2, 7] }]]);
+    await tauriBackend().paneControl?.setOrder([[4, 2], [7]]);
+    expect(invoke.mock.calls).toEqual([["pane_order_set", { tabs: [[4, 2], [7]] }]]);
+  });
+
+  const closes: [string, string | undefined, Record<string, unknown>][] = [
+    ["Close own pane: the window answers it closed", undefined, { requestId: 5, error: null }],
+    ["Close own pane: the window answers why it could not", "no such pane", { requestId: 5, error: "no such pane" }],
+  ];
+  it.each(closes)("%s", async (_name, error, args) => {
+    invoke.mockClear();
+    await tauriBackend().paneControl?.closed(5, error);
+    expect(invoke.mock.calls).toEqual([["pane_close_done", args]]);
   });
 });
 

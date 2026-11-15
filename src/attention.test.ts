@@ -7,6 +7,8 @@ import {
   parseOsc9,
   parseOsc99,
   parseOsc777,
+  RATE_LIMIT_MS,
+  requestedSignal,
   sanitizeMessage,
 } from "./attention";
 
@@ -34,6 +36,34 @@ describe("attention signals", () => {
   ];
   it.each(sanitized)("%s", (_name, input, expected) => {
     expect(sanitizeMessage(input)).toBe(expected);
+  });
+});
+
+describe("tiili attention requests", () => {
+  const requested: [string, string, AttentionSignal | undefined][] = [
+    ["Agent asks for the user: the message is a notification", "Review ready", { kind: "message", text: "Review ready" }],
+    ["Agent asks for the user: control characters are removed", "\u001b]0;x\u0007ok", { kind: "message", text: "]0;xok" }],
+    ["Agent asks for the user: an empty message still marks", "", { kind: "message", text: "" }],
+    ["Agent asks for the user: a message over 4096 bytes is ignored", "x".repeat(4097), undefined],
+  ];
+  it.each(requested)("%s", (_name, message, expected) => {
+    expect(requestedSignal(message)).toEqual(expected);
+  });
+
+  const gated: [string, number[], (GateResult | undefined)[]][] = [
+    ["Agent asks for the user: the first request marks the pane", [0], [{ action: "mark", message: "hi" }]],
+    ["Agent asks for the user: a second request inside the rate limit is dropped", [0, 500], [{ action: "mark", message: "hi" }, undefined]],
+    [
+      "Agent asks for the user: after the rate limit it marks again",
+      [0, RATE_LIMIT_MS],
+      [{ action: "mark", message: "hi" }, { action: "mark", message: "hi" }],
+    ],
+  ];
+  it.each(gated)("%s", (_name, times, expected) => {
+    const gate = new AttentionGate();
+    const signal = requestedSignal("hi");
+    expect(signal).toBeDefined();
+    expect(times.map((now) => (signal ? gate.signal(signal, now) : undefined))).toEqual(expected);
   });
 });
 

@@ -1,7 +1,7 @@
 //! `tiili <command>`: the app's binary in command-line mode, with the commands of [`crate::control::COMMANDS`].
-//! `open` and `list` run from inside a pane: they find the app through `TIILI_SOCKET`, `TIILI_TOKEN` and
-//! `TIILI_PANE`, send one request (see [`crate::control`]) and print the answer. `help`, `--version`, `describe`
-//! and `install-claude-skill` work anywhere without the app.
+//! `open`, `list`, `attention` and `close` run from inside a pane: they find the app through `TIILI_SOCKET`,
+//! `TIILI_TOKEN` and `TIILI_PANE`, send one request (see [`crate::control`]) and print the answer. `help`,
+//! `--version`, `describe`, `prompt` and `install-claude-skill` work anywhere without the app.
 
 use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, Write};
@@ -101,10 +101,17 @@ fn execute(
             let _ = writeln!(out, "Installed the tiili-tiles skill to {}", path.display());
             return Ok(());
         }
+        CliCommand::Prompt => {
+            let _ = write!(out, "{}", crate::intents::render_prompt());
+            return Ok(());
+        }
         CliCommand::List { json } => (Op::List, json),
+        CliCommand::Attention { message, clear } => (Op::Attention { message, clear }, false),
+        CliCommand::Close(target) => (Op::Close { target }, false),
         CliCommand::Open {
             cwd: dir,
             title,
+            key,
             command,
             json,
         } => (
@@ -120,6 +127,7 @@ fn execute(
                 title,
                 command,
                 path: env("PATH").map(|p| p.to_string_lossy().into_owned()),
+                key,
             },
             json,
         ),
@@ -139,11 +147,17 @@ fn execute(
         .unwrap_or_default();
     let line = ask(Path::new(&socket), &request_line(&token, pane, &op))
         .map_err(|e| CliError::Unreachable(format!("{}: {e}", socket.to_string_lossy())))?;
+    let keyed = matches!(op, Op::Open { key: Some(_), .. });
     let _ = match (parse_reply(&line)?, json) {
-        (Reply::Opened(id), false) => writeln!(out, "{id}"),
-        (Reply::Opened(id), true) => writeln!(out, "{}", opened_reply(id)),
+        (Reply::Opened { pane, reused }, true) => writeln!(out, "{}", opened_reply(pane, reused)),
+        // With a key the caller learns whether it got a new pane; without one the line stays the bare id.
+        (Reply::Opened { pane, reused }, false) if keyed => {
+            writeln!(out, "{} {pane}", if reused { "reused" } else { "opened" })
+        }
+        (Reply::Opened { pane, .. }, false) => writeln!(out, "{pane}"),
         (Reply::Listed(panes), false) => write!(out, "{}", list_lines(&panes)),
         (Reply::Listed(panes), true) => writeln!(out, "{}", listed_reply(&panes)),
+        (Reply::Done, _) => Ok(()),
     };
     Ok(())
 }
@@ -222,6 +236,10 @@ mod tests {
         let cases: &[(&[&str], bool)] = &[
             (&["open", "--", "ls"], true),
             (&["list"], true),
+            (&["list", "--json"], true),
+            (&["attention", "hi"], true),
+            (&["close", "8"], true),
+            (&["prompt"], true),
             (&["install-claude-skill"], true),
             (&["describe"], true),
             (&["help"], true),
@@ -258,7 +276,15 @@ mod tests {
             (&["list"], socket_only, 3),
             // TIILI_PANE set but not a pane id.
             (&["list"], bad_pane, 3),
+            (&["attention", "hi"], nothing, 3),
+            (&["attention", "--clear"], socket_only, 3),
+            (&["close", "8"], nothing, 3),
             (&["open"], nothing, 2),
+            (&["attention", "--clear", "hi"], socket_only, 2),
+            (&["close", "abc"], socket_only, 2),
+            (&["close"], socket_only, 2),
+            (&["open", "--key", "", "--", "ls"], socket_only, 2),
+            (&["prompt", "now"], nothing, 2),
             (&["open", "--"], socket_only, 2),
             (&["list", "extra"], socket_only, 2),
             (&["frobnicate"], nothing, 2),
@@ -326,7 +352,8 @@ mod tests {
         assert_eq!(err.lines().nth(1), Some("hint: reopen the pane"), "{err}");
     }
 
-    /// Help from a pane, Version, Describe outside a pane: they answer with no tiili variables set and exit 0.
+    /// Help from a pane, Version, Describe outside a pane, Prompt fragment: they answer with no tiili variables set
+    /// and exit 0.
     #[test]
     fn help_version_and_describe_answer_without_a_pane() {
         let nothing = |_: &str| None;
@@ -336,6 +363,7 @@ mod tests {
             (&["help"], help_text(None).unwrap()),
             (&["help", "open"], help_text(Some("open")).unwrap()),
             (&["--version"], format!("{}\n", version_line())),
+            (&["prompt"], crate::intents::render_prompt()),
             (
                 &["describe"],
                 serde_json::to_string_pretty(&describe(None).unwrap()).unwrap() + "\n",

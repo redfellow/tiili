@@ -30,7 +30,10 @@ impl Handler for Recorder {
         title: Option<String>,
         command: Vec<String>,
         path: Option<String>,
-    ) -> Result<SessionId, String> {
+        key: Option<String>,
+    ) -> Result<(SessionId, bool), String> {
+        // The key "again" stands for one already open.
+        let reused = key.as_deref() == Some("again");
         self.0.lock().unwrap().push((
             caller,
             Op::Open {
@@ -38,9 +41,10 @@ impl Handler for Recorder {
                 title,
                 command,
                 path,
+                key,
             },
         ));
-        Ok(caller + 40)
+        Ok((caller + 40, reused))
     }
 
     fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String> {
@@ -49,6 +53,34 @@ impl Handler for Recorder {
             return Err("pane 99 is in no window".into());
         }
         Ok(vec![tmp_pane(caller)])
+    }
+
+    fn attention(
+        &self,
+        caller: SessionId,
+        message: Option<String>,
+        clear: bool,
+    ) -> Result<(), String> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((caller, Op::Attention { message, clear }));
+        if caller == 99 {
+            return Err("pane 99 is in no window".into());
+        }
+        Ok(())
+    }
+
+    fn close(&self, caller: SessionId, target: SessionId) -> Result<(), CliError> {
+        self.0.lock().unwrap().push((caller, Op::Close { target }));
+        // Pane 5 stands for one the caller did not open, pane 6 for one that is gone.
+        match target {
+            5 => Err(CliError::NotOpenedByYou(
+                "pane 5 was not opened by this pane".into(),
+            )),
+            6 => Err(CliError::NoSuchPane("there is no pane 6".into())),
+            _ => Ok(()),
+        }
     }
 }
 
@@ -70,6 +102,9 @@ fn tmp_pane(id: SessionId) -> PaneInfo {
         attention: Some(AttentionRecord {
             message: Some("done".into()),
         }),
+        tab: Some(1),
+        key: Some("dev".into()),
+        opened_by_you: true,
     }
 }
 
@@ -138,6 +173,7 @@ fn request_with_the_right_token_reaches_the_handler_and_others_are_refused() {
         title: Some("logs".into()),
         command: vec!["tail".into(), "-f".into(), "x.log".into()],
         path: Some("/opt/bin:/usr/bin".into()),
+        key: None,
     };
     let wrong = "f".repeat(64);
     // The line sent, the reply expected (an error just has to be one), and what the handler then holds.
@@ -158,7 +194,10 @@ fn request_with_the_right_token_reaches_the_handler_and_others_are_refused() {
         ),
         (
             request_line(TOKEN, 2, &open),
-            Ok(Reply::Opened(42)),
+            Ok(Reply::Opened {
+                pane: 42,
+                reused: false,
+            }),
             vec![(3, Op::List), (2, open.clone())],
         ),
         // A failure in the handler comes back as an error.
@@ -206,12 +245,101 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
                     title: None,
                     command: vec!["top".into()],
                     path: None,
+                    key: None,
                 },
             ),
-            Ok(Reply::Opened(45)),
+            Ok(Reply::Opened {
+                pane: 45,
+                reused: false,
+            }),
             2,
         ),
         (request_line(TOKEN, 99, &list), Err("list_failed"), 3),
+        // Second call reuses: a keyed open the app already holds answers with the same pane, marked reused.
+        (
+            request_line(
+                TOKEN,
+                5,
+                &Op::Open {
+                    cwd: None,
+                    title: None,
+                    command: vec!["npm".into()],
+                    path: None,
+                    key: Some("again".into()),
+                },
+            ),
+            Ok(Reply::Opened {
+                pane: 45,
+                reused: true,
+            }),
+            4,
+        ),
+        // Empty key is malformed and never reaches the handler.
+        (
+            format!(r#"{{"token":"{TOKEN}","pane":5,"op":"open","command":["npm"],"key":""}}"#),
+            Err("malformed_request"),
+            4,
+        ),
+        // Agent asks for the user, Agent clears.
+        (
+            request_line(
+                TOKEN,
+                5,
+                &Op::Attention {
+                    message: Some("Review ready".into()),
+                    clear: false,
+                },
+            ),
+            Ok(Reply::Done),
+            5,
+        ),
+        (
+            request_line(
+                TOKEN,
+                5,
+                &Op::Attention {
+                    message: None,
+                    clear: true,
+                },
+            ),
+            Ok(Reply::Done),
+            6,
+        ),
+        (
+            format!(
+                r#"{{"token":"{TOKEN}","pane":5,"op":"attention","message":"hi","clear":true}}"#
+            ),
+            Err("malformed_request"),
+            6,
+        ),
+        (
+            request_line(
+                TOKEN,
+                99,
+                &Op::Attention {
+                    message: Some("hi".into()),
+                    clear: false,
+                },
+            ),
+            Err("attention_failed"),
+            7,
+        ),
+        // Close own pane, Refuse another pane, Close a pane that is gone: no_such_pane.
+        (
+            request_line(TOKEN, 2, &Op::Close { target: 3 }),
+            Ok(Reply::Done),
+            8,
+        ),
+        (
+            request_line(TOKEN, 2, &Op::Close { target: 5 }),
+            Err("not_opened_by_you"),
+            9,
+        ),
+        (
+            request_line(TOKEN, 2, &Op::Close { target: 6 }),
+            Err("no_such_pane"),
+            10,
+        ),
     ];
     for (line, reply, calls) in cases {
         let answer = respond(&line, TOKEN, &recorder);
