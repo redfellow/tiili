@@ -200,9 +200,14 @@ function exactColour(index, colour) {
   const hex = hex6(colour);
   const token = index.colours.find((entry) => entry.hex === hex);
   if (!token) return null;
-  if (colour.a === 1) return `var(${token.name})`;
   if (colour.a === 0) return null;
-  return `color-mix(in srgb, var(${token.name}) ${+(colour.a * 100).toFixed(1)}%, transparent)`;
+  return tokenWithAlpha(token.name, colour.a);
+}
+
+/** `var(--token)`, mixed with transparent to keep a translucent colour's alpha. */
+function tokenWithAlpha(name, alpha) {
+  if (alpha === 1) return `var(${name})`;
+  return `color-mix(in srgb, var(${name}) ${+(alpha * 100).toFixed(1)}%, transparent)`;
 }
 
 function nearestColour(index, colour) {
@@ -241,7 +246,7 @@ const brandTokens = {
     messages: {
       exact: "Use {{replacement}} instead of {{literal}}",
       near: "{{literal}} is not a brand token; the nearest is var({{token}}) (ΔE {{delta}})",
-      useNearest: "Use var({{token}}) instead of {{literal}}",
+      useNearest: "Use {{replacement}} instead of {{literal}}",
     },
   },
   create(context) {
@@ -278,6 +283,7 @@ const brandTokens = {
           continue;
         }
         const nearest = nearestColour(index, literal.colour);
+        const suggestion = tokenWithAlpha(nearest.name, literal.colour.a);
         context.report({
           loc,
           messageId: "near",
@@ -285,8 +291,8 @@ const brandTokens = {
           suggest: [
             {
               messageId: "useNearest",
-              data: { token: nearest.name, literal: literal.raw },
-              fix: (fixer) => fixer.replaceTextRange(range, `var(${nearest.name})`),
+              data: { replacement: suggestion, literal: literal.raw },
+              fix: (fixer) => fixer.replaceTextRange(range, suggestion),
             },
           ],
         });

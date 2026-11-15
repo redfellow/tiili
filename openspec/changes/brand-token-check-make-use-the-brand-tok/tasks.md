@@ -13,7 +13,7 @@
 
 - [x] 2.1 Add `@eslint/css` as a devDependency and `eslint-rules/brand-tokens.js` (the `brand/tokens` rule: colour index from `tiili.css`, OKLab nearest match, exact-match fix, suggestion, size families, `tokens-allow:`, file and theme-id allow options, and an HTML `<style>` processor). Add the rule's table-driven `RuleTester` test `eslint-rules/brand-tokens.test.ts` (fast tier).
   - proof: `npx vitest run eslint-rules/brand-tokens.test.ts`
-  - proof: `npx eslint eslint-rules/brand-tokens.js`
+  - proof: `npx eslint eslint-rules/brand-tokens.js eslint-rules/brand-allow.js`
 - [x] 2.2 Wire the rule into `eslint.config.js` for `src/**/*.css`, `src/**/*.ts` (not `*.test.ts`), `site/**/*.css` and `site/*.html`, with `site/brand/` and `docs/` ignored. Add the theme-id and Heynote allowances.
   - proof: `npx eslint eslint.config.js`
 

@@ -2,6 +2,7 @@
 import css from "@eslint/css";
 import { RuleTester } from "eslint";
 import { describe, expect, it } from "vitest";
+import { BRAND_ALLOW } from "./brand-allow.js";
 import brand, { styleBlocks } from "./brand-tokens.js";
 
 RuleTester.describe = describe;
@@ -48,7 +49,20 @@ describe("brand/tokens", () => {
         output: null,
         errors: [{
           messageId: "near",
-          suggestions: [{ messageId: "useNearest", data: { token: "--sunken", literal: "#ffe6d2" }, output: "a { color: var(--sunken); }" }],
+          suggestions: [{ messageId: "useNearest", data: { replacement: "var(--sunken)", literal: "#ffe6d2" }, output: "a { color: var(--sunken); }" }],
+        }],
+      },
+      {
+        name: "Near colour: a translucent colour's suggestion keeps its alpha",
+        code: "a { box-shadow: 0 2px 4px rgba(0,0,0,.3); }",
+        output: null,
+        errors: [{
+          messageId: "near",
+          suggestions: [{
+            messageId: "useNearest",
+            data: { replacement: "color-mix(in srgb, var(--tiili-koski) 30%, transparent)", literal: "rgba(0,0,0,.3)" },
+            output: "a { box-shadow: 0 2px 4px color-mix(in srgb, var(--tiili-koski) 30%, transparent); }",
+          }],
         }],
       },
       // Sizes equal to a token of their property's family.
@@ -72,6 +86,11 @@ describe("brand/tokens", () => {
       { code: 'const t = { id: "nord", tokens: f({ bg: "#2E3440" }, "#3B4252 #BF616A") };', options },
       { code: 'const ground = "#252B37";', filename: "/repo/src/heynotePane.ts", options },
       { code: '// tokens-allow: published palette\nconst c = "#123456";', options },
+      ...['{ id: "tiili-dark", tokens: { bg: "#123456" } }', '{ id: "koski", tokens: { bg: "#123456" } }'].map((theme) => ({
+        name: `Tiili-made theme allowed by id: ${theme}`,
+        code: `const t = ${theme};`,
+        options: [BRAND_ALLOW],
+      })),
     ],
     invalid: [
       { code: 'const c = "#A4472B";', output: 'const c = "var(--accent)";', options, errors: [exact("var(--accent)", "#A4472B")] },
@@ -86,7 +105,7 @@ describe("brand/tokens", () => {
         code: 'const h = "#ffe6d2";',
         output: null,
         options,
-        errors: [{ messageId: "near", suggestions: [{ messageId: "useNearest", data: { token: "--sunken", literal: "#ffe6d2" }, output: 'const h = "var(--sunken)";' }] }],
+        errors: [{ messageId: "near", suggestions: [{ messageId: "useNearest", data: { replacement: "var(--sunken)", literal: "#ffe6d2" }, output: 'const h = "var(--sunken)";' }] }],
       },
     ],
   });
