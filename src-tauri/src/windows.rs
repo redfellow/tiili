@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindo
 
 use crate::pty::SessionId;
 
-/// The label of the window `tauri.conf.json` opens; the only one whose size and place are remembered.
+/// The label of the window `tauri.conf.json` opens at start.
 pub const MAIN_WINDOW: &str = "main";
 /// How far down and right of the focused window a new window opens, in logical pixels.
 pub const CASCADE_OFFSET: f64 = 28.0;

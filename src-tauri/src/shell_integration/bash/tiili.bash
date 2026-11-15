@@ -150,7 +150,8 @@ _tiili_ready() {
 if [ -z "$(trap -p DEBUG)" ]; then
   case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in
     'declare -a'*) PROMPT_COMMAND+=(_tiili_ready) ;;
-    *) PROMPT_COMMAND="$PROMPT_COMMAND; _tiili_ready" ;;
+    # A newline, not `;`: a PROMPT_COMMAND of the user's ending in `;` (`history -a; $PROMPT_COMMAND`) stays valid.
+    *) PROMPT_COMMAND+=$'\n'_tiili_ready ;;
   esac
   trap _tiili_preexec DEBUG
 fi

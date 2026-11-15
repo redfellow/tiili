@@ -564,7 +564,8 @@ fn pasted_text_in_bash_takes_the_highlight_file_colour() {
 }
 
 /// Up re-runs: a zsh and a bash started with a restored history line run it on Up then Enter and delete its file,
-/// and report a typed command line while it runs, cleared once the prompt is back.
+/// and report a typed command line while it runs, cleared once the prompt is back; bash with a user PROMPT_COMMAND
+/// ending in `; ` too.
 #[cfg(unix)]
 #[test]
 #[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
@@ -583,6 +584,12 @@ fn up_re_runs_zsh_and_bash_seed_history_and_report_the_typed_command() {
         let home = temp_dir(&format!("home-{tag}"));
         let history = home.join("restore-line");
         std::fs::write(&history, "echo restored-$((40 + 2))").expect("history file");
+        // A PROMPT_COMMAND ending in `; `, as `history -a; $PROMPT_COMMAND` leaves, must still run.
+        std::fs::write(
+            home.join(".bash_profile"),
+            "PROMPT_COMMAND='history -a; '\n",
+        )
+        .expect("bash profile");
         let mut cmd = command_for(shell, "classic", &temp_dir(&format!("scripts-{tag}")))
             .expect("zsh and bash have an integration");
         set_colour_env(&mut cmd);

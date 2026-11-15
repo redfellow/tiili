@@ -173,10 +173,11 @@ fn forget_session(app: &AppHandle, id: SessionId) {
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
-/// in Settings (`off` when absent), with `history` as the newest entry of its history when given, or `command` directly when given (looked up on and run with `path`, the `PATH` of
-/// the `tiili open` that asked for it, when given), and returns its session id; its output streams over `on_output`, a
-/// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
-/// `pane-command` events, sent only to the window it belongs to: the one that started it, until its pane moves.
+/// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
+/// the `tiili open` that asked for it, when given), and returns its session id. A shell started with `history` has that
+/// line as the newest entry of its history. Its output streams over `on_output`, a channel of its own, and its working
+/// directory as `pane-cwd` events and what runs in it as `pane-command` events, sent only to the window it belongs to:
+/// the one that started it, until its pane moves.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn pty_spawn(
