@@ -29,6 +29,70 @@ gh auth status
 
 If any check fails, stop here and open no tiles.
 
+## Command reference
+
+`tiili help` lists the commands and `tiili help <command>` shows one; `tiili describe` prints the whole command
+line as JSON (arguments, needed variables, output, exit codes, and each error with its fix), and works outside a
+pane. When a `tiili` command fails it prints `tiili: <what went wrong>` and then a `hint:` line naming the fix: tell
+the user both, and follow the hint before trying again.
+
+## Intents: what to ask tiili for
+
+Each thing you may want from tiili has one recipe. `tiili prompt` prints this list as plain text to put in a prompt
+you write for another agent, and `tiili describe` lists it as `intents`.
+
+<!-- tiili:intents:begin -->
+- **fan-out**: when a task should run in its own pane, one agent session per task.
+
+  ```sh
+  tiili open --cwd DIR -- claude "PROMPT"
+  ```
+
+  The new session does not see this conversation, so PROMPT says everything the task needs.
+
+- **run-beside**: when a long-running command (a dev server, a watcher, tests) should run beside you while you read its output.
+
+  ```sh
+  tiili open --key dev -- sh -c 'CMD 2>&1 | tee FILE'
+  ```
+
+  Then read FILE; it prints opened ID, and running it again with the same --key prints reused ID instead of opening a second pane; tiili close ID closes it.
+
+- **need-you**: when you need the user: a question, a finished task, something to review.
+
+  ```sh
+  tiili attention "MSG"
+  ```
+
+  Marks your own pane with MSG while the user is elsewhere; it clears when they focus the pane, or with tiili attention --clear.
+
+- **find-reuse**: when you want to find a pane to reuse, read or close.
+
+  ```sh
+  tiili list --json
+  ```
+
+  Each pane in panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true.
+<!-- tiili:intents:end -->
+
+### Run something beside you
+
+Use run-beside instead of starting a dev server, watcher or long test run in the background of your own shell. The
+command runs in its own tile where the user can watch it, and `tee` copies its output to `FILE` (pick a path such as
+`/tmp/<project>-dev.log`) for you to read with your file tools. Give each long-running command its own `--key`: the
+first call prints `opened <id>`, and any later call with the same key prints `reused <id>` without opening a second
+tile, so running the recipe again is safe. Once the tile's command has exited, the next call opens a fresh one.
+
+When you no longer need it, close it with `tiili close <id>`. You can close only tiles you opened yourself; for any
+other tile tiili refuses with `not_opened_by_you`, and you ask the user to close it instead.
+
+### Ask for the user
+
+Use need-you when you finish a task, are blocked on a question, or have something for the user to review: run
+`tiili attention "<short message>"` and then wait for them. It marks only your own tile, the same way a terminal
+notification does, and shows nothing when the user is already looking at your tile. The mark clears when they focus
+your tile; if you no longer need them before that, run `tiili attention --clear`.
+
 ## 2. Generic recipe: one tile per task
 
 For each task:

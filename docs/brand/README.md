@@ -106,17 +106,43 @@ light tints they are dark. Tints 9–16 keep their labels above 5:1; sammal sits
 rings. Buttons keep the tiili fill in both themes with white labels (6.0:1). All text tokens pass 4.5:1 against
 their theme's background.
 
+## Semantic tokens
+
+Use these in the app and on the site, never a raw colour or a copied hex. Each has a light and a dark value in
+[`tiili.css`](tiili.css); `npm run lint` rejects literals that should be one of them.
+
+| Token | For |
+| --- | --- |
+| `--bg` | The window ground behind everything |
+| `--surface` | Raised areas: panes, dialogues, menus, tooltips |
+| `--sunken` | Wells below the ground: inputs, tracks, code blocks |
+| `--fg` | Body text and icons |
+| `--muted` | Secondary text, hints, placeholders |
+| `--line` | Hairline borders and dividers |
+| `--accent` | Fills for the primary action, the cursor, selected states |
+| `--accent-hover`, `--accent-press` | The accent fill while hovered and pressed |
+| `--accent-text` | Accent-coloured text and links, readable on the ground |
+| `--on-accent` | Labels and glyphs on an accent fill |
+| `--focus` | The 2 px focus ring |
+| `--term-bg`, `--term-fg`, `--term-dim`, `--term-gap` | The terminal: ground, text, dim text, and the mortar between panes |
+| `--mark-ground`, `--mark-focus`, `--mark-prompt` | The running bond mark: its ground, focus brick and `>_` |
+| `--dot` | The brick dots of the wordmark |
+| `--shadow-1` | Tooltips, menus and other small floating surfaces |
+| `--shadow-2` | Dialogues |
+| `--shadow-3` | A pane lifted off the grid while it moves |
+| `--text-display`, `--text-h1`, `--text-h2`, `--text-body`, `--text-small`, `--text-terminal`, `--text-label` | Font sizes for the type styles below |
+
 ## Type
 
-| Style | Spec |
-| --- | --- |
-| Display | Geist 700, 56/1.0, −0.04 em |
-| Heading 1 | Geist 600, 36/1.1, −0.035 em |
-| Heading 2 | Geist 600, 24/1.2, −0.025 em |
-| Body | Geist 400, 16/1.6 |
-| Small | Geist 400, 13.5/1.5 |
-| Label | Geist Mono 500, 11.5, uppercase, +0.08 em |
-| Terminal | Geist Mono 400, 13/1.6 |
+| Style | Spec | Size token |
+| --- | --- | --- |
+| Display | Geist 700, 56/1.0, −0.04 em | `--text-display` |
+| Heading 1 | Geist 600, 36/1.1, −0.035 em | `--text-h1` |
+| Heading 2 | Geist 600, 24/1.2, −0.025 em | `--text-h2` |
+| Body | Geist 400, 16/1.6 | `--text-body` |
+| Small | Geist 400, 13.5/1.5 | `--text-small` |
+| Label | Geist Mono 500, 11.5, uppercase, +0.08 em | `--text-label` |
+| Terminal | Geist Mono 400, 13/1.6 | `--text-terminal` |
 
 ## Website
 
@@ -138,7 +164,7 @@ their theme's background.
 ## Theme variants
 
 Besides tiili Light and tiili Dark, the app's settings offer four variants built from the core palette. Their full
-token and ANSI sets live in `src/themes.ts`; this is the first pass, to be revised once they can be seen side by side
+token and ANSI sets live in `src/themes.ts`, mirrored in the `[data-variant]` blocks of `tiili.css`; this is the first pass, to be revised once they can be seen side by side
 (contrast has not been tuned yet).
 
 | Variant | Kind | Ground (window / pane / gap) | Text / muted | Accent (cursor) | Character |

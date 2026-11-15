@@ -1,0 +1,19 @@
+format: 1
+slug: agent-intent-vocabulary-for-tiili-four-i
+title: "Agent intent vocabulary for tiili: four intents, each with one canonical
+  recipe, backed by `tiili attention`, `tiili ..."
+x-harvaaja-card: 28dab4fb-71b7-469b-8462-96da7a2c6b20
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable contracts (attention op, open --key, close, list
+    --json fields, intents in describe, tiili prompt). The CLI contract change
+    is a dependency with different intent, so not a polish target.
+  citations:
+    - openspec/specs/pane-control/spec.md
+    - openspec/specs/pane-attention/spec.md
+    - openspec/specs/agent-skills/spec.md
+    - card fdeb8b47 tiili-cli-contract-one-command-table-err
+  revision: b1e5ec87-860a-4e8e-9821-86f21501e763

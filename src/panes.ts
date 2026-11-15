@@ -1,10 +1,11 @@
-import { AttentionGate, type AttentionMark, type AttentionSignal } from "./attention";
+import { AttentionGate, type AttentionMark, type AttentionSignal, requestedSignal } from "./attention";
 import type {
   Backend,
   MenuItem,
   MovePayload,
   PaneLaunch,
   PaneMovePayload,
+  PaneAttentionRequest,
   PaneOpenRequest,
   SessionId,
   TabMenuId,
@@ -58,7 +59,6 @@ import { give, Tab, type Pane, type TabHooks } from "./tab";
 import {
   badgeCount,
   insertBeside,
-  listOrder,
   neighbourIndex,
   reorder,
   stepIndex,
@@ -231,6 +231,16 @@ export class Panes {
           )
           .catch((error: unknown) => console.error(error));
       });
+      await backend.onAppEvent("pane-close-request", (request) => {
+        panes
+          .closeRequested(request.session)
+          .then(
+            () => control.closed(request.requestId),
+            (error: unknown) => control.closed(request.requestId, String(error)),
+          )
+          .catch((error: unknown) => console.error(error));
+      });
+      await backend.onAppEvent("pane-attention-request", (request) => panes.attentionRequested(request));
     }
     if (backend.session) {
       // The app is ending or this last window is closing: the latest state and scrollback are saved first.
@@ -1071,6 +1081,28 @@ export class Panes {
     attention.mark(session, result.message, pane.chip.textContent ?? "").catch(() => undefined);
   }
 
+  /**
+   * `tiili attention` from the pane running `request.session`: its message marks the pane as a notification escape
+   * code would (made safe, rate-limited, and not while the user looks at the pane), or `clear` takes its mark away.
+   */
+  attentionRequested(request: PaneAttentionRequest): void {
+    const pane = this.allPanes().find((p) => p.session === request.session);
+    if (!pane) return;
+    if (request.clear) {
+      this.clearMark(request.session);
+      return;
+    }
+    const signal = requestedSignal(request.message ?? "");
+    if (signal) this.onSignal(pane, signal);
+  }
+
+  /** `tiili close`: closes the pane running `session` as its close control would, without asking. */
+  async closeRequested(session: SessionId): Promise<void> {
+    const pane = this.allPanes().find((p) => p.session === session);
+    if (!pane) throw new Error(`no pane runs session ${session} in this window`);
+    await this.close(pane);
+  }
+
   /** Shows `marks`, every marked session app-wide, on this window's panes and its background tabs. */
   private showMarks(marks: AttentionMark[]): void {
     this.marks = new Map(marks.map((mark) => [mark.session, mark]));
@@ -1218,11 +1250,11 @@ export class Panes {
   private reportOrder(): void {
     const control = this.backend.paneControl;
     if (!control) return;
-    const sessions = listOrder(this.tabs.map((tab) => tab.sessions()));
-    const order = sessions.join(",");
+    const tabs = this.tabs.map((tab) => tab.sessions());
+    const order = JSON.stringify(tabs);
     if (order === this.reportedOrder) return;
     this.reportedOrder = order;
-    control.setOrder(sessions).catch(() => undefined);
+    control.setOrder(tabs).catch(() => undefined);
   }
 
   /** xterm's key hook: layout, tab, pane, settings, find and clipboard shortcuts are kept from the shell. */
