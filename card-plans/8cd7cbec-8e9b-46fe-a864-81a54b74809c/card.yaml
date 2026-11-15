@@ -6,3 +6,12 @@ x-harvaaja-card: 8cd7cbec-8e9b-46fe-a864-81a54b74809c
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Existing requirement already says notes show as plain text without
+    tags; this hardens plainNotes to meet it. No contract change.
+  citations:
+    - "openspec/specs/app-updates/spec.md: Requirement: Release notes in the
+      update dialog (plain text without tags)"
+    - src/updates.ts plainNotes
+  revision: 106fb9db-f070-4b6c-9098-20f4b9c5fd47
