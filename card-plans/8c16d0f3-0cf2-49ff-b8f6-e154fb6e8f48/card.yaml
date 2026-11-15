@@ -6,3 +6,14 @@ x-harvaaja-card: 8c16d0f3-0cf2-49ff-b8f6-e154fb6e8f48
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable feature (Zen mode, shortcut, menu item, setting)
+    across pane-tiling, pane-layout, pane-attention and settings; no active
+    changes exist.
+  citations:
+    - openspec/specs/pane-tiling/spec.md#Pane shortcuts
+    - openspec/specs/settings/spec.md#Tiling setting
+    - openspec/specs/pane-attention/spec.md#Attention count and next pane
+    - openspec/specs/pane-layout/spec.md#Reset layout
+  revision: 333186c4-08b0-4b1b-871d-f6b103b6e595
