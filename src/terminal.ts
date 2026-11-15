@@ -95,11 +95,19 @@ function applySize(term: Terminal, settings: Settings, zoom: number): void {
   const area = pane?.parentElement?.closest<HTMLElement>("#panes");
   const fitted =
     pane && area
-      ? responsiveFont(font, responsive, pane.getBoundingClientRect(), area.getBoundingClientRect())
+      ? responsiveFont(font, responsive, layoutSize(pane), layoutSize(area))
       : { size: font.size, lineHeight: font.lineHeight, letterSpacing: font.letterSpacing };
   if (term.options.fontSize !== fitted.size) term.options.fontSize = fitted.size;
   if (term.options.lineHeight !== fitted.lineHeight) term.options.lineHeight = fitted.lineHeight;
   if (term.options.letterSpacing !== fitted.letterSpacing) term.options.letterSpacing = fitted.letterSpacing;
+}
+
+/**
+ * `element`'s laid-out size, ignoring transforms: a pane that is still scaling in measures as the size it is settling
+ * at, so its first shell starts at the width it keeps (a shell started wider leaves zsh's `%` mark on screen).
+ */
+function layoutSize(element: HTMLElement): { width: number; height: number } {
+  return { width: element.offsetWidth, height: element.offsetHeight };
 }
 
 /** Whether the terminal's input has focus. A terminal without focus never blinks its cursor. */
