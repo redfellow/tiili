@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { buildArgs, builtAppPath, dependenciesStale, dockEntryXml, isPinned } from "./install-app.mjs";
+import { buildArgs, buildVersion, builtAppPath, dependenciesStale, dockEntryXml, isPinned } from "./install-app.mjs";
 
 describe("install-app", () => {
   const lock = (packages: Record<string, { version?: string; optional?: boolean }>) =>
@@ -33,6 +33,19 @@ describe("install-app", () => {
     const xml = dockEntryXml();
     expect(xml).toContain("<string>/Applications/tiili.app</string>");
     expect(isPinned(xml)).toBe(true);
+  });
+
+  it("Tagged commit: builds the tag's version", () => {
+    expect(buildVersion("v0.3.0-0-gd2c41ae\n", "0.2.0")).toBe("0.3.0");
+  });
+
+  it("Unreleased commits: builds a dev version past the last tag", () => {
+    expect(buildVersion("v0.3.0-145-gd2c41ae\n", "0.2.0")).toBe("0.3.1-dev.145+d2c41ae");
+  });
+
+  it("No tag: falls back to package.json's version", () => {
+    expect(buildVersion(undefined, "0.2.0")).toBe("0.2.0");
+    expect(buildVersion("vnext-3-gabc1234", "0.2.0")).toBe("0.2.0");
   });
 
   it("builds only the host-architecture .app, without an updater bundle", () => {

@@ -8,8 +8,9 @@ npm run bundle
 
 The installers land under `src-tauri/target/**/bundle/`. Builds are unsigned unless the signing variables
 below are set. Product name, version and descriptions come from `src-tauri/tauri.conf.json`; the version is
-read from `package.json` (`"version": "../package.json"`), so it is never edited there; `npm run release`
-bumps it (see [Releasing](#releasing)).
+read from `package.json` (`"version": "../package.json"`), so it is never edited there. Releases do not commit a
+version bump: the release workflow stamps the tag's version into the build (see [Releasing](#releasing)), so the
+version in the repository is only a fallback and may be older than the latest release.
 
 | Platform | Installers | What `npm run bundle` runs |
 | --- | --- | --- |
@@ -38,6 +39,22 @@ running, replaces `/Applications/tiili.app` with the new build, and adds tiili t
 yet. Pinning edits the `com.apple.dock` `persistent-apps` defaults and restarts the Dock with `killall Dock`;
 running the command again replaces the app and leaves the Dock alone. It runs only on macOS and exits with an
 error elsewhere.
+
+It builds whatever is checked out and takes the version from git, not from `package.json`: on a release tag it is
+that release's version (`0.3.0`), and past the last tag it is a dev version such as `0.3.1-dev.145+d2c41ae` (the next
+patch, the number of commits since `v0.3.0` and the commit). A dev version sorts after the release it builds on and
+before any later one, so the in-app updater does not offer the older release but does offer the next. Without a tag
+it falls back to `package.json`'s version. The version is written into `package.json`, `src-tauri/Cargo.toml` and
+`src-tauri/Cargo.lock` for the build only; the files are put back afterwards, also when the build fails or is
+stopped.
+
+To run code that is not on `main` yet, such as `hv/main`, build it from its own worktree so this checkout stays on
+`main`:
+
+```sh
+git fetch origin && git worktree add ../tiili-hv-main origin/hv/main
+cd ../tiili-hv-main && npm run install-app
+```
 
 ## Prerequisites
 

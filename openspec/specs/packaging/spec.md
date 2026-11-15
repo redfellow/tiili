@@ -56,6 +56,17 @@ The project SHALL provide `npm run install-app`. On macOS it SHALL build `tiili.
 - **WHEN** it runs again
 - **THEN** the app is replaced and the Dock is left unchanged
 
+### Requirement: Version of a local install
+`npm run install-app` SHALL build the app with the version from git: the tag's version on a `vX.Y.Z` tag, `<next patch>-dev.<commits since the tag>+<commit>` past the last tag, and `package.json`'s version when there is no tag. It SHALL leave `package.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` as they were.
+
+#### Scenario: Unreleased build
+- **WHEN** `npm run install-app` runs on a commit 145 commits past the tag `v0.3.0`
+- **THEN** the installed app reports version `0.3.1-dev.145+<commit>` and the working tree is unchanged afterwards
+
+#### Scenario: Release build
+- **WHEN** it runs on the commit tagged `v0.3.0`
+- **THEN** the installed app reports version `0.3.0`
+
 ### Requirement: Release command
 The project SHALL provide `npm run release <patch|minor|major>`. It SHALL refuse to run when the working tree has uncommitted changes or the argument is missing or unknown. Otherwise it SHALL bump the version by that kind in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` to the same value, leave `src-tauri/tauri.conf.json` taking its version from `package.json` (`"../package.json"`), commit them, tag the commit `v<version>` and push the commit and tag.
 
