@@ -19,6 +19,21 @@ pub const CASCADE_OFFSET: f64 = 28.0;
 /// `window_new` with its focused pane's folder.
 pub const NEW_WINDOW_EVENT: &str = "new-window";
 
+/// How long a window may stay hidden before tiili shows it anyway. Windows open hidden and their page shows them
+/// once it has painted in its theme, so the webview's white never flashes; this is for a page that never gets there.
+const REVEAL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Shows `window` after [`REVEAL_FALLBACK`] unless its page has shown it already.
+pub fn reveal_later(window: &WebviewWindow) {
+    let window = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(REVEAL_FALLBACK);
+        if !window.is_visible().unwrap_or(true) {
+            let _ = window.show();
+        }
+    });
+}
+
 /// Whether the window-state plugin saves and restores window `label`: only the main window, so extra windows'
 /// size and place never reach the saved state.
 pub fn is_remembered(label: &str) -> bool {
@@ -293,13 +308,15 @@ fn open_window(
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title("tiili >_")
         .inner_size(size.width, size.height)
-        .position(x, y);
+        .position(x, y)
+        // Hidden until its page has painted, as the main window in `tauri.conf.json`.
+        .visible(false);
     // The same decorations as the main window in `tauri.conf.json`.
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true);
-    builder.build().map_err(text)?;
+    reveal_later(&builder.build().map_err(text)?);
     Ok(())
 }
 

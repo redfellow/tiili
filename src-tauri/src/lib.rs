@@ -563,6 +563,9 @@ pub fn run() {
                 })?;
             }
             reset_off_screen_window(app)?;
+            if let Some(main) = app.get_webview_window(windows::MAIN_WINDOW) {
+                windows::reveal_later(&main);
+            }
             #[cfg(target_os = "macos")]
             {
                 let menu = macos_menu(app.handle())?;
