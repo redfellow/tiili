@@ -52,16 +52,20 @@ pub fn run(
 ) -> i32 {
     match execute(args, env, cwd, out) {
         Ok(()) => 0,
-        Err(error) => {
-            let _ = writeln!(
-                err,
-                "tiili: {}\nhint: {}",
-                error.message(),
-                error.suggestion()
-            );
-            error.exit()
-        }
+        Err(error) => report(&error, err),
     }
+}
+
+/// Prints `error` as `tiili: <message>` and `hint: <suggestion>` (the app's own suggestion for an error it replied
+/// with) and returns its exit code.
+fn report(error: &CliError, err: &mut dyn Write) -> i32 {
+    let _ = writeln!(
+        err,
+        "tiili: {}\nhint: {}",
+        error.message(),
+        error.suggestion()
+    );
+    error.exit()
 }
 
 fn execute(
@@ -267,6 +271,17 @@ mod tests {
             assert!(lines[0].starts_with("tiili: "), "{argv:?}: {err}");
             assert!(lines[1].starts_with("hint: "), "{argv:?}: {err}");
         }
+    }
+
+    /// Refused request carries a code: the CLI prints the suggestion the app's reply carries, not its own.
+    #[test]
+    fn refused_request_carries_a_code_the_cli_prints_the_apps_suggestion() {
+        let reply = r#"{"ok":false,"code":"bad_token","error":"wrong or missing token","suggestion":"reopen the pane"}"#;
+        let error = parse_reply(reply).unwrap_err();
+        let mut err = Vec::new();
+        assert_eq!(report(&error, &mut err), 1);
+        let err = String::from_utf8(err).unwrap();
+        assert_eq!(err.lines().nth(1), Some("hint: reopen the pane"), "{err}");
     }
 
     /// Help from a pane, Version, Describe outside a pane: they answer with no tiili variables set and exit 0.

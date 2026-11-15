@@ -150,6 +150,12 @@ pub enum CliError {
     BadReply(String),
     /// The Claude skill could not be installed.
     InstallFailed(String),
+    /// An error the app replied with, carrying the app's own suggestion, which may differ from this binary's
+    /// [`ERRORS`] when the two are different versions.
+    FromApp {
+        error: Box<CliError>,
+        suggestion: String,
+    },
 }
 
 impl CliError {
@@ -165,6 +171,7 @@ impl CliError {
             CliError::ListFailed(_) => "list_failed",
             CliError::BadReply(_) => "bad_reply",
             CliError::InstallFailed(_) => "install_failed",
+            CliError::FromApp { error, .. } => error.code(),
         }
     }
 
@@ -181,9 +188,12 @@ impl CliError {
         self.spec().exit
     }
 
-    /// The fix to suggest.
-    pub fn suggestion(&self) -> &'static str {
-        self.spec().suggestion
+    /// The fix to suggest: the app's own for an error it replied with, else this binary's from [`ERRORS`].
+    pub fn suggestion(&self) -> &str {
+        match self {
+            CliError::FromApp { suggestion, .. } => suggestion,
+            _ => self.spec().suggestion,
+        }
     }
 
     /// What went wrong, without the `tiili:` prefix.
@@ -198,13 +208,14 @@ impl CliError {
             | CliError::ListFailed(why)
             | CliError::BadReply(why)
             | CliError::InstallFailed(why) => why.clone(),
+            CliError::FromApp { error, .. } => error.message(),
         }
     }
 
-    /// The error an app reply with `code` and `message` stands for; a missing or unknown code is a bad reply that
-    /// keeps the app's message.
-    fn from_reply(code: Option<&str>, message: String) -> CliError {
-        match code {
+    /// The error an app reply with `code`, `message` and `suggestion` stands for; a missing or unknown code is a
+    /// bad reply that keeps the app's message. The reply's suggestion, when it has one, is the one to print.
+    fn from_reply(code: Option<&str>, message: String, suggestion: Option<String>) -> CliError {
+        let error = match code {
             Some("bad_token") => CliError::BadToken,
             Some("malformed_request") => CliError::Malformed(
                 message
@@ -215,6 +226,13 @@ impl CliError {
             Some("open_failed") => CliError::OpenFailed(message),
             Some("list_failed") => CliError::ListFailed(message),
             _ => CliError::BadReply(message),
+        };
+        match suggestion.filter(|s| !s.is_empty()) {
+            Some(suggestion) => CliError::FromApp {
+                error: Box::new(error),
+                suggestion,
+            },
+            None => error,
         }
     }
 }
@@ -304,6 +322,7 @@ struct WireReply {
     panes: Option<Vec<PaneInfo>>,
     error: Option<String>,
     code: Option<String>,
+    suggestion: Option<String>,
 }
 
 /// What an unreadable reply is reported as.
@@ -312,8 +331,8 @@ fn unreadable() -> CliError {
 }
 
 /// Reads a reply line; a refusal, a failure or anything malformed is the error to show. A reply's code picks the
-/// error (and so the suggestion, which comes from the same [`ERRORS`] table the app used); a reply without one,
-/// from an older app, is a bad reply that keeps the app's message.
+/// error and its suggestion is the one shown; a reply without a code, from an older app, is a bad reply that keeps
+/// the app's message, and one without a suggestion falls back to this binary's [`ERRORS`].
 pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
     let reply: WireReply = serde_json::from_str(line).map_err(|_| unreadable())?;
     match reply {
@@ -331,8 +350,9 @@ pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
             ok: false,
             error: Some(error),
             code,
+            suggestion,
             ..
-        } => Err(CliError::from_reply(code.as_deref(), error)),
+        } => Err(CliError::from_reply(code.as_deref(), error, suggestion)),
         _ => Err(unreadable()),
     }
 }
@@ -977,7 +997,9 @@ mod tests {
         assert_eq!(reply["code"], "bad_token");
         assert_eq!(reply["error"], error.message());
         assert_eq!(reply["suggestion"], error.suggestion());
-        assert_eq!(parse_reply(&error_reply(&error)), Err(CliError::BadToken));
+        let read = parse_reply(&error_reply(&error)).unwrap_err();
+        assert_eq!(read.code(), "bad_token");
+        assert_eq!(read.suggestion(), error.suggestion());
     }
 
     #[test]
@@ -1074,20 +1096,44 @@ mod tests {
                 r#"{"ok":false,"error":"wrong or missing token"}"#.into(),
                 Err(CliError::BadReply("wrong or missing token".into())),
             ),
-            // A newer app's code this CLI does not know.
+            // A newer app's code this CLI does not know, with no suggestion.
             (
                 r#"{"ok":false,"code":"frobnicated","error":"no"}"#.into(),
                 Err(CliError::BadReply("no".into())),
             ),
+            // ... and with its own suggestion, which is the one kept.
+            (
+                r#"{"ok":false,"code":"frobnicated","error":"no","suggestion":"update tiili"}"#.into(),
+                Err(CliError::FromApp {
+                    error: Box::new(CliError::BadReply("no".into())),
+                    suggestion: "update tiili".into(),
+                }),
+            ),
+            // A known code whose suggestion differs from this binary's table keeps the app's.
+            (
+                r#"{"ok":false,"code":"bad_token","error":"wrong or missing token","suggestion":"reopen the pane"}"#
+                    .into(),
+                Err(CliError::FromApp {
+                    error: Box::new(CliError::BadToken),
+                    suggestion: "reopen the pane".into(),
+                }),
+            ),
         ];
-        // Every error the app can send reads back as itself.
+        // Every error the app can send reads back as itself, with the suggestion it was sent with.
         for error in [
             CliError::BadToken,
             CliError::Malformed("not an object".into()),
             CliError::OpenFailed("no such program".into()),
             CliError::ListFailed("pane 9 is in no window".into()),
         ] {
-            cases.push((error_reply(&error), Err(error)));
+            let suggestion = error.suggestion().to_string();
+            cases.push((
+                error_reply(&error),
+                Err(CliError::FromApp {
+                    error: Box::new(error),
+                    suggestion,
+                }),
+            ));
         }
         for (line, expected) in cases {
             assert_eq!(parse_reply(&line), expected, "{line}");
