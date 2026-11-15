@@ -1,9 +1,9 @@
 ## 1. Hover-only Zen icon
 
-- [ ] 1.1 Add to `src/styles.css` near the "Zen toggle" comment `.pane:not(:hover) .pane-zen-toggle:not([data-marked]):not(:focus-visible) { visibility: hidden; }` and update the comment to say it shows on hover or with the dot
+- [x] 1.1 Add to `src/styles.css` near the "Zen toggle" comment `.pane:not(:hover) .pane-zen-toggle:not([data-marked]):not(:focus-visible) { visibility: hidden; }` and update the comment to say it shows on hover or with the dot
   - proof: `grep -n "pane-zen-toggle:not(\[data-marked\])" src/styles.css`
-- [ ] 1.2 Validate the spec delta
-  - proof: `openspec validate show-a-pane-s-zen-icon-only-while-the-po --strict`
+- [x] 1.2 Validate the spec delta
+  - proof: `openspec validate hover-only-zen-icon-per-pane-kept-visibl --strict`
 
 ## Manual checks after merge (The user)
 
