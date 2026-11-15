@@ -143,11 +143,29 @@ function setState(key, value) {
 
 const mediaMatch = window.matchMedia('(prefers-color-scheme: dark)')
 let themeCallback = null
-mediaMatch.addEventListener("change", async () => {
+const followTheme = async () => {
     if (themeCallback) {
         themeCallback((await Heynote.themeMode.get()).computed)
     }
-})
+}
+// Heynote's "system" theme is tiili's light or dark (window.parent.tiiliTheme), which follows the OS itself when
+// tiili's theme is System. The browser preview, with no tiili around the page, follows the OS directly.
+const tiiliTheme = (() => {
+    try {
+        return window.parent !== window ? window.parent.tiiliTheme : undefined
+    } catch {
+        return undefined
+    }
+})()
+if (tiiliTheme) {
+    const stop = tiiliTheme.onChange(followTheme)
+    window.addEventListener("pagehide", stop)
+} else {
+    mediaMatch.addEventListener("change", followTheme)
+}
+// tiili opens the next Heynote page in the ground of the theme chosen here.
+tiiliTheme?.heynoteChose?.(state.theme)
+const systemTheme = () => tiiliTheme ? tiiliTheme.kind() : (mediaMatch.matches ? "dark" : "light")
 
 let currencyData = null
 
@@ -483,14 +501,14 @@ const Heynote = {
     themeMode: {
         set: (mode) => {
             setState("theme", mode)
+            tiiliTheme?.heynoteChose?.(mode)
             themeCallback(mode)
         },
         get: async () => {
             const theme = state.theme || "system"
-            const systemTheme = mediaMatch.matches ? "dark" : "light"
             return {
                 theme: theme,
-                computed: theme === "system" ? systemTheme : theme,
+                computed: theme === "system" ? systemTheme() : theme,
             }
         },
         onChange: (callback) => {

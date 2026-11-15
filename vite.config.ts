@@ -1,8 +1,12 @@
 import { readFileSync } from "node:fs";
 import type { Plugin, UserConfig } from "vite";
 
-/** The app version from package.json (Tauri reads the same one), baked into the frontend as `__APP_VERSION__`. */
-const appVersion = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
+/**
+ * The app version from src-tauri/Cargo.toml's [package] table (Tauri reads the same one), baked into the frontend as
+ * `__APP_VERSION__`. package.json has no version, so npm's script banner shows none.
+ */
+const cargoToml = readFileSync(new URL("./src-tauri/Cargo.toml", import.meta.url), "utf8");
+const appVersion = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/m.exec(cargoToml)?.[1] ?? "0.0.0-dev";
 
 const host = process.env.TAURI_DEV_HOST;
 

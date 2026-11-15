@@ -68,3 +68,17 @@ Where the platform delivers a notification click to the app, clicking SHALL focu
 #### Scenario: Click a notification
 - **WHEN** the user clicks a pane's notification on a platform that delivers clicks
 - **THEN** that pane's window comes to the front with the pane focused
+
+### Requirement: Attention in Zen mode
+Hidden panes SHALL still be marked by attention signals. While any hidden pane in a Zen window is marked, the lit Zen icon SHALL show a small dot. The next-pane shortcut SHALL show the marked pane in Zen.
+
+#### Scenario: Bell in a hidden pane
+- **WHEN** Zen is on and a hidden pane rings the bell
+- **THEN** the Zen icon shows a dot, and ⌘J shows that pane in Zen and the dot goes
+
+### Requirement: Attention in background tabs
+A background tab with marked panes SHALL show a brick and the count of its marked panes in the tab strip, and no output-activity mark. The next-pane shortcut SHALL show the tab holding the marked pane before focusing it.
+
+#### Scenario: Mark in a background tab
+- **WHEN** a pane in a hidden tab rings the bell and the user presses ⌘J
+- **THEN** the tab showed a brick and `1`, and now it is shown with that pane focused and the mark cleared

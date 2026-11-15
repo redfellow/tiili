@@ -1,8 +1,15 @@
 import type { Backend } from "./backend";
 import type { ClipboardAction, FindAction, Platform } from "./keymap";
+import type { TiiliTheme } from "./themes";
 
 /** Where the Heynote app is served from: `public/heynote/`, built by `npm run heynote`. */
 export const HEYNOTE_URL = "heynote/index.html";
+
+/**
+ * Heynote's editor ground in its light and dark modes, which the frame shows until Heynote has painted; the same
+ * colours as the head style scripts/heynote.mjs adds to Heynote's page.
+ */
+const HEYNOTE_GROUND = { light: "#ffffff", dark: "#252B37" } as const;
 
 /** The Heynote page's own window, with what tiili's bridge (`heynote/bridge.js`) adds to it. */
 type HeynoteWindow = Window & { tiiliFlush?: () => void };
@@ -36,10 +43,23 @@ export function openHeynote(
   const frame = document.createElement("iframe");
   frame.className = "pane-heynote";
   frame.title = "Heynote";
+  // The frame opens in the ground of the mode Heynote starts in and stays hidden until Heynote has painted, with the
+  // pane behind it in that ground meanwhile, so neither the empty frame's white nor the pane's own ground shows.
+  const tiiliTheme = (window as Window & { tiiliTheme?: TiiliTheme }).tiiliTheme;
+  const kind =
+    tiiliTheme?.startKind() ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  frame.style.colorScheme = kind;
+  frame.style.background = HEYNOTE_GROUND[kind];
+  frame.style.visibility = "hidden";
+  host.style.background = HEYNOTE_GROUND[kind];
   frame.src = HEYNOTE_URL;
   const page = () => frame.contentWindow as HeynoteWindow | null;
 
   frame.addEventListener("load", () => {
+    requestAnimationFrame(() => {
+      frame.style.visibility = "";
+      host.style.background = "";
+    });
     const win = page();
     if (!win) return;
     win.addEventListener("focus", onFocus);

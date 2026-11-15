@@ -1,7 +1,7 @@
 // Releases what is on main now, in one command: `npm run release <patch|minor|major|x.y.z>`.
 //
 // No commit is made. The version is the highest vX.Y.Z tag on GitHub bumped by the argument (or the version given),
-// and the release workflow stamps it into package.json, Cargo.toml and Cargo.lock from the tag before it builds
+// and the release workflow stamps it into Cargo.toml and Cargo.lock from the tag before it builds
 // (scripts/stamp-version.mjs). So the command never commits, never switches this checkout's branch, never touches
 // hv/main and does not need a pull:
 //

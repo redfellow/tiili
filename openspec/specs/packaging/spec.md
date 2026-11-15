@@ -6,7 +6,7 @@ How tiili is packaged for release: installers for macOS, Windows and Linux built
 ## Requirements
 
 ### Requirement: Installers per platform
-The project SHALL build installers through Tauri's bundler: an Apple Silicon `.dmg` on macOS, an NSIS setup `.exe` on Windows, and `.AppImage` and `.deb` on Linux. Each installer SHALL carry the product name `tiili`, the version from `package.json` and the short description.
+The project SHALL build installers through Tauri's bundler: an Apple Silicon `.dmg` on macOS, an NSIS setup `.exe` on Windows, and `.AppImage` and `.deb` on Linux. Each installer SHALL carry the product name `tiili`, the version from `src-tauri/Cargo.toml` and the short description.
 
 #### Scenario: Local bundle on the host
 - **WHEN** a developer runs `npm run bundle`
@@ -57,7 +57,7 @@ The project SHALL provide `npm run install-app`. On macOS it SHALL build `tiili.
 - **THEN** the app is replaced and the Dock is left unchanged
 
 ### Requirement: Version of a local install
-`npm run install-app` SHALL build the app with the version from git: the tag's version on a `vX.Y.Z` tag, `<next patch>-dev.<commits since the tag>+<commit>` past the last tag, and `package.json`'s version when there is no tag. It SHALL leave `package.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` as they were.
+`npm run install-app` SHALL build the app with the version from git: the tag's version on a `vX.Y.Z` tag, `<next patch>-dev.<commits since the tag>+<commit>` past the last tag, and `src-tauri/Cargo.toml`'s version when there is no tag. It SHALL leave `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` as they were.
 
 #### Scenario: Unreleased build
 - **WHEN** `npm run install-app` runs on a commit 145 commits past the tag `v0.3.0`
