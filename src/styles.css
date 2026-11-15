@@ -1387,6 +1387,23 @@ dialog.link-dialog {
   user-select: text;
 }
 
+/* The release's What's new items, in the update dialog and the What's new panel: the sunken notes block as a list. */
+.update-items {
+  padding-left: var(--space-5);
+  font-family: inherit;
+  font-size: inherit;
+  white-space: normal;
+}
+
+.update-items li + li {
+  margin-top: var(--space-1);
+}
+
+.update-all-changes {
+  align-self: flex-start;
+  color: var(--accent-text);
+}
+
 .update-notes[hidden],
 .update-progress[hidden] {
   display: none;
