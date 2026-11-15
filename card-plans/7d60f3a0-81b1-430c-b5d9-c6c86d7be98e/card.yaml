@@ -1,0 +1,16 @@
+format: 1
+slug: show-a-pane-s-zen-icon-only-while-the-po
+title: Show a pane's Zen icon only while the pointer is over that pane
+x-harvaaja-card: 7d60f3a0-81b1-430c-b5d9-c6c86d7be98e
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes the observable Zen toggle contract (always shown -> shown on
+    hover or with attention dot); no active change to polish.
+  citations:
+    - "openspec/specs/pane-tiling/spec.md#Requirement: Zen toggle"
+    - "openspec/specs/pane-attention/spec.md#Requirement: Attention in Zen mode"
+    - src/styles.css:760
+  revision: 65a5b0b1-4278-450c-b5e7-a4aaab4c1bc8

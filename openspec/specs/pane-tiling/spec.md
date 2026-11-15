@@ -285,11 +285,19 @@ Each window SHALL have a Zen mode that shows only one pane, centred horizontally
 - **THEN** Zen ends and the remaining pane fills the window
 
 ### Requirement: Zen toggle
-Each pane's title row SHALL have a Zen icon at its right end, hidden with one pane, lit in the accent colour while that pane is in Zen, with tooltip "Zen mode" and the shortcut. Clicking it, double-clicking the title row, ⇧⌘↩ on macOS, Ctrl+Shift+Enter on Windows and Linux, and Shell ▸ Zen Mode on macOS SHALL toggle Zen for the focused pane. The shortcut SHALL not reach the shell.
+Each pane's title row SHALL have a Zen icon at its right end, shown while the pointer is over the pane or while it carries the attention dot, hidden with one pane, lit in the accent colour while that pane is in Zen, with tooltip "Zen mode" and the shortcut. Clicking it, double-clicking the title row, ⇧⌘↩ on macOS, Ctrl+Shift+Enter on Windows and Linux, and Shell ▸ Zen Mode on macOS SHALL toggle Zen for the focused pane. The shortcut SHALL not reach the shell.
 
 #### Scenario: Shortcut toggles
 - **WHEN** two panes are open and the user presses Ctrl+Shift+Enter on Linux
 - **THEN** the focused pane enters Zen and the shell receives nothing
+
+#### Scenario: Icon on hover
+- **WHEN** two panes are open and the pointer is over the first
+- **THEN** the first pane shows the Zen icon and the second keeps an empty space where it would be
+
+#### Scenario: Dot keeps the icon shown
+- **WHEN** Zen is on, a hidden pane rings the bell and the pointer is outside the Zen pane
+- **THEN** the lit Zen icon shows with its dot
 
 ### Requirement: Zen follows focus
 While Zen is on, focusing a pane by number or by the attention shortcut, opening a new pane from the user, or closing the Zen pane SHALL show the newly focused pane in Zen. A pane opened through pane control SHALL join the hidden grid without changing the Zen pane. Moving the Zen pane to another window SHALL end Zen in this window; the pane arrives normal.
