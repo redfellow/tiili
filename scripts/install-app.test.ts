@@ -43,7 +43,7 @@ describe("install-app", () => {
     expect(buildVersion("v0.3.0-145-gd2c41ae\n", "0.2.0")).toBe("0.3.1-dev.145+d2c41ae");
   });
 
-  it("No tag: falls back to package.json's version", () => {
+  it("No tag: falls back to Cargo.toml's version", () => {
     expect(buildVersion(undefined, "0.2.0")).toBe("0.2.0");
     expect(buildVersion("vnext-3-gabc1234", "0.2.0")).toBe("0.2.0");
   });
