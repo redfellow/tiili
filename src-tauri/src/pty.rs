@@ -393,6 +393,13 @@ pub fn set_prompt<'a>(
     Ok(())
 }
 
+/// Makes `colour` (`#RRGGBB`) the one integrated zsh and bash 5.1+ shells give pasted text from their next prompt on.
+pub fn set_highlight(colour: &str) -> io::Result<()> {
+    let dir = crate::shell_integration::default_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no cache folder"))?;
+    crate::shell_integration::write_highlight(&dir, colour)
+}
+
 /// Runs every tick about once a second while `alive` holds, on macOS and Linux; elsewhere neither
 /// the working directory nor the foreground process can be read, so it does nothing.
 fn poll(mut ticks: Vec<Box<dyn FnMut() + Send>>, alive: Arc<AtomicBool>) -> io::Result<()> {

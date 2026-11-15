@@ -7,6 +7,8 @@ import { normalize, type Settings } from "./settings";
 import { createSettingsDialog, mountSettingsPage, type SettingsDialog } from "./settingsDialog";
 import { same } from "./settingsSession";
 import { applyTheme } from "./themes";
+import { documentTokens, followSystemTheme, highlightColour, terminalTheme } from "./theme";
+import type { ITheme } from "@xterm/xterm";
 import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
 import { showUpdateDialog } from "./updateDialog";
@@ -135,6 +137,13 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     settingsWindows.open().catch((error: unknown) => console.error(error));
   };
   const panes = await Panes.create(backend, root, platform, () => settings, openSettings);
+  const report = (error: unknown) => console.error(error);
+  // The shells paste in the selection's colour of the theme shown here, not in reverse video's block of text colour.
+  const highlightShells = (theme: ITheme) => {
+    const colour = highlightColour(theme);
+    if (colour) backend.setHighlight(colour).catch(report);
+  };
+  followSystemTheme(highlightShells, () => settings.theme === "system");
   // The settings last saved or loaded, which a closed settings window's previews give way to.
   let saved = settings;
   const apply = async (next: Settings) => {
@@ -145,11 +154,13 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     settings = next;
     // Open panes follow the prompt live: while picking, on Save, on Cancel and when another window saves.
     if (promptChanged) backend.setPrompt(next.prompt).catch((error: unknown) => console.error(error));
-    if (themeChanged) applyTheme(next.theme);
+    if (themeChanged) {
+      applyTheme(next.theme);
+      highlightShells(terminalTheme(documentTokens()));
+    }
     if (iconChanged) await backend.setAppIcon(next.appIcon);
     await panes.applySettings(next, themeChanged);
   };
-  const report = (error: unknown) => console.error(error);
   if (!settingsWindows) {
     dialog = createSettingsDialog({
       initial: settings,

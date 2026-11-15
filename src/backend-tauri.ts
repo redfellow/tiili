@@ -48,6 +48,7 @@ export function tauriBackend(): Backend {
       });
     },
     setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
+    setHighlight: (colour) => invoke("pty_set_highlight", { colour }),
     write: (id, data) => invoke("pty_write", { id, data }),
     resize: (id, rows, cols) => invoke("pty_resize", { id, rows, cols }),
     close: (id) => invoke("pty_close", { id }),

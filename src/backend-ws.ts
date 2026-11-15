@@ -145,6 +145,7 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
       }),
     // The dev bridge's shells keep the prompt they started with.
     setPrompt: async () => undefined,
+    setHighlight: async () => undefined,
     write: async (id, data) => socketOf(id).send(encodeClient({ type: "input", data })),
     resize: async (id, rows, cols) => socketOf(id).send(encodeClient({ type: "resize", rows, cols })),
     close: async (id) => {
