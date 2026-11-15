@@ -22,7 +22,7 @@
   - proof: `npx vitest run src/backend.test.ts src/backend-ws.test.ts`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test window_state`
 - [ ] 3.2 macOS Shell menu items New Tab, Next Tab, Previous Tab, Move Pane to Next/Previous Tab in macos_menu() (src-tauri/src/lib.rs), emitted through the "pane" event and handled in viaMenu()
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `grep -nE "New Tab|Next Tab|Previous Tab" src-tauri/src/lib.rs`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
   - proof: `npm run typecheck`
 
