@@ -19,6 +19,14 @@ export interface TileHooks {
   motionPlay(): Map<PaneId, number>;
   /** The panes have reached their new places: terminals refit once to their final size. */
   motionEnd(): void;
+  /** The Zen pane's width in CSS pixels at the saved Zen width, for a pane area `areaWidth` wide. */
+  zenWidth(areaWidth: number): number;
+  /** `widthPx` kept between the Zen pane's narrowest and widest width for a pane area `areaWidth` wide. */
+  zenClamp(widthPx: number, areaWidth: number): number;
+  /** A Zen edge drag started: the Zen terminal holds its size until it ends. */
+  zenResizeStart(): void;
+  /** A Zen edge drag ended with the Zen pane `widthPx` wide: the terminal refits once and the width is saved. */
+  zenResizeEnd(widthPx: number): void;
 }
 
 /** The pane id stored on each pane element. */
@@ -26,6 +34,9 @@ const PANE_ID = "paneId";
 
 /** The width of the miniature that follows the pointer while a pane is dragged. */
 const DRAG_PREVIEW_WIDTH = 200;
+
+/** How long after a drag ends a double-click still counts as part of the drag. */
+const DRAG_SETTLE_MS = 500;
 
 function sum(sizes: number[], count: number): number {
   return sizes.slice(0, count).reduce((total, s) => total + s, 0);
@@ -54,20 +65,53 @@ export class TileView {
   private generation = 0;
   /** True between `motionStart` and `motionEnd`. */
   private moving = false;
+  /** The pane shown alone in the centre, or undefined when the grid shows. */
+  private zen: PaneId | undefined;
+  /** When the last drag that moved the pointer ended, for telling a double-click from a drag. */
+  private draggedAt = -Infinity;
+  /** True while a Zen edge is dragged, so a window resize doesn't undo the width being dragged. */
+  private zenDragging = false;
 
   constructor(
     private readonly root: HTMLElement,
     private readonly hooks: TileHooks,
   ) {
     root.addEventListener("pointerdown", (event) => this.onPointerDown(event));
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => this.sizeZen()).observe(root);
+  }
+
+  /** True when a pane or edge drag ended a moment ago: a double-click then is part of the drag. */
+  dragged(): boolean {
+    return performance.now() - this.draggedAt < DRAG_SETTLE_MS;
+  }
+
+  /** Sizes the Zen pane again from the saved Zen width, e.g. after its font size or the setting changed. */
+  sizeZen(): void {
+    const box = this.zenBox();
+    if (!box || this.zenDragging) return;
+    this.placeZen(box, this.hooks.zenWidth(this.root.clientWidth));
+  }
+
+  /** Makes the Zen box `width` pixels wide, centred in the pane area. */
+  private placeZen(box: HTMLElement, width: number): void {
+    box.style.width = `${width}px`;
+    box.style.left = `calc(50% - ${width / 2}px)`;
+  }
+
+  private zenBox(): HTMLElement | null {
+    return this.root.querySelector<HTMLElement>(":scope > .pane-zen");
   }
 
   /**
    * Lays `state` out again, moving the pane elements into place. Panes that move glide from their old rect to the
    * new one, new panes grow in and panes no longer in `state` shrink and fade out, unless the OS asks for reduced
    * motion. A change while panes are still moving starts from where they are on screen.
+   *
+   * With `zen`, that pane shows alone in a centred box at the Zen width; the others stay laid out in the grid,
+   * hidden, so their terminals keep running and keep their place and size.
    */
-  render(state: LayoutState): void {
+  render(state: LayoutState, zen?: PaneId): void {
+    this.zen = zen !== undefined && state.order.includes(zen) ? zen : undefined;
     const animate = !prefersReducedMotion();
     // Measured before the running animations stop, so the panes start from where they are seen.
     const before = animate ? this.measure() : new Map<PaneId, Rect>();
@@ -160,9 +204,11 @@ export class TileView {
     return animations;
   }
 
-  /** The pane elements laid out in the grid, without the ones fading out. */
+  /** The pane elements laid out in the grid or the Zen box, without the ones fading out. */
   private panes(): HTMLElement[] {
-    return Array.from(this.root.querySelectorAll<HTMLElement>(":scope > .pane-row > .pane"));
+    return Array.from(
+      this.root.querySelectorAll<HTMLElement>(":scope > .pane-row > .pane, :scope > .pane-zen > .pane"),
+    );
   }
 
   /** Each laid-out pane's rect on screen, by pane id. */
@@ -199,9 +245,14 @@ export class TileView {
     this.hooks.motionEnd();
   }
 
-  /** Builds the rows, panes and dividers for `state`. */
+  /**
+   * Builds the rows, panes and dividers for `state`. In Zen the Zen pane goes into a centred box with an edge handle
+   * on each side and a placeholder keeps its grid slot; the other panes are hidden in place and there are no dividers.
+   */
   private layOut(state: LayoutState): void {
     this.state = state;
+    const zen = this.zen;
+    let zenElement: HTMLElement | undefined;
     const rows = Array.from({ length: state.rows }, (_, r) => {
       const row = document.createElement("div");
       row.className = "pane-row";
@@ -210,16 +261,38 @@ export class TileView {
         ...ids.map((id) => {
           const element = this.hooks.element(id);
           element.dataset[PANE_ID] = String(id);
-          return element;
+          element.toggleAttribute("data-zen-hidden", zen !== undefined && id !== zen);
+          if (id !== zen) return element;
+          zenElement = element;
+          const placeholder = document.createElement("div");
+          placeholder.className = "pane-placeholder";
+          return placeholder;
         }),
       );
       return row;
     });
-    const dividers: HTMLElement[] = [];
-    for (let i = 0; i + 1 < state.cols; i++) dividers.push(this.divider("col", i));
-    for (let i = 0; i + 1 < state.rows; i++) dividers.push(this.divider("row", i));
-    this.root.replaceChildren(...rows, ...dividers);
+    this.root.toggleAttribute("data-zen", zenElement !== undefined);
+    if (zenElement) {
+      zenElement.style.flexGrow = "1";
+      const box = document.createElement("div");
+      box.className = "pane-zen";
+      box.append(this.zenEdge("left"), zenElement, this.zenEdge("right"));
+      this.placeZen(box, this.hooks.zenWidth(this.root.clientWidth));
+      this.root.replaceChildren(...rows, box);
+    } else {
+      const dividers: HTMLElement[] = [];
+      for (let i = 0; i + 1 < state.cols; i++) dividers.push(this.divider("col", i));
+      for (let i = 0; i + 1 < state.rows; i++) dividers.push(this.divider("row", i));
+      this.root.replaceChildren(...rows, ...dividers);
+    }
     this.applySizes(state);
+  }
+
+  private zenEdge(side: "left" | "right"): HTMLElement {
+    const edge = document.createElement("div");
+    edge.className = `pane-zen-edge pane-zen-edge-${side}`;
+    edge.dataset.side = side;
+    return edge;
   }
 
   private divider(axis: Axis, index: number): HTMLElement {
@@ -262,6 +335,13 @@ export class TileView {
       this.dragDivider(divider, event);
       return;
     }
+    const edge = event.target.closest<HTMLElement>(".pane-zen-edge");
+    if (edge) {
+      this.dragZenEdge(edge, event);
+      return;
+    }
+    // Panes can't be dragged onto each other while one is shown alone.
+    if (this.zen !== undefined) return;
     const grab = event.target.closest<HTMLElement>(".pane-grab");
     const pane = grab?.closest<HTMLElement>(".pane");
     if (grab && pane) this.dragPane(grab, pane, event);
@@ -300,11 +380,48 @@ export class TileView {
       divider.removeEventListener("pointerup", onEnd);
       divider.removeEventListener("pointercancel", onEnd);
       divider.toggleAttribute("data-dragging", false);
+      if (current !== start) this.draggedAt = performance.now();
       this.hooks.resizeEnd(start, current);
     };
     divider.addEventListener("pointermove", onMove);
     divider.addEventListener("pointerup", onEnd);
     divider.addEventListener("pointercancel", onEnd);
+  }
+
+  /**
+   * Widens or narrows the Zen pane as an edge is dragged, both edges moving alike so it stays centred, between its
+   * narrowest and widest width; the terminal holds its size until the edge is let go, then the width is saved.
+   */
+  private dragZenEdge(edge: HTMLElement, down: PointerEvent): void {
+    const box = this.zenBox();
+    if (!box) return;
+    down.preventDefault();
+    const outward = edge.dataset.side === "left" ? -1 : 1;
+    // The width it is set to, not its rect, which a glide still playing scales.
+    const start = parseFloat(box.style.width) || box.getBoundingClientRect().width;
+    const area = this.root.clientWidth;
+    let width = start;
+    edge.setPointerCapture(down.pointerId);
+    edge.toggleAttribute("data-dragging", true);
+    this.zenDragging = true;
+    this.hooks.zenResizeStart();
+
+    const onMove = (event: PointerEvent) => {
+      width = this.hooks.zenClamp(start + 2 * outward * (event.clientX - down.clientX), area);
+      this.placeZen(box, width);
+    };
+    const onEnd = () => {
+      edge.removeEventListener("pointermove", onMove);
+      edge.removeEventListener("pointerup", onEnd);
+      edge.removeEventListener("pointercancel", onEnd);
+      edge.toggleAttribute("data-dragging", false);
+      this.zenDragging = false;
+      if (width !== start) this.draggedAt = performance.now();
+      this.hooks.zenResizeEnd(width);
+    };
+    edge.addEventListener("pointermove", onMove);
+    edge.addEventListener("pointerup", onEnd);
+    edge.addEventListener("pointercancel", onEnd);
   }
 
   /** A miniature of `pane` as it looks now: a scaled-down copy of its elements, kept from taking part in the page. */
@@ -371,6 +488,7 @@ export class TileView {
       ghost?.remove();
       source.toggleAttribute("data-drag-source", false);
       document.documentElement.toggleAttribute("data-pane-dragging", false);
+      if (ghost) this.draggedAt = performance.now();
       if (drop && to !== undefined) this.hooks.swap(from, to);
     };
     const onUp = () => finish(true);
