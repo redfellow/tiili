@@ -71,15 +71,53 @@ The builds are not signed yet, so the first launch takes one extra step:
 
 ## Shortcuts
 
+<!-- generated:shortcuts: `npm run docs` writes this from src/shortcuts.ts; after a merge conflict here, re-run it -->
+
+### Panes
+
 | Action | macOS | Windows and Linux |
 | --- | --- | --- |
 | New terminal | ⌘T | Ctrl+Shift+T |
 | Close terminal | ⌘W | Ctrl+Shift+W |
 | Focus terminal 1–9 | ⌘1–⌘9 | Alt+1–Alt+9 |
+| Focus the terminal that needs you | ⌘J | Ctrl+Shift+J |
 | Move pane | ⌃⌘ + arrow | Ctrl+Alt+Shift + arrow |
 | Reset grid | ⌃⌘0 | Ctrl+Alt+Shift+0 |
-| Copy / Paste | ⌘C / ⌘V | Ctrl+Shift+C / Ctrl+Shift+V |
+| New window | ⌘N | Ctrl+Shift+N |
+| Move pane to a new window | ⌃⌘N | Ctrl+Alt+Shift+N |
+
+### Tabs
+
+| Action | macOS | Windows and Linux |
+| --- | --- | --- |
+| New tab | ⇧⌘T | Ctrl+Alt+Shift+T |
+| Next tab | ⇧⌘] or ⌃Tab | Ctrl+PageDown |
+| Previous tab | ⇧⌘[ or ⌃⇧Tab | Ctrl+PageUp |
+| Move pane to the next tab | ⌃⇧⌘] | Ctrl+Shift+PageDown |
+| Move pane to the previous tab | ⌃⇧⌘[ | Ctrl+Shift+PageUp |
+
+### Find
+
+| Action | macOS | Windows and Linux |
+| --- | --- | --- |
+| Find | ⌘F | Ctrl+Shift+F |
+| Next match | ⌘G | F3 |
+| Previous match | ⇧⌘G | Shift+F3 |
+
+### View and edit
+
+| Action | macOS | Windows and Linux |
+| --- | --- | --- |
+| Copy | ⌘C | Ctrl+Shift+C |
+| Paste | ⌘V | Ctrl+Shift+V |
+| Select all | ⌘A | — |
+| Larger text | ⌘= | Ctrl+= |
+| Smaller text | ⌘− | Ctrl+− |
+| Reset text size | ⌘0 | Ctrl+0 |
+| Zen mode | ⇧⌘Enter | Ctrl+Shift+Enter |
 | Settings | ⌘, | Ctrl+, |
+
+<!-- end generated:shortcuts -->
 
 On Windows the name chip follows `cd` only when your shell reports its folder: see
 [Windows: let the chip follow `cd`](docs/windows-cd.md).
