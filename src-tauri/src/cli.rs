@@ -1,6 +1,7 @@
-//! `tiili open` and `tiili list`: the app's binary in command-line mode, run from inside a pane. It finds the app
-//! through `TIILI_SOCKET`, `TIILI_TOKEN` and `TIILI_PANE`, sends one request (see [`crate::control`]) and prints
-//! the answer.
+//! `tiili <command>`: the app's binary in command-line mode, with the commands of [`crate::control::COMMANDS`].
+//! `open` and `list` run from inside a pane: they find the app through `TIILI_SOCKET`, `TIILI_TOKEN` and
+//! `TIILI_PANE`, send one request (see [`crate::control`]) and print the answer. `help`, `--version`, `describe`
+//! and `install-claude-skill` work anywhere without the app.
 
 use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, Write};
@@ -8,21 +9,22 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::control::{
-    list_lines, parse_args, parse_reply, request_line, CliCommand, Op, Reply, PANE_VAR, SOCKET_VAR,
-    TOKEN_VAR, USAGE,
+    describe, help_text, list_lines, parse_args, parse_reply, request_line, version_line,
+    CliCommand, CliError, Op, Reply, PANE_VAR, SOCKET_VAR, TOKEN_VAR,
 };
-
-/// Exit code for a request that failed or could not be sent.
-pub const FAILED: i32 = 1;
-/// Exit code for arguments `tiili` does not understand.
-pub const USAGE_ERROR: i32 = 2;
 
 /// How long `tiili` waits for the answer; an open waits up to 10 seconds for the window.
 const REPLY_WAIT: Duration = Duration::from_secs(15);
 
-/// Whether the arguments after the program name ask for command-line mode rather than the app.
+/// Whether the arguments after the program name ask for command-line mode rather than the app: a command, the help
+/// or version flags, or any other bare word (an unknown command, refused with a usage error). No arguments, or a
+/// dash-prefixed one the OS passes (`-psn_0_123` on macOS), start the app.
 pub fn is_cli(args: &[String]) -> bool {
-    matches!(args.first().map(String::as_str), Some("open" | "list"))
+    match args.first().map(String::as_str) {
+        Some("--help" | "-h" | "--version") => true,
+        Some(first) => !first.starts_with('-'),
+        None => false,
+    }
 }
 
 /// Runs `tiili ARGS` and exits with its code.
@@ -39,7 +41,8 @@ pub fn main(args: &[String]) -> ! {
 }
 
 /// Runs `tiili ARGS` (without the program name) with the variables `env` reads, from folder `cwd`, printing to
-/// `out` and `err`; returns the exit code.
+/// `out` and `err`; returns the exit code. A failure prints `tiili: <message>` and `hint: <suggestion>` on `err`
+/// and exits with its [`CliError`] code.
 pub fn run(
     args: &[String],
     env: &dyn Fn(&str) -> Option<OsString>,
@@ -47,43 +50,51 @@ pub fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> i32 {
-    let command = match parse_args(args) {
-        Ok(command) => command,
-        Err(why) => {
-            let _ = writeln!(err, "tiili: {why}\n{USAGE}");
-            return USAGE_ERROR;
+    match execute(args, env, cwd, out) {
+        Ok(()) => 0,
+        Err(error) => report(&error, err),
+    }
+}
+
+/// Prints `error` as `tiili: <message>` and `hint: <suggestion>` (the app's own suggestion for an error it replied
+/// with) and returns its exit code.
+fn report(error: &CliError, err: &mut dyn Write) -> i32 {
+    let _ = writeln!(
+        err,
+        "tiili: {}\nhint: {}",
+        error.message(),
+        error.suggestion()
+    );
+    error.exit()
+}
+
+fn execute(
+    args: &[String],
+    env: &dyn Fn(&str) -> Option<OsString>,
+    cwd: Option<&Path>,
+    out: &mut dyn Write,
+) -> Result<(), CliError> {
+    let op = match parse_args(args)? {
+        // Help, version and describe answer here, before anything reaches for the app.
+        CliCommand::Help(cmd) => {
+            let _ = write!(out, "{}", help_text(cmd.as_deref())?);
+            return Ok(());
         }
-    };
-    let Some(socket) = env(SOCKET_VAR).filter(|s| !s.is_empty()) else {
-        let _ = writeln!(
-            err,
-            "tiili: not inside a tiili pane ({SOCKET_VAR} is not set)"
-        );
-        return FAILED;
-    };
-    let pane = match env(PANE_VAR) {
-        None => {
-            let _ = writeln!(
-                err,
-                "tiili: not inside a tiili pane ({PANE_VAR} is not set)"
-            );
-            return FAILED;
+        CliCommand::Version => {
+            let _ = writeln!(out, "{}", version_line());
+            return Ok(());
         }
-        Some(value) => match value.to_str().and_then(|p| p.parse().ok()) {
-            Some(pane) => pane,
-            None => {
-                let _ = writeln!(
-                    err,
-                    "tiili: not inside a tiili pane ({PANE_VAR} is not a pane id)"
-                );
-                return FAILED;
-            }
-        },
-    };
-    let token = env(TOKEN_VAR)
-        .map(|t| t.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let op = match command {
+        CliCommand::Describe(cmd) => {
+            let json = serde_json::to_string_pretty(&describe(cmd.as_deref())?)
+                .expect("describe serializes");
+            let _ = writeln!(out, "{json}");
+            return Ok(());
+        }
+        CliCommand::InstallClaudeSkill => {
+            let path = crate::claude_skill::install_from_env(env)?;
+            let _ = writeln!(out, "Installed the tiili-tiles skill to {}", path.display());
+            return Ok(());
+        }
         CliCommand::List => Op::List,
         CliCommand::Open {
             cwd: dir,
@@ -103,28 +114,30 @@ pub fn run(
             path: env("PATH").map(|p| p.to_string_lossy().into_owned()),
         },
     };
-    let reply = ask(Path::new(&socket), &request_line(&token, pane, &op))
-        .map_err(|e| {
-            format!(
-                "could not reach tiili at {}: {e} (is the tiili app that opened this pane still running?)",
-                socket.to_string_lossy()
-            )
-        })
-        .and_then(|line| parse_reply(&line));
-    match reply {
-        Ok(Reply::Opened(id)) => {
+    let socket = env(SOCKET_VAR)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| CliError::NotInPane(format!("{SOCKET_VAR} is not set")))?;
+    let pane = match env(PANE_VAR) {
+        None => return Err(CliError::NotInPane(format!("{PANE_VAR} is not set"))),
+        Some(value) => value
+            .to_str()
+            .and_then(|p| p.parse().ok())
+            .ok_or_else(|| CliError::NotInPane(format!("{PANE_VAR} is not a pane id")))?,
+    };
+    let token = env(TOKEN_VAR)
+        .map(|t| t.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let line = ask(Path::new(&socket), &request_line(&token, pane, &op))
+        .map_err(|e| CliError::Unreachable(format!("{}: {e}", socket.to_string_lossy())))?;
+    match parse_reply(&line)? {
+        Reply::Opened(id) => {
             let _ = writeln!(out, "{id}");
-            0
         }
-        Ok(Reply::Listed(panes)) => {
+        Reply::Listed(panes) => {
             let _ = write!(out, "{}", list_lines(&panes));
-            0
-        }
-        Err(why) => {
-            let _ = writeln!(err, "tiili: {why}");
-            FAILED
         }
     }
+    Ok(())
 }
 
 /// Sends request `line` to the endpoint and reads the answer line.
@@ -170,7 +183,7 @@ fn connect(endpoint: &Path) -> io::Result<std::fs::File> {
 }
 
 /// A release build on Windows is a GUI program with no console of its own: its output goes to the console of the
-/// shell that ran it, unless it was redirected. Every `tiili <subcommand>` path calls this before writing output.
+/// shell that ran it, unless it was redirected. Every `tiili <command>` path calls this before writing output.
 pub fn attach_console() {
     #[cfg(windows)]
     {
@@ -194,23 +207,34 @@ mod tests {
         list.iter().map(|a| a.to_string()).collect()
     }
 
+    /// Launch arguments still start the app: commands, help and version flags and bare words run the CLI;
+    /// nothing, or another dash-prefixed argument, starts the app.
     #[test]
-    fn only_open_and_list_run_the_cli() {
+    fn commands_flags_and_bare_words_run_the_cli() {
         let cases: &[(&[&str], bool)] = &[
             (&["open", "--", "ls"], true),
             (&["list"], true),
+            (&["install-claude-skill"], true),
+            (&["describe"], true),
+            (&["help"], true),
+            (&["--help"], true),
+            (&["-h"], true),
+            (&["--version"], true),
+            (&["frobnicate"], true),
             (&[], false),
             (&["-psn_0_12345"], false),
             (&["--", "open"], false),
+            (&["--frobnicate"], false),
         ];
         for (argv, cli) in cases {
             assert_eq!(is_cli(&args(argv)), *cli, "{argv:?}");
         }
     }
 
-    /// Outside tiili, Missing command: neither reaches the app.
+    /// Outside a pane with a hint, Unknown command, Missing command: none reaches the app, each prints its
+    /// message and a hint, and exits with its code.
     #[test]
-    fn outside_tiili_and_missing_command_fail_without_a_request() {
+    fn outside_a_pane_and_bad_arguments_fail_with_a_hint_and_a_code() {
         let socket_only = |name: &str| (name == SOCKET_VAR).then(|| OsString::from("/nowhere"));
         let nothing = |_: &str| None;
         let bad_pane = |name: &str| match name {
@@ -220,15 +244,18 @@ mod tests {
         };
         type Env = fn(&str) -> Option<OsString>;
         let cases: &[(&[&str], Env, i32)] = &[
-            (&["open", "--", "ls"], nothing, FAILED),
-            (&["list"], nothing, FAILED),
+            (&["open", "--", "ls"], nothing, 3),
+            (&["list"], nothing, 3),
             // TIILI_PANE missing too.
-            (&["list"], socket_only, FAILED),
+            (&["list"], socket_only, 3),
             // TIILI_PANE set but not a pane id.
-            (&["list"], bad_pane, FAILED),
-            (&["open"], nothing, USAGE_ERROR),
-            (&["open", "--"], socket_only, USAGE_ERROR),
-            (&["list", "extra"], socket_only, USAGE_ERROR),
+            (&["list"], bad_pane, 3),
+            (&["open"], nothing, 2),
+            (&["open", "--"], socket_only, 2),
+            (&["list", "extra"], socket_only, 2),
+            (&["frobnicate"], nothing, 2),
+            (&["help", "frobnicate"], nothing, 2),
+            (&["describe", "frobnicate"], nothing, 2),
         ];
         for (argv, env, code) in cases {
             let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -238,7 +265,53 @@ mod tests {
                 "{argv:?}"
             );
             assert!(out.is_empty(), "{argv:?} printed {out:?}");
-            assert!(!err.is_empty(), "{argv:?} said nothing");
+            let err = String::from_utf8(err).unwrap();
+            let lines: Vec<&str> = err.lines().collect();
+            assert_eq!(lines.len(), 2, "{argv:?}: {err}");
+            assert!(lines[0].starts_with("tiili: "), "{argv:?}: {err}");
+            assert!(lines[1].starts_with("hint: "), "{argv:?}: {err}");
+        }
+    }
+
+    /// Refused request carries a code: the CLI prints the suggestion the app's reply carries, not its own.
+    #[test]
+    fn refused_request_carries_a_code_the_cli_prints_the_apps_suggestion() {
+        let reply = r#"{"ok":false,"code":"bad_token","error":"wrong or missing token","suggestion":"reopen the pane"}"#;
+        let error = parse_reply(reply).unwrap_err();
+        let mut err = Vec::new();
+        assert_eq!(report(&error, &mut err), 1);
+        let err = String::from_utf8(err).unwrap();
+        assert_eq!(err.lines().nth(1), Some("hint: reopen the pane"), "{err}");
+    }
+
+    /// Help from a pane, Version, Describe outside a pane: they answer with no tiili variables set and exit 0.
+    #[test]
+    fn help_version_and_describe_answer_without_a_pane() {
+        let nothing = |_: &str| None;
+        let cases: &[(&[&str], String)] = &[
+            (&["--help"], help_text(None).unwrap()),
+            (&["-h"], help_text(None).unwrap()),
+            (&["help"], help_text(None).unwrap()),
+            (&["help", "open"], help_text(Some("open")).unwrap()),
+            (&["--version"], format!("{}\n", version_line())),
+            (
+                &["describe"],
+                serde_json::to_string_pretty(&describe(None).unwrap()).unwrap() + "\n",
+            ),
+            (
+                &["describe", "open"],
+                serde_json::to_string_pretty(&describe(Some("open")).unwrap()).unwrap() + "\n",
+            ),
+        ];
+        for (argv, expected) in cases {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            assert_eq!(
+                run(&args(argv), &nothing, None, &mut out, &mut err),
+                0,
+                "{argv:?}"
+            );
+            assert_eq!(String::from_utf8(out).unwrap(), *expected, "{argv:?}");
+            assert!(err.is_empty(), "{argv:?}");
         }
     }
 }

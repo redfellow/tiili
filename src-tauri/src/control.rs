@@ -2,8 +2,10 @@
 //! the token check, the replies and the `tiili` command line. The control server
 //! ([`control_server`](crate::control_server)) and the CLI ([`cli`](crate::cli)) carry it out.
 //!
-//! A request is one JSON line, `{"token","pane","op":"open"|"list",...}`; the reply is one JSON line,
-//! `{"ok":true,"pane":7}`, `{"ok":true,"panes":[...]}` or `{"ok":false,"error":"..."}`.
+//! A request is one JSON line, `{"protocol":1,"token","pane","op":"open"|"list",...}`; the reply is one JSON line,
+//! `{"ok":true,"protocol":1,"pane":7}`, `{"ok":true,"protocol":1,"panes":[...]}` or
+//! `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
+//! failures one, [`ERRORS`].
 
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +44,7 @@ pub struct Request {
 
 #[derive(Serialize)]
 struct WireRequest<'a> {
+    protocol: u32,
     token: &'a str,
     pane: SessionId,
     #[serde(flatten)]
@@ -55,23 +58,181 @@ struct Body {
     op: Op,
 }
 
-/// Why a request was refused.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Refusal {
+/// The control protocol version every request and reply carries; nothing compares it yet.
+pub const PROTOCOL: u32 = 1;
+
+/// A `tiili` failure's stable code and what it means: the exit code, when it happens and the fix to suggest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorSpec {
+    pub code: &'static str,
+    pub exit: i32,
+    pub summary: &'static str,
+    pub suggestion: &'static str,
+}
+
+/// Every error `tiili` reports, once, by code. [`CliError`] and `tiili describe` read it.
+pub const ERRORS: &[ErrorSpec] = &[
+    ErrorSpec {
+        code: "usage",
+        exit: 2,
+        summary: "the arguments are not a tiili command",
+        suggestion: "run tiili help to see the commands",
+    },
+    ErrorSpec {
+        code: "not_in_pane",
+        exit: 3,
+        summary: "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id",
+        suggestion: "run tiili from a pane of the running tiili app",
+    },
+    ErrorSpec {
+        code: "unreachable",
+        exit: 4,
+        summary: "the tiili app at TIILI_SOCKET could not be reached",
+        suggestion: "check that the tiili app that opened this pane is still running",
+    },
+    ErrorSpec {
+        code: "bad_token",
+        exit: 1,
+        summary: "the app refused the request: TIILI_TOKEN is missing or not this run's",
+        suggestion: "run tiili from a pane of the running tiili app",
+    },
+    ErrorSpec {
+        code: "malformed_request",
+        exit: 1,
+        summary: "the app could not read the request",
+        suggestion: "use the tiili command of the running app, so both speak the same protocol",
+    },
+    ErrorSpec {
+        code: "open_failed",
+        exit: 1,
+        summary: "the app could not open the pane",
+        suggestion: "check that the command is on PATH and the folder exists",
+    },
+    ErrorSpec {
+        code: "list_failed",
+        exit: 1,
+        summary: "the app could not list the panes",
+        suggestion: "check that this pane is still open in a tiili window",
+    },
+    ErrorSpec {
+        code: "bad_reply",
+        exit: 1,
+        summary: "the app sent a reply tiili could not read, or one without an error code",
+        suggestion: "restart the tiili app, or update it to match this tiili command",
+    },
+    ErrorSpec {
+        code: "install_failed",
+        exit: 1,
+        summary: "the skill could not be written under the home folder",
+        suggestion:
+            "set HOME (USERPROFILE on Windows) to a home folder you can write to and run it again",
+    },
+];
+
+/// Why a `tiili` command failed, in the app or on the command line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CliError {
+    /// The arguments are wrong; the text says how.
+    Usage(String),
+    /// Not inside a tiili pane; the text says which variable is missing or wrong.
+    NotInPane(String),
+    /// The app could not be reached; the text says where and why.
+    Unreachable(String),
     /// The token is missing or not this run's.
     BadToken,
     /// The line is not a valid control message.
     Malformed(String),
+    /// The app could not open the pane.
+    OpenFailed(String),
+    /// The app could not list the panes.
+    ListFailed(String),
+    /// The app's reply could not be read, or carried no known code.
+    BadReply(String),
+    /// The Claude skill could not be installed.
+    InstallFailed(String),
+    /// An error the app replied with, carrying the app's own suggestion, which may differ from this binary's
+    /// [`ERRORS`] when the two are different versions.
+    FromApp {
+        error: Box<CliError>,
+        suggestion: String,
+    },
 }
 
-impl Refusal {
-    /// The error the reply carries.
+impl CliError {
+    /// The stable code, one of [`ERRORS`].
+    pub fn code(&self) -> &'static str {
+        match self {
+            CliError::Usage(_) => "usage",
+            CliError::NotInPane(_) => "not_in_pane",
+            CliError::Unreachable(_) => "unreachable",
+            CliError::BadToken => "bad_token",
+            CliError::Malformed(_) => "malformed_request",
+            CliError::OpenFailed(_) => "open_failed",
+            CliError::ListFailed(_) => "list_failed",
+            CliError::BadReply(_) => "bad_reply",
+            CliError::InstallFailed(_) => "install_failed",
+            CliError::FromApp { error, .. } => error.code(),
+        }
+    }
+
+    fn spec(&self) -> &'static ErrorSpec {
+        let code = self.code();
+        ERRORS
+            .iter()
+            .find(|e| e.code == code)
+            .expect("every error code is in ERRORS")
+    }
+
+    /// The process exit code.
+    pub fn exit(&self) -> i32 {
+        self.spec().exit
+    }
+
+    /// The fix to suggest: the app's own for an error it replied with, else this binary's from [`ERRORS`].
+    pub fn suggestion(&self) -> &str {
+        match self {
+            CliError::FromApp { suggestion, .. } => suggestion,
+            _ => self.spec().suggestion,
+        }
+    }
+
+    /// What went wrong, without the `tiili:` prefix.
     pub fn message(&self) -> String {
         match self {
-            Refusal::BadToken => {
-                "wrong or missing token (run tiili from a pane of the running app)".to_string()
-            }
-            Refusal::Malformed(why) => format!("malformed request: {why}"),
+            CliError::Usage(why) => why.clone(),
+            CliError::NotInPane(why) => format!("not inside a tiili pane ({why})"),
+            CliError::Unreachable(why) => format!("could not reach tiili at {why}"),
+            CliError::BadToken => "wrong or missing token".to_string(),
+            CliError::Malformed(why) => format!("malformed request: {why}"),
+            CliError::OpenFailed(why)
+            | CliError::ListFailed(why)
+            | CliError::BadReply(why)
+            | CliError::InstallFailed(why) => why.clone(),
+            CliError::FromApp { error, .. } => error.message(),
+        }
+    }
+
+    /// The error an app reply with `code`, `message` and `suggestion` stands for; a missing or unknown code is a
+    /// bad reply that keeps the app's message. The reply's suggestion, when it has one, is the one to print.
+    fn from_reply(code: Option<&str>, message: String, suggestion: Option<String>) -> CliError {
+        let error = match code {
+            Some("bad_token") => CliError::BadToken,
+            Some("malformed_request") => CliError::Malformed(
+                message
+                    .strip_prefix("malformed request: ")
+                    .map(str::to_string)
+                    .unwrap_or(message),
+            ),
+            Some("open_failed") => CliError::OpenFailed(message),
+            Some("list_failed") => CliError::ListFailed(message),
+            _ => CliError::BadReply(message),
+        };
+        match suggestion.filter(|s| !s.is_empty()) {
+            Some(suggestion) => CliError::FromApp {
+                error: Box::new(error),
+                suggestion,
+            },
+            None => error,
         }
     }
 }
@@ -83,21 +244,21 @@ pub fn check_token(given: &str, token: &str) -> bool {
 }
 
 /// Reads one request line and checks its token against this run's `token` before anything else in it.
-pub fn parse_request(line: &str, token: &str) -> Result<Request, Refusal> {
+pub fn parse_request(line: &str, token: &str) -> Result<Request, CliError> {
     let value: serde_json::Value =
-        serde_json::from_str(line).map_err(|e| Refusal::Malformed(e.to_string()))?;
+        serde_json::from_str(line).map_err(|e| CliError::Malformed(e.to_string()))?;
     let object = value
         .as_object()
-        .ok_or_else(|| Refusal::Malformed("not an object".into()))?;
+        .ok_or_else(|| CliError::Malformed("not an object".into()))?;
     match object.get("token").and_then(|t| t.as_str()) {
         Some(given) if check_token(given, token) => {}
-        _ => return Err(Refusal::BadToken),
+        _ => return Err(CliError::BadToken),
     }
     let body: Body =
-        serde_json::from_value(value).map_err(|e| Refusal::Malformed(e.to_string()))?;
+        serde_json::from_value(value).map_err(|e| CliError::Malformed(e.to_string()))?;
     if let Op::Open { command, .. } = &body.op {
         if command.is_empty() || command[0].is_empty() {
-            return Err(Refusal::Malformed("no command to run".into()));
+            return Err(CliError::Malformed("no command to run".into()));
         }
     }
     Ok(Request {
@@ -108,7 +269,13 @@ pub fn parse_request(line: &str, token: &str) -> Result<Request, Refusal> {
 
 /// The request line the CLI sends for `op` from pane `pane`, with the `token` it found.
 pub fn request_line(token: &str, pane: SessionId, op: &Op) -> String {
-    serde_json::to_string(&WireRequest { token, pane, op }).unwrap_or_default()
+    serde_json::to_string(&WireRequest {
+        protocol: PROTOCOL,
+        token,
+        pane,
+        op,
+    })
+    .unwrap_or_default()
 }
 
 /// A pane as `tiili list` shows it.
@@ -121,17 +288,24 @@ pub struct PaneInfo {
 
 /// The reply to an open that made pane `id`.
 pub fn opened_reply(id: SessionId) -> String {
-    serde_json::json!({ "ok": true, "pane": id }).to_string()
+    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "pane": id }).to_string()
 }
 
 /// The reply to a list.
 pub fn listed_reply(panes: &[PaneInfo]) -> String {
-    serde_json::json!({ "ok": true, "panes": panes }).to_string()
+    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "panes": panes }).to_string()
 }
 
-/// The reply to a refused or failed request.
-pub fn error_reply(message: &str) -> String {
-    serde_json::json!({ "ok": false, "error": message }).to_string()
+/// The reply to a refused or failed request: its code, message and suggestion.
+pub fn error_reply(error: &CliError) -> String {
+    serde_json::json!({
+        "ok": false,
+        "protocol": PROTOCOL,
+        "code": error.code(),
+        "error": error.message(),
+        "suggestion": error.suggestion(),
+    })
+    .to_string()
 }
 
 /// A reply as the CLI reads it.
@@ -147,12 +321,20 @@ struct WireReply {
     pane: Option<SessionId>,
     panes: Option<Vec<PaneInfo>>,
     error: Option<String>,
+    code: Option<String>,
+    suggestion: Option<String>,
 }
 
-/// Reads a reply line; a refusal, a failure or anything malformed is the error to show.
-pub fn parse_reply(line: &str) -> Result<Reply, String> {
-    let reply: WireReply =
-        serde_json::from_str(line).map_err(|_| "tiili sent an unreadable reply".to_string())?;
+/// What an unreadable reply is reported as.
+fn unreadable() -> CliError {
+    CliError::BadReply("tiili sent an unreadable reply".to_string())
+}
+
+/// Reads a reply line; a refusal, a failure or anything malformed is the error to show. A reply's code picks the
+/// error and its suggestion is the one shown; a reply without a code, from an older app, is a bad reply that keeps
+/// the app's message, and one without a suggestion falls back to this binary's [`ERRORS`].
+pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
+    let reply: WireReply = serde_json::from_str(line).map_err(|_| unreadable())?;
     match reply {
         WireReply {
             ok: true,
@@ -167,9 +349,11 @@ pub fn parse_reply(line: &str) -> Result<Reply, String> {
         WireReply {
             ok: false,
             error: Some(error),
+            code,
+            suggestion,
             ..
-        } => Err(error),
-        _ => Err("tiili sent an unreadable reply".to_string()),
+        } => Err(CliError::from_reply(code.as_deref(), error, suggestion)),
+        _ => Err(unreadable()),
     }
 }
 
@@ -227,54 +411,475 @@ pub enum CliCommand {
         command: Vec<String>,
     },
     List,
+    InstallClaudeSkill,
+    /// `tiili describe [CMD]`.
+    Describe(Option<String>),
+    /// `tiili help [CMD]`, `--help` or `-h`.
+    Help(Option<String>),
+    /// `tiili --version`.
+    Version,
 }
 
-/// How `tiili` is used, printed with a usage error.
-pub const USAGE: &str =
-    "usage: tiili open [--cwd DIR] [--title TITLE] -- CMD [ARGS...]\n       tiili list";
+/// An option a command takes before `--`, with the placeholder for its value.
+#[derive(Debug, Clone, Copy)]
+pub struct OptSpec {
+    pub name: &'static str,
+    pub value: &'static str,
+    pub summary: &'static str,
+}
 
-/// Reads `tiili`'s arguments (without the program name). Options come before `--`; everything after it is the
-/// command. The error is what is wrong, to print with [`USAGE`].
-pub fn parse_args(args: &[String]) -> Result<CliCommand, String> {
+/// A positional argument, or the words after `--`.
+#[derive(Debug, Clone, Copy)]
+pub struct ArgSpec {
+    pub name: &'static str,
+    pub required: bool,
+    pub summary: &'static str,
+}
+
+/// One `tiili` command: how it is called, what it needs, prints and fails with.
+#[derive(Debug, Clone, Copy)]
+pub struct CommandSpec {
+    pub name: &'static str,
+    pub summary: &'static str,
+    pub usage: &'static str,
+    pub options: &'static [OptSpec],
+    pub positionals: &'static [ArgSpec],
+    /// The words after `--`, when the command takes them.
+    pub rest: Option<ArgSpec>,
+    /// The variables it needs set.
+    pub needs: &'static [&'static str],
+    /// What it prints on stdout.
+    pub output_text: &'static str,
+    /// The JSON schema of its stdout, when that is JSON.
+    pub output_schema: Option<&'static str>,
+    pub exit_codes: &'static [i32],
+    /// The codes of the [`ERRORS`] it can fail with.
+    pub errors: &'static [&'static str],
+}
+
+/// The variables a command run inside a pane needs.
+const PANE_NEEDS: &[&str] = &[SOCKET_VAR, TOKEN_VAR, PANE_VAR];
+
+/// The JSON schema of `tiili describe`'s output.
+const DESCRIBE_OUTPUT_SCHEMA: &str = r#"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "version", "protocol", "env", "commands"],
+  "properties": {
+    "schema": { "const": "tiili.describe/1" },
+    "version": { "type": "string" },
+    "protocol": { "type": "integer" },
+    "env": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "summary"],
+        "properties": { "name": { "type": "string" }, "summary": { "type": "string" } }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "summary", "usage", "args", "needs", "output", "exit_codes", "errors"],
+        "properties": {
+          "name": { "type": "string" },
+          "summary": { "type": "string" },
+          "usage": { "type": "string" },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "kind", "required", "summary"],
+              "properties": {
+                "name": { "type": "string" },
+                "kind": { "enum": ["option", "positional", "rest"] },
+                "value": { "type": "string" },
+                "required": { "type": "boolean" },
+                "summary": { "type": "string" }
+              }
+            }
+          },
+          "needs": { "type": "array", "items": { "type": "string" } },
+          "output": {
+            "type": "object",
+            "required": ["text", "json"],
+            "properties": { "text": { "type": "string" }, "json": { "type": ["object", "null"] } }
+          },
+          "exit_codes": { "type": "array", "items": { "type": "integer" } },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "exit", "summary", "suggestion"],
+              "properties": {
+                "code": { "type": "string" },
+                "exit": { "type": "integer" },
+                "summary": { "type": "string" },
+                "suggestion": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}"#;
+
+/// Every `tiili` command. The CLI's dispatch, parser, help and `tiili describe` all read it.
+pub const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "open",
+        summary: "Open a pane in this pane's window running a command",
+        usage: "tiili open [--cwd DIR] [--title TITLE] -- CMD [ARGS...]",
+        options: &[
+            OptSpec {
+                name: "--cwd",
+                value: "DIR",
+                summary: "folder the command runs in (default: the current folder)",
+            },
+            OptSpec {
+                name: "--title",
+                value: "TITLE",
+                summary: "the pane's title",
+            },
+        ],
+        positionals: &[],
+        rest: Some(ArgSpec {
+            name: "CMD",
+            required: true,
+            summary: "the command and its arguments, looked up on the caller's PATH",
+        }),
+        needs: PANE_NEEDS,
+        output_text: "the new pane's id on one line",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "open_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "list",
+        summary: "List the panes of this pane's window in grid order",
+        usage: "tiili list",
+        options: &[],
+        positionals: &[],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "one line per pane: id, folder and title separated by tabs",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "list_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "install-claude-skill",
+        summary: "Install the tiili-tiles Claude Code skill into ~/.claude/skills",
+        usage: "tiili install-claude-skill",
+        options: &[],
+        positionals: &[],
+        rest: None,
+        needs: &["HOME"],
+        output_text: "the path the skill was written to",
+        output_schema: None,
+        exit_codes: &[0, 1, 2],
+        errors: &["usage", "install_failed"],
+    },
+    CommandSpec {
+        name: "describe",
+        summary: "Print this command line's contract as JSON, without contacting the app",
+        usage: "tiili describe [CMD]",
+        options: &[],
+        positionals: &[ArgSpec {
+            name: "CMD",
+            required: false,
+            summary: "describe only this command",
+        }],
+        rest: None,
+        needs: &[],
+        output_text: "JSON, the same on every run of the same binary",
+        output_schema: Some(DESCRIBE_OUTPUT_SCHEMA),
+        exit_codes: &[0, 2],
+        errors: &["usage"],
+    },
+    CommandSpec {
+        name: "help",
+        summary: "Print the commands, or one command's usage",
+        usage: "tiili help [CMD]",
+        options: &[],
+        positionals: &[ArgSpec {
+            name: "CMD",
+            required: false,
+            summary: "show only this command",
+        }],
+        rest: None,
+        needs: &[],
+        output_text: "help text",
+        output_schema: None,
+        exit_codes: &[0, 2],
+        errors: &["usage"],
+    },
+];
+
+/// The variables `tiili` reads, for `tiili describe`.
+const ENV: &[(&str, &str)] = &[
+    (
+        SOCKET_VAR,
+        "the control endpoint of the app that opened this pane; set in every pane",
+    ),
+    (TOKEN_VAR, "this run's token; set in every pane"),
+    (PANE_VAR, "this pane's id; set in every pane"),
+    (
+        "PATH",
+        "sent with open, so the command is looked up on and runs with the caller's PATH",
+    ),
+    (
+        "HOME",
+        "the home folder install-claude-skill writes under (USERPROFILE on Windows when unset)",
+    ),
+];
+
+/// The schema name `tiili describe` stamps its output with.
+pub const DESCRIBE_SCHEMA: &str = "tiili.describe/1";
+
+/// The command named `name`.
+pub fn command(name: &str) -> Option<&'static CommandSpec> {
+    COMMANDS.iter().find(|c| c.name == name)
+}
+
+fn unknown_command(name: &str) -> CliError {
+    CliError::Usage(format!("unknown command {name}"))
+}
+
+/// The command `name`, or the usage error for an unknown one.
+fn known(name: &str) -> Result<&'static CommandSpec, CliError> {
+    command(name).ok_or_else(|| unknown_command(name))
+}
+
+/// Reads `tiili`'s arguments (without the program name) against [`COMMANDS`]. Options come before `--`; everything
+/// after it is the command to run.
+pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
     let (first, rest) = args
         .split_first()
-        .ok_or_else(|| "no subcommand".to_string())?;
+        .ok_or_else(|| CliError::Usage("no command".to_string()))?;
     match first.as_str() {
-        "list" if rest.is_empty() => Ok(CliCommand::List),
-        "list" => Err(format!("list takes no arguments: {}", rest.join(" "))),
-        "open" => {
-            let (mut cwd, mut title) = (None, None);
-            let mut iter = rest.iter();
-            let mut command = Vec::new();
-            while let Some(arg) = iter.next() {
-                let mut value = |name: &str| {
-                    iter.next()
-                        .cloned()
-                        .ok_or_else(|| format!("{name} needs a value"))
-                };
-                match arg.as_str() {
-                    "--" => {
-                        command = iter.cloned().collect();
-                        break;
-                    }
-                    "--cwd" => cwd = Some(value("--cwd")?),
-                    "--title" => title = Some(value("--title")?),
-                    other => {
-                        return Err(format!("unknown option {other} (put the command after --)"))
-                    }
-                }
-            }
-            if command.is_empty() || command[0].is_empty() {
-                return Err("no command after --".to_string());
-            }
-            Ok(CliCommand::Open {
-                cwd,
-                title,
-                command,
-            })
+        "--help" | "-h" if rest.is_empty() => return Ok(CliCommand::Help(None)),
+        "--version" if rest.is_empty() => return Ok(CliCommand::Version),
+        "--help" | "-h" | "--version" => {
+            return Err(CliError::Usage(format!(
+                "{first} takes no arguments: {}",
+                rest.join(" ")
+            )))
         }
-        other => Err(format!("unknown subcommand {other}")),
+        _ => {}
     }
+    let spec = known(first)?;
+    let mut options: Vec<(&str, String)> = Vec::new();
+    let mut positionals: Vec<String> = Vec::new();
+    let mut words: Option<Vec<String>> = None;
+    let mut iter = rest.iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--" && spec.rest.is_some() {
+            words = Some(iter.cloned().collect());
+            break;
+        }
+        if let Some(opt) = spec.options.iter().find(|o| o.name == arg) {
+            let value = iter
+                .next()
+                .cloned()
+                .ok_or_else(|| CliError::Usage(format!("{} needs a value", opt.name)))?;
+            options.push((opt.name, value));
+        } else if arg.starts_with('-') {
+            let hint = if spec.rest.is_some() {
+                " (put the command after --)"
+            } else {
+                ""
+            };
+            return Err(CliError::Usage(format!(
+                "{} has no option {arg}{hint}",
+                spec.name
+            )));
+        } else if positionals.len() < spec.positionals.len() {
+            positionals.push(arg.clone());
+        } else {
+            return Err(CliError::Usage(format!(
+                "{} does not take {arg}{}",
+                spec.name,
+                if spec.rest.is_some() {
+                    " (put the command after --)"
+                } else {
+                    ""
+                }
+            )));
+        }
+    }
+    if let Some(missing) = spec
+        .positionals
+        .iter()
+        .skip(positionals.len())
+        .find(|p| p.required)
+    {
+        return Err(CliError::Usage(format!(
+            "{} needs {}",
+            spec.name, missing.name
+        )));
+    }
+    if let Some(rest) = spec.rest.filter(|r| r.required) {
+        if words
+            .as_ref()
+            .is_none_or(|w| w.first().is_none_or(String::is_empty))
+        {
+            return Err(CliError::Usage(format!(
+                "{} needs -- {} after its options",
+                spec.name, rest.name
+            )));
+        }
+    }
+    let option = |name: &str| {
+        options
+            .iter()
+            .rev()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| v.clone())
+    };
+    let target = |positionals: Vec<String>| -> Result<Option<String>, CliError> {
+        match positionals.into_iter().next() {
+            Some(name) => known(&name).map(|c| Some(c.name.to_string())),
+            None => Ok(None),
+        }
+    };
+    Ok(match spec.name {
+        "open" => CliCommand::Open {
+            cwd: option("--cwd"),
+            title: option("--title"),
+            command: words.unwrap_or_default(),
+        },
+        "list" => CliCommand::List,
+        "install-claude-skill" => CliCommand::InstallClaudeSkill,
+        "describe" => CliCommand::Describe(target(positionals)?),
+        "help" => CliCommand::Help(target(positionals)?),
+        other => unreachable!("command {other} in COMMANDS has no parser"),
+    })
+}
+
+/// One command's help: usage, summary, options and arguments.
+fn command_help(spec: &CommandSpec) -> String {
+    let mut text = format!("usage: {}\n\n{}\n", spec.usage, spec.summary);
+    let args: Vec<(String, &str)> = spec
+        .options
+        .iter()
+        .map(|o| (format!("{} {}", o.name, o.value), o.summary))
+        .chain(
+            spec.positionals
+                .iter()
+                .chain(spec.rest.iter())
+                .map(|a| (a.name.to_string(), a.summary)),
+        )
+        .collect();
+    if !args.is_empty() {
+        text.push('\n');
+        for (name, summary) in args {
+            text.push_str(&format!("  {name:<16}{summary}\n"));
+        }
+    }
+    if !spec.needs.is_empty() {
+        text.push_str(&format!("\nneeds: {}\n", spec.needs.join(", ")));
+    }
+    text
+}
+
+/// The help `tiili help [CMD]` prints: every command with its usage, or only `cmd`'s.
+pub fn help_text(cmd: Option<&str>) -> Result<String, CliError> {
+    if let Some(name) = cmd {
+        return known(name).map(command_help);
+    }
+    let mut text = "usage: tiili <command> [ARGS]\n\ncommands:\n".to_string();
+    for spec in COMMANDS {
+        text.push_str(&format!("  {}\n      {}\n", spec.usage, spec.summary));
+    }
+    text.push_str(
+        "\nRun tiili help <command> for one command, or tiili describe for all of it as JSON.\n",
+    );
+    Ok(text)
+}
+
+/// `tiili --version`'s line.
+pub fn version_line() -> String {
+    format!("tiili {}", env!("CARGO_PKG_VERSION"))
+}
+
+fn describe_command(spec: &CommandSpec) -> serde_json::Value {
+    use serde_json::json;
+    let mut args: Vec<serde_json::Value> = spec
+        .options
+        .iter()
+        .map(|o| {
+            json!({ "name": o.name, "kind": "option", "value": o.value, "required": false, "summary": o.summary })
+        })
+        .collect();
+    args.extend(spec.positionals.iter().map(|a| {
+        json!({ "name": a.name, "kind": "positional", "required": a.required, "summary": a.summary })
+    }));
+    args.extend(spec.rest.iter().map(
+        |a| json!({ "name": a.name, "kind": "rest", "required": a.required, "summary": a.summary }),
+    ));
+    let errors: Vec<serde_json::Value> = spec
+        .errors
+        .iter()
+        .map(|code| {
+            let e = ERRORS
+                .iter()
+                .find(|e| e.code == *code)
+                .expect("every command error is in ERRORS");
+            json!({ "code": e.code, "exit": e.exit, "summary": e.summary, "suggestion": e.suggestion })
+        })
+        .collect();
+    let schema = spec.output_schema.map(|s| {
+        serde_json::from_str::<serde_json::Value>(s).expect("output schemas are valid JSON")
+    });
+    json!({
+        "name": spec.name,
+        "summary": spec.summary,
+        "usage": spec.usage,
+        "args": args,
+        "needs": spec.needs,
+        "output": { "text": spec.output_text, "json": schema },
+        "exit_codes": spec.exit_codes,
+        "errors": errors,
+    })
+}
+
+/// `tiili describe [CMD]`: the command line's contract as JSON, built only from the tables, so the same binary
+/// always prints the same bytes. With `cmd`, only that command.
+pub fn describe(cmd: Option<&str>) -> Result<serde_json::Value, CliError> {
+    let commands: Vec<serde_json::Value> = match cmd {
+        Some(name) => vec![describe_command(known(name)?)],
+        None => COMMANDS.iter().map(describe_command).collect(),
+    };
+    let env: Vec<serde_json::Value> = ENV
+        .iter()
+        .map(|(name, summary)| serde_json::json!({ "name": name, "summary": summary }))
+        .collect();
+    Ok(serde_json::json!({
+        "schema": DESCRIBE_SCHEMA,
+        "version": env!("CARGO_PKG_VERSION"),
+        "protocol": PROTOCOL,
+        "env": env,
+        "commands": commands,
+    }))
 }
 
 #[cfg(test)]
@@ -350,7 +955,7 @@ mod tests {
         for line in cases {
             assert_eq!(
                 parse_request(&line, TOKEN),
-                Err(Refusal::BadToken),
+                Err(CliError::BadToken),
                 "{line}"
             );
         }
@@ -375,9 +980,69 @@ mod tests {
         for line in cases {
             let result = parse_request(&line, TOKEN);
             assert!(
-                matches!(result, Err(Refusal::Malformed(_))),
+                matches!(result, Err(CliError::Malformed(_))),
                 "{line} gave {result:?}"
             );
+        }
+    }
+
+    /// Refused request carries a code: the error reply has ok false, the code, the message and the suggestion.
+    #[test]
+    fn refused_request_carries_a_code_and_a_suggestion() {
+        let line = format!(r#"{{"token":"{}","pane":3,"op":"list"}}"#, "f".repeat(64));
+        let error = parse_request(&line, TOKEN).unwrap_err();
+        let reply: serde_json::Value = serde_json::from_str(&error_reply(&error)).unwrap();
+        assert_eq!(reply["ok"], false);
+        assert_eq!(reply["protocol"], PROTOCOL);
+        assert_eq!(reply["code"], "bad_token");
+        assert_eq!(reply["error"], error.message());
+        assert_eq!(reply["suggestion"], error.suggestion());
+        let read = parse_reply(&error_reply(&error)).unwrap_err();
+        assert_eq!(read.code(), "bad_token");
+        assert_eq!(read.suggestion(), error.suggestion());
+    }
+
+    #[test]
+    fn every_error_has_one_spec_and_every_command_names_known_errors() {
+        let errors = [
+            CliError::Usage(String::new()),
+            CliError::NotInPane(String::new()),
+            CliError::Unreachable(String::new()),
+            CliError::BadToken,
+            CliError::Malformed(String::new()),
+            CliError::OpenFailed(String::new()),
+            CliError::ListFailed(String::new()),
+            CliError::BadReply(String::new()),
+            CliError::InstallFailed(String::new()),
+        ];
+        assert_eq!(errors.len(), ERRORS.len());
+        for (error, spec) in errors.iter().zip(ERRORS) {
+            assert_eq!(error.code(), spec.code);
+            assert_eq!(error.exit(), spec.exit, "{}", spec.code);
+            assert!(!error.suggestion().is_empty(), "{}", spec.code);
+        }
+        for spec in COMMANDS {
+            for code in spec.errors {
+                let exit = ERRORS.iter().find(|e| e.code == *code).map(|e| e.exit);
+                assert!(
+                    exit.is_some_and(|exit| spec.exit_codes.contains(&exit)),
+                    "{} error {code}",
+                    spec.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn requests_and_replies_carry_the_protocol() {
+        for line in [
+            request_line(TOKEN, 1, &Op::List),
+            opened_reply(1),
+            listed_reply(&[]),
+            error_reply(&CliError::BadToken),
+        ] {
+            let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(value["protocol"], PROTOCOL, "{line}");
         }
     }
 
@@ -419,23 +1084,57 @@ mod tests {
                 title: "logs".into(),
             },
         ];
-        let cases: Vec<(String, Result<Reply, String>)> = vec![
+        let unreadable = || Err(CliError::BadReply("tiili sent an unreadable reply".into()));
+        let mut cases: Vec<(String, Result<Reply, CliError>)> = vec![
             (opened_reply(7), Ok(Reply::Opened(7))),
             (listed_reply(&panes), Ok(Reply::Listed(panes.clone()))),
             (listed_reply(&[]), Ok(Reply::Listed(vec![]))),
+            ("garbage".into(), unreadable()),
+            (r#"{"ok":true}"#.into(), unreadable()),
+            // An older app's error, without code or suggestion.
             (
-                error_reply("wrong or missing token"),
-                Err("wrong or missing token".into()),
+                r#"{"ok":false,"error":"wrong or missing token"}"#.into(),
+                Err(CliError::BadReply("wrong or missing token".into())),
             ),
+            // A newer app's code this CLI does not know, with no suggestion.
             (
-                "garbage".into(),
-                Err("tiili sent an unreadable reply".into()),
+                r#"{"ok":false,"code":"frobnicated","error":"no"}"#.into(),
+                Err(CliError::BadReply("no".into())),
             ),
+            // ... and with its own suggestion, which is the one kept.
             (
-                r#"{"ok":true}"#.into(),
-                Err("tiili sent an unreadable reply".into()),
+                r#"{"ok":false,"code":"frobnicated","error":"no","suggestion":"update tiili"}"#.into(),
+                Err(CliError::FromApp {
+                    error: Box::new(CliError::BadReply("no".into())),
+                    suggestion: "update tiili".into(),
+                }),
+            ),
+            // A known code whose suggestion differs from this binary's table keeps the app's.
+            (
+                r#"{"ok":false,"code":"bad_token","error":"wrong or missing token","suggestion":"reopen the pane"}"#
+                    .into(),
+                Err(CliError::FromApp {
+                    error: Box::new(CliError::BadToken),
+                    suggestion: "reopen the pane".into(),
+                }),
             ),
         ];
+        // Every error the app can send reads back as itself, with the suggestion it was sent with.
+        for error in [
+            CliError::BadToken,
+            CliError::Malformed("not an object".into()),
+            CliError::OpenFailed("no such program".into()),
+            CliError::ListFailed("pane 9 is in no window".into()),
+        ] {
+            let suggestion = error.suggestion().to_string();
+            cases.push((
+                error_reply(&error),
+                Err(CliError::FromApp {
+                    error: Box::new(error),
+                    suggestion,
+                }),
+            ));
+        }
         for (line, expected) in cases {
             assert_eq!(parse_reply(&line), expected, "{line}");
         }
@@ -534,10 +1233,78 @@ mod tests {
             (args(&["open", "--frobnicate", "--", "ls"]), Err(())),
             (args(&["close"]), Err(())),
             (args(&[]), Err(())),
+            (
+                args(&["install-claude-skill"]),
+                Ok(CliCommand::InstallClaudeSkill),
+            ),
+            (args(&["install-claude-skill", "now"]), Err(())),
+            (args(&["describe"]), Ok(CliCommand::Describe(None))),
+            (
+                args(&["describe", "open"]),
+                Ok(CliCommand::Describe(Some("open".into()))),
+            ),
+            (args(&["describe", "frobnicate"]), Err(())),
+            (args(&["describe", "open", "list"]), Err(())),
+            (args(&["help"]), Ok(CliCommand::Help(None))),
+            (
+                args(&["help", "list"]),
+                Ok(CliCommand::Help(Some("list".into()))),
+            ),
+            (args(&["help", "frobnicate"]), Err(())),
+            (args(&["--help"]), Ok(CliCommand::Help(None))),
+            (args(&["-h"]), Ok(CliCommand::Help(None))),
+            (args(&["--version"]), Ok(CliCommand::Version)),
+            (args(&["--version", "x"]), Err(())),
+            (args(&["frobnicate"]), Err(())),
         ];
         for (argv, expected) in cases {
-            assert_eq!(parse_args(&argv).map_err(|_| ()), expected, "{argv:?}");
+            let parsed = parse_args(&argv);
+            if let Err(error) = &parsed {
+                assert_eq!(error.code(), "usage", "{argv:?}");
+            }
+            assert_eq!(parsed.map_err(|_| ()), expected, "{argv:?}");
         }
+    }
+
+    /// Help from a pane: the help lists every command's usage, and each command has its own help.
+    #[test]
+    fn help_lists_every_command_and_each_has_its_own() {
+        let all = help_text(None).unwrap();
+        for spec in COMMANDS {
+            assert!(all.contains(spec.usage), "{} missing", spec.name);
+            let one = help_text(Some(spec.name)).unwrap();
+            assert!(one.contains(spec.usage), "{}", spec.name);
+            for opt in spec.options {
+                assert!(one.contains(opt.name), "{} {}", spec.name, opt.name);
+            }
+        }
+        assert_eq!(
+            help_text(Some("frobnicate")).map_err(|e| e.code()),
+            Err("usage")
+        );
+    }
+
+    /// Describe outside a pane, Describe one command, Describe an unknown command: the output matches the golden
+    /// file (the version stands in as `<version>`), one command describes only itself, and an unknown one is a
+    /// usage error.
+    #[test]
+    fn describe_matches_the_golden_file() {
+        let golden = include_str!("../tests/fixtures/describe.json")
+            .replace("<version>", env!("CARGO_PKG_VERSION"));
+        let all = describe(None).unwrap();
+        assert_eq!(serde_json::to_string_pretty(&all).unwrap() + "\n", golden);
+        assert_eq!(all["schema"], DESCRIBE_SCHEMA);
+        assert_eq!(all["commands"].as_array().unwrap().len(), COMMANDS.len());
+        let one = describe(Some("open")).unwrap();
+        assert_eq!(one["commands"], serde_json::json!([all["commands"][0]]));
+        assert_eq!(one["commands"][0]["name"], "open");
+        let list = &all["commands"][1];
+        assert_eq!(list["name"], "list");
+        assert!(list["output"]["json"].is_null());
+        assert_eq!(
+            describe(Some("frobnicate")).map_err(|e| e.code()),
+            Err("usage")
+        );
     }
 
     /// List panes: the panes come in grid order, also after two were swapped.
