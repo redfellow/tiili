@@ -21,9 +21,29 @@ mod unix {
     }
 
     impl Outputs {
+        /// The visible text: shell-integration marks (`ESC ] ... BEL` or `ESC ] ... ESC \`) are dropped.
         fn text(&self, id: SessionId) -> String {
-            String::from_utf8_lossy(self.seen.get(&id).map(Vec::as_slice).unwrap_or_default())
-                .into_owned()
+            let raw =
+                String::from_utf8_lossy(self.seen.get(&id).map(Vec::as_slice).unwrap_or_default())
+                    .into_owned();
+            let mut visible = String::with_capacity(raw.len());
+            let mut chars = raw.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\u{1b}' && chars.peek() == Some(&']') {
+                    // An unfinished mark is dropped to the end; it completes with later output.
+                    while let Some(d) = chars.next() {
+                        if d == '\u{7}' || (d == '\u{1b}' && chars.peek() == Some(&'\\')) {
+                            if d != '\u{7}' {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                } else {
+                    visible.push(c);
+                }
+            }
+            visible
         }
 
         fn wait_for(&mut self, id: SessionId, pattern: &str) -> bool {
