@@ -75,6 +75,18 @@ describe("release", () => {
     expect(() => setCargoLockVersion('[[package]]\nname = "serde"\nversion = "1.0.0"\n', "0.3.1")).toThrow();
   });
 
+  it("Stamped version: the repository's 0.0.0-dev is replaced by the tag's version", () => {
+    expect(setJsonVersion('{\n  "name": "tiili",\n  "version": "0.0.0-dev"\n}\n', "1.0.1")).toBe(
+      '{\n  "name": "tiili",\n  "version": "1.0.1"\n}\n',
+    );
+    expect(setCargoVersion('[package]\nname = "tiili"\nversion = "0.0.0-dev"\n', "1.0.1")).toBe(
+      '[package]\nname = "tiili"\nversion = "1.0.1"\n',
+    );
+    expect(setCargoLockVersion('[[package]]\nname = "tiili"\nversion = "0.0.0-dev"\n', "1.0.1")).toBe(
+      '[[package]]\nname = "tiili"\nversion = "1.0.1"\n',
+    );
+  });
+
   it("Stamped version: the Windows runner's CRLF checkout stamps the same way", () => {
     const crlf = (text: string) => text.replace(/\n/g, "\r\n");
     const lock = crlf('[[package]]\nname = "tiili"\nversion = "0.2.0"\ndependencies = [\n "serde",\n]\n');
