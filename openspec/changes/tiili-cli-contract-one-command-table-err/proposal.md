@@ -31,6 +31,7 @@ Agents in panes learn `tiili` by trial. Today the command list lives in three pl
 - Schemas are hand-written (Reijo); no `schemars` dependency.
 - Exit codes: 0 ok, 1 request failed at the app, 2 usage, 3 not in a pane, 4 app unreachable. Rejected: keeping only 0/1/2, which hides which fix applies.
 - Error codes are snake_case strings (`usage`, `not_in_pane`, `unreachable`, `bad_token`, `malformed_request`, `open_failed`, `list_failed`). Rejected: numeric codes.
+- Two more codes, both exit 1 (Reijo): `bad_reply` for an unreadable reply or an error reply without a known code (from an older or newer app, message kept), and `install_failed` for `install-claude-skill`, so every failure carries a code.
 - The golden file pins describe with the version replaced by a placeholder so version bumps don't break it. Rejected: pinning the literal version.
 - The skill's preflight stays `[ -n "$TIILI_SOCKET" ]`; the skill only adds a pointer to `tiili describe`, so `agent-skills` gets no delta. Rejected: making preflight call describe.
 - `tiili help` and `tiili describe` with an unknown CMD are usage errors (exit 2).
