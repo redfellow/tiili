@@ -24,8 +24,8 @@ export const EXIT_HOLD_MS = EXIT_MS + 20;
 /** The scale a new pane grows in from and a closing pane shrinks to. */
 const SHRUNK = 0.94;
 /** A new or closing pane lifts off the grid on a soft shadow, so it reads against the dark mortar. */
-const LIFTED = "0 10px 32px rgba(0,0,0,.45)";
-const FLAT = "0 0 0 rgba(0,0,0,0)";
+const LIFTED = "var(--shadow-3)";
+const FLAT = "none";
 /** Rect changes smaller than this many pixels count as no change. */
 const EPSILON = 0.5;
 
