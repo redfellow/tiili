@@ -170,6 +170,26 @@ describe("Tauri backend pane moves", () => {
   });
 });
 
+describe("Tauri backend session: each call reaches its core command", () => {
+  const cases: [string, (backend: Backend) => Promise<unknown>, string, Record<string, unknown> | undefined][] = [
+    ["Two windows reopen: the window takes its saved state", (b) => b.session!.load(), "session_load", undefined],
+    ["the window reports its state", (b) => b.session!.update({ tabs: [], activeTab: 0 }), "session_update", { tabState: { tabs: [], activeTab: 0 } }],
+    ["Scrollback above the divider: a pane's scrollback is saved", (b) => b.session!.saveScrollback(4, "x"), "session_save_scrollback", { paneId: 4, text: "x" }],
+    ["Turned off: saved scrollback and commands are deleted", (b) => b.session!.clearScrollback(), "session_clear_scrollback", undefined],
+    ["the window has flushed", (b) => b.session!.flushed(), "session_flushed", undefined],
+    ["what runs in a pane is asked", (b) => b.session!.running(3), "pty_running", { id: 3 }],
+    ["Up re-runs: the shell starts with the restored history line", (b) => b.spawn(24, 80, "/tmp", "off", () => undefined, undefined, "npm run dev"), "pty_spawn", { history: "npm run dev" }],
+  ];
+  it.each(cases)("%s", async (_name, call, command, args) => {
+    invoke.mockClear();
+    invoke.mockResolvedValueOnce({ command: null, program: null });
+    await call(tauriBackend());
+    const [called, passed] = invoke.mock.calls[0];
+    expect(called).toBe(command);
+    if (args) expect(passed).toMatchObject(args);
+  });
+});
+
 describe("Tauri backend settings window", () => {
   it("Open settings twice: each time asks the core to open or focus this window's settings window", async () => {
     invoke.mockClear();

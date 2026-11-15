@@ -5,8 +5,15 @@ How tiili's main window keeps its size, position and maximised or fullscreen sta
 
 ## Requirements
 
-### Requirement: Window state persists between launches
-tiili SHALL open its main window at the size, position and maximised/fullscreen state it had when it was last closed, on macOS, Windows and Linux. Relaunching SHALL open only the main window; other windows SHALL NOT be reopened and their size and place SHALL NOT be saved as the main window's.
+### Requirement: Default when no usable saved state
+When there is no saved state, or a window's saved position is off every connected screen, tiili SHALL open that window at 900×600 centred on the main screen.
+
+#### Scenario: Monitor unplugged
+- **WHEN** the window was last closed on a monitor that is no longer connected
+- **THEN** tiili opens the window at 900×600 centred on the main screen
+
+### Requirement: Every window keeps its state between launches
+tiili SHALL reopen each restored window at the size, position and maximised/fullscreen state it had when the app last ended, on macOS, Windows and Linux. Each window SHALL keep its own size and place.
 
 #### Scenario: Resized window reopens at the same size and place
 - **WHEN** the user resizes the window to 1280×720, moves it, quits and relaunches tiili
@@ -16,13 +23,6 @@ tiili SHALL open its main window at the size, position and maximised/fullscreen 
 - **WHEN** the user quits tiili while the window is maximised or fullscreen
 - **THEN** the window opens maximised or fullscreen on relaunch
 
-#### Scenario: Extra windows are not remembered
+#### Scenario: Extra windows keep their own place
 - **WHEN** the user opens a second window, resizes it, quits and relaunches tiili
-- **THEN** only the main window opens, at the main window's own saved size and place
-
-### Requirement: Default when no usable saved state
-When there is no saved state, or the saved position is off every connected screen, tiili SHALL open the window at 900×600 centred on the main screen.
-
-#### Scenario: Monitor unplugged
-- **WHEN** the window was last closed on a monitor that is no longer connected
-- **THEN** tiili opens the window at 900×600 centred on the main screen
+- **THEN** both windows open, each at its own saved size and place

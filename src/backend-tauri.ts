@@ -5,9 +5,10 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { AttentionMark } from "./attention";
-import type { Backend, MenuItem, MovePayload } from "./backend";
+import type { Backend, MenuItem, MovePayload, RunningCommand } from "./backend";
 import { noteListeners, type NotesChanged } from "./heynoteStore";
 import { currentPlatform } from "./keymap";
+import type { Restored } from "./session";
 
 type NativeItem =
   | { item: "Separator" }
@@ -34,7 +35,7 @@ export function tauriBackend(): Backend {
   let listening: Promise<unknown> | undefined;
   return {
     nativeMenus: currentPlatform() === "macos",
-    spawn: (rows, cols, cwd, prompt, onOutput, launch) => {
+    spawn: (rows, cols, cwd, prompt, onOutput, launch, history) => {
       const output = new Channel<number[]>();
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
       return invoke<number>("pty_spawn", {
@@ -45,6 +46,7 @@ export function tauriBackend(): Backend {
         onOutput: output,
         command: launch?.command ?? null,
         path: launch?.path ?? null,
+        history: history ?? null,
       });
     },
     setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
@@ -123,6 +125,20 @@ export function tauriBackend(): Backend {
           error: "error" in result ? result.error : null,
         }),
       setOrder: (sessions) => invoke("pane_order_set", { sessions }),
+    },
+    session: {
+      load: async () => (await invoke<Restored | null>("session_load")) ?? undefined,
+      update: (tabState) => invoke("session_update", { tabState }),
+      saveScrollback: (paneId, text) => invoke("session_save_scrollback", { paneId, text }),
+      clearScrollback: () => invoke("session_clear_scrollback"),
+      flushed: () => invoke("session_flushed"),
+      running: async (id) => {
+        const running = await invoke<{ command: string | null; program: string | null }>("pty_running", { id });
+        const result: RunningCommand = {};
+        if (running.command) result.command = running.command;
+        if (running.program) result.program = running.program;
+        return result;
+      },
     },
   };
 }

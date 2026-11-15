@@ -1,5 +1,6 @@
 // @harvaaja-test-tier: fast
-//! The main window's saved rectangle and the check that it is still on a connected screen.
+//! The check that a window's saved rectangle is still on a connected screen, and the one-time migration of the
+//! main window's rectangle from the old window-state file.
 
 use tiili_lib::window_state::{is_on_screen, read_saved, Rect};
 
@@ -56,8 +57,10 @@ fn monitor_unplugged_saved_rectangle_is_off_screen() {
     }
 }
 
+/// Every window keeps its state between launches: the first launch after the update keeps the main window's place
+/// from the old plugin's state file.
 #[test]
-fn saved_state_file_gives_the_main_windows_rectangle() {
+fn every_window_keeps_its_state_old_state_file_gives_the_main_windows_rectangle() {
     let dir = std::env::temp_dir().join(format!("tiili-window-state-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("state.json");

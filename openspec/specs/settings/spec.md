@@ -312,3 +312,10 @@ The Behaviour tab SHALL have a "Zen width" field in columns, default 140, range 
 #### Scenario: Invalid saved Zen width
 - **WHEN** the settings file has a Zen width of `"wide"`
 - **THEN** the Zen width is 140 and the other settings load
+
+### Requirement: Restore scrollback setting
+The Behaviour tab SHALL have a "Restore scrollback and commands" setting, on by default. With it off, tiili SHALL write neither scrollback nor command lines to disk and SHALL delete any already saved; layout, folders and reminder lines are still saved.
+
+#### Scenario: Turned off
+- **WHEN** the setting is off and the user quits and relaunches
+- **THEN** panes reopen in their folders without scrollback, and no command lines are on disk

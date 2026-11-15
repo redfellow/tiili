@@ -30,7 +30,7 @@ export interface Pane {
   tint?: number;
   /** Set for a Heynote pane, which holds Heynote instead of a terminal. */
   note?: HeynoteFrame;
-  /** Pixels added to the Settings font size by the zoom keys; not saved, so a new pane starts at 0. */
+  /** Pixels added to the Settings font size by the zoom keys; a new pane starts at 0, a reopened one at its saved zoom. */
   zoom: number;
   /** Merges and rate-limits the bells and notifications of a terminal pane's shell. */
   gate?: AttentionGate;
@@ -46,7 +46,7 @@ export function give(pane: Pane): void {
 
 /** What a tab asks of its window. */
 export interface TabHooks {
-  /** The tab's grid was laid out again: its panes or their order may have changed. */
+  /** The tab's grid was laid out again, or resized: its panes, their order or their sizes may have changed. */
   rendered(tab: Tab): void;
   /** Pane `from`'s grab strip was dropped on `under`, outside this tab's grid; true when the window took the pane. */
   dropOutside(tab: Tab, from: PaneId, under: Element): boolean;
@@ -95,6 +95,8 @@ export class Tab {
         this.layout = after;
         const changed = new Set(changedPanes(before, after));
         this.panes.forEach((pane) => pane.terminal?.releaseSize(changed.has(pane.id)));
+        // The sizes changed, which the window saves for the next launch.
+        this.hooks.rendered(this);
       },
       // Panes stay in their places while one is shown alone.
       swap: (from, to) => {

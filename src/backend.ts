@@ -2,6 +2,7 @@ import type { AttentionMark } from "./attention";
 import type { NoteStore } from "./heynoteStore";
 import type { ResolvedPath } from "./links";
 import type { PaneCommand, PaneCwd } from "./paneChip";
+import type { Restored, TabState } from "./session";
 import type { AppIcon, PromptId, Settings } from "./settings";
 import type { WindowEntry } from "./windowMenu";
 
@@ -99,6 +100,28 @@ export interface PaneAttention {
   list(): Promise<AttentionMark[]>;
 }
 
+/** What runs in a session: the command line tiili's shell integration reported, else the foreground program's name. */
+export interface RunningCommand {
+  command?: string;
+  program?: string;
+}
+
+/** Saving this window for the next launch, where the backend keeps a session (the Tauri app). */
+export interface SessionSaving {
+  /** This window's saved state, once, right after it opened; undefined for a window that was not reopened. */
+  load(): Promise<Restored | undefined>;
+  /** Tells the app this window's tabs and panes; a state with no tab means the window does not reopen. */
+  update(state: TabState): Promise<void>;
+  /** Saves pane `paneId`'s scrollback for the next launch. */
+  saveScrollback(paneId: number, text: string): Promise<void>;
+  /** Deletes every saved scrollback and command line, for Restore scrollback and commands turned off. */
+  clearScrollback(): Promise<void>;
+  /** Tells the app this window answered `session-flush`: its latest state and scrollback are in. */
+  flushed(): Promise<void>;
+  /** What runs in session `id` now. */
+  running(id: SessionId): Promise<RunningCommand>;
+}
+
 /** Settings in a window of their own, where the backend can open OS windows. */
 export interface SettingsWindows {
   /** Opens this window's settings window centred over it, or brings it to the front when it is open already. */
@@ -115,7 +138,7 @@ export interface SettingsWindows {
  * saved, the ask to focus this window's Heynote pane, the Move to Window ▸ choice (the target window's label), a
  * pane arriving from another window, settings this window's settings window previews and that window having closed,
  * the panes that need the user (every window hears these), the ask to focus one of this window's marked panes and
- * `tiili open` asking this window for a pane.
+ * `tiili open` asking this window for a pane, and the app ending, which asks this window to save itself.
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
@@ -132,6 +155,7 @@ export interface AppEvents {
   "attention-changed": { marks: AttentionMark[] };
   "attention-focus": SessionId;
   "pane-open-request": PaneOpenRequest;
+  "session-flush": undefined;
 }
 
 /**
@@ -144,7 +168,8 @@ export interface Backend {
   /**
    * Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own
    * config leaves the shell's default one; its output goes to `onOutput`. With `launch` the session runs that
-   * program instead of a shell, where the backend can (the dev server always starts a shell).
+   * program instead of a shell, where the backend can (the dev server always starts a shell). A shell started with
+   * `history` has that line as its newest history entry, where the backend can.
    */
   spawn(
     rows: number,
@@ -153,6 +178,7 @@ export interface Backend {
     prompt: PromptId,
     onOutput: (bytes: Uint8Array) => void,
     launch?: PaneLaunch,
+    history?: string,
   ): Promise<SessionId>;
   /**
    * Makes `prompt` the current choice for new shells and the open local zsh, bash and PowerShell shells, where their
@@ -215,6 +241,8 @@ export interface Backend {
   readonly settingsWindows?: SettingsWindows;
   /** Answering `tiili open`; absent where nothing runs the command line (the dev server). */
   readonly paneControl?: PaneControl;
+  /** Saving the window for the next launch; absent where nothing is kept (the dev server). */
+  readonly session?: SessionSaving;
 }
 
 export type BackendKind = "tauri" | "dev";

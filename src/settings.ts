@@ -56,6 +56,11 @@ export interface BehaviourSettings {
   startupSplash: boolean;
   /** Lines of history each terminal keeps; applies live to open panes. */
   scrollback: number;
+  /**
+   * Panes reopen with their scrollback and the command that was running; off, neither is written to disk and any
+   * already saved is deleted.
+   */
+  restoreScrollback: boolean;
 }
 
 export interface ZenSettings {
@@ -160,7 +165,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000 },
+  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000, restoreScrollback: true },
   zen: { width: 140 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
@@ -252,6 +257,10 @@ export function normalize(value: unknown): Settings {
           ? behaviour.startupSplash
           : DEFAULT_SETTINGS.behaviour.startupSplash,
       scrollback: number(behaviour.scrollback, DEFAULT_SETTINGS.behaviour.scrollback, SCROLLBACK_RANGE),
+      restoreScrollback:
+        typeof behaviour.restoreScrollback === "boolean"
+          ? behaviour.restoreScrollback
+          : DEFAULT_SETTINGS.behaviour.restoreScrollback,
     },
     zen: { width: number(zen.width, DEFAULT_SETTINGS.zen.width, ZEN_WIDTH_RANGE) },
     inactive: {

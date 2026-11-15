@@ -81,7 +81,7 @@ pub fn parse_osc7(uri: &str) -> Option<Osc7> {
 }
 
 /// Decodes standard base64, with or without padding; `None` when `text` is not base64.
-fn base64_decode(text: &str) -> Option<Vec<u8>> {
+pub(crate) fn base64_decode(text: &str) -> Option<Vec<u8>> {
     let digits = text.trim_end_matches('=').as_bytes();
     if text.len() - digits.len() > 2 || digits.len() % 4 == 1 {
         return None;

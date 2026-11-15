@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindo
 
 use crate::pty::SessionId;
 
-/// The label of the window `tauri.conf.json` opens; the only one whose size and place are remembered.
+/// The label of the window `tauri.conf.json` opens at start.
 pub const MAIN_WINDOW: &str = "main";
 /// How far down and right of the focused window a new window opens, in logical pixels.
 pub const CASCADE_OFFSET: f64 = 28.0;
@@ -32,12 +32,6 @@ pub fn reveal_later(window: &WebviewWindow) {
             let _ = window.show();
         }
     });
-}
-
-/// Whether the window-state plugin saves and restores window `label`: only the main window, so extra windows'
-/// size and place never reach the saved state.
-pub fn is_remembered(label: &str) -> bool {
-    label == MAIN_WINDOW
 }
 
 /// Hands out `window-1`, `window-2`, …; labels of closed windows are never reused.
@@ -316,19 +310,28 @@ fn open_window(
         .map_err(text)?
         .to_logical::<f64>(scale);
     let (x, y) = cascade(place.x, place.y);
+    let builder = window_builder(app, label, url)
+        .inner_size(size.width, size.height)
+        .position(x, y);
+    reveal_later(&builder.build().map_err(text)?);
+    Ok(())
+}
+
+/// A builder for a full tiili window `label` loading `url`, hidden until its page has painted and with the same
+/// title and decorations as the main window in `tauri.conf.json`.
+pub fn window_builder<'a>(
+    app: &'a AppHandle,
+    label: String,
+    url: String,
+) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title("tiili >_")
-        .inner_size(size.width, size.height)
-        .position(x, y)
-        // Hidden until its page has painted, as the main window in `tauri.conf.json`.
         .visible(false);
-    // The same decorations as the main window in `tauri.conf.json`.
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true);
-    reveal_later(&builder.build().map_err(text)?);
-    Ok(())
+    builder
 }
 
 /// Opens a full tiili window with one pane starting in `cwd`, or holding the pane of pending move `move_token`,
@@ -681,11 +684,5 @@ mod tests {
         assert_eq!(last.get().as_deref(), Some("window-1"));
         last.forget("window-1");
         assert_eq!(last.get(), None);
-    }
-
-    #[test]
-    fn extra_windows_are_not_remembered_only_main_is_saved() {
-        assert!(is_remembered("main"));
-        assert!(!is_remembered("window-1"));
     }
 }

@@ -13,6 +13,8 @@ pub mod links;
 pub mod notes;
 pub mod pty;
 pub mod repo;
+pub mod session;
+mod session_app;
 pub mod settings;
 pub mod shell_integration;
 pub mod sink;
@@ -172,9 +174,10 @@ fn forget_session(app: &AppHandle, id: SessionId) {
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
 /// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
-/// the `tiili open` that asked for it, when given), and returns its session id; its output streams over `on_output`, a
-/// channel of its own, and its working directory as `pane-cwd` events and what runs in it as
-/// `pane-command` events, sent only to the window it belongs to: the one that started it, until its pane moves.
+/// the `tiili open` that asked for it, when given), and returns its session id. A shell started with `history` has that
+/// line as the newest entry of its history. Its output streams over `on_output`, a channel of its own, and its working
+/// directory as `pane-cwd` events and what runs in it as `pane-command` events, sent only to the window it belongs to:
+/// the one that started it, until its pane moves.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn pty_spawn(
@@ -187,6 +190,7 @@ fn pty_spawn(
     prompt: Option<String>,
     command: Option<Vec<String>>,
     path: Option<String>,
+    history: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
     let command = command
@@ -204,10 +208,11 @@ fn pty_spawn(
     }));
     let output_sink = std::sync::Arc::clone(&sink);
     let id = sessions
-        .spawn_tracked(
+        .spawn_restored(
             cwd.as_deref().map(Path::new),
             prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
             command.as_ref(),
+            history.as_deref(),
             rows,
             cols,
             Box::new(move |_id, data| {
@@ -370,6 +375,15 @@ pub(crate) fn refresh_move_menu(app: &AppHandle) {
     })();
 }
 
+/// What runs in session `id`: the command line its shell reported and the foreground program's name.
+#[tauri::command]
+fn pty_running(
+    sessions: State<'_, SessionRegistry>,
+    id: SessionId,
+) -> Result<command::Running, String> {
+    sessions.running(id).map_err(text)
+}
+
 /// The working directory of session `id`'s shell, or `None` where it cannot be read (Windows).
 #[tauri::command]
 fn pty_cwd(sessions: State<'_, SessionRegistry>, id: SessionId) -> Result<Option<String>, String> {
@@ -378,6 +392,10 @@ fn pty_cwd(sessions: State<'_, SessionRegistry>, id: SessionId) -> Result<Option
         .map_err(text)?
         .map(|p| p.to_string_lossy().into_owned()))
 }
+
+/// The macOS app menu's Quit item.
+#[cfg(target_os = "macos")]
+const QUIT_ID: &str = "quit";
 
 /// macOS menu bar: the app menu with Settings…, a Shell menu for panes and an Edit menu, whose items the
 /// frontend carries out. The Shell menu's Move to Window ▸ submenu is kept in [`MoveMenu`].
@@ -398,7 +416,12 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         .item(&PredefinedMenuItem::hide_others(app, None)?)
         .item(&PredefinedMenuItem::show_all(app, None)?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, None)?)
+        // Not the predefined Quit, which ends the app at once: tiili first saves the session.
+        .item(
+            &MenuItemBuilder::with_id(QUIT_ID, "Quit tiili")
+                .accelerator("Cmd+Q")
+                .build(app)?,
+        )
         .build()?;
     let move_menu = SubmenuBuilder::new(app, "Move to Window")
         .enabled(false)
@@ -503,60 +526,14 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         .build()
 }
 
-/// Size of the main window when it has no usable saved state; the same as `tauri.conf.json`.
-const DEFAULT_WINDOW_SIZE: tauri::LogicalSize<f64> = tauri::LogicalSize::new(900.0, 600.0);
-
-/// Puts the main window back to its default size, centred, when its saved position lies on no connected
-/// screen: the window-state plugin leaves the position to the OS then but still restores the saved size.
-fn reset_off_screen_window(app: &tauri::App) -> tauri::Result<()> {
-    let Some(window) = app.get_webview_window("main") else {
-        return Ok(());
-    };
-    let path = app
-        .path()
-        .app_config_dir()?
-        .join(tauri_plugin_window_state::DEFAULT_FILENAME);
-    let Some(saved) = window_state::read_saved(&path, window.label()) else {
-        return Ok(());
-    };
-    let monitors: Vec<_> = window
-        .available_monitors()?
-        .iter()
-        .map(|m| window_state::Rect {
-            x: m.position().x,
-            y: m.position().y,
-            width: m.size().width,
-            height: m.size().height,
-        })
-        .collect();
-    if !window_state::is_on_screen(saved, &monitors) {
-        window.set_size(DEFAULT_WINDOW_SIZE)?;
-        window.center()?;
-    }
-    Ok(())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use tauri_plugin_window_state::StateFlags;
-
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                .with_filter(windows::is_remembered)
-                .with_state_flags(
-                    StateFlags::SIZE
-                        | StateFlags::POSITION
-                        | StateFlags::MAXIMIZED
-                        | StateFlags::FULLSCREEN,
-                )
-                .build(),
-        )
         .manage(SessionRegistry::new())
         .manage(app_icon::IconState::default())
         .manage(Tints::default())
@@ -573,6 +550,7 @@ pub fn run() {
         .manage(control_app::PaneTitles::default())
         .manage(control_app::ControlState::default())
         .manage(control_app::PaneOrders::default())
+        .manage(session_app::SessionState::default())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::ThemeChanged(_) => app_icon::apply(window.app_handle()),
             tauri::WindowEvent::Focused(true) => {
@@ -583,8 +561,17 @@ pub fn run() {
             tauri::WindowEvent::Focused(false) => {
                 attention::focus_changed(window.app_handle(), false);
             }
+            tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                session_app::record_geometry(window);
+            }
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                session_app::close_requested(window, api);
+            }
             // Tauri quits once the last window is gone, on macOS too.
-            tauri::WindowEvent::Destroyed => window_destroyed(window.app_handle(), window.label()),
+            tauri::WindowEvent::Destroyed => {
+                session_app::window_destroyed(window.app_handle(), window.label());
+                window_destroyed(window.app_handle(), window.label());
+            }
             _ => {}
         })
         .setup(|app| {
@@ -600,7 +587,7 @@ pub fn run() {
                     }
                 })?;
             }
-            reset_off_screen_window(app)?;
+            session_app::restore(app)?;
             if let Some(main) = app.get_webview_window(windows::MAIN_WINDOW) {
                 windows::reveal_later(&main);
             }
@@ -610,6 +597,10 @@ pub fn run() {
                 app.set_menu(menu)?;
                 // Menu items act on the focused window only.
                 app.on_menu_event(|app, event| {
+                    if event.id().as_ref() == QUIT_ID {
+                        app.exit(0);
+                        return;
+                    }
                     let Some(label) = windows::focused_label(app) else {
                         return;
                     };
@@ -652,6 +643,7 @@ pub fn run() {
             pty_resize,
             pty_close,
             pty_cwd,
+            pty_running,
             pty_set_prompt,
             pty_set_highlight,
             settings::settings_load,
@@ -680,13 +672,25 @@ pub fn run() {
             links::link_open,
             links::path_resolve,
             links::path_open,
-            links::path_reveal
+            links::path_reveal,
+            session_app::session_load,
+            session_app::session_update,
+            session_app::session_save_scrollback,
+            session_app::session_clear_scrollback,
+            session_app::session_flushed
         ])
         .build(tauri::generate_context!())
         .expect("error while building tiili")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                if session_app::exit_requested(app) {
+                    api.prevent_exit();
+                }
+            }
+            tauri::RunEvent::Exit => {
+                session_app::exited(app);
                 control_app::stop(app);
             }
+            _ => {}
         });
 }

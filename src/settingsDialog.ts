@@ -8,7 +8,7 @@ import {
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
-import { createSettingsSession, same, whileTyping } from "./settingsSession";
+import { createSettingsSession, same, turnsOffRestore, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION, VERSION_LABEL } from "./version";
 
@@ -53,6 +53,11 @@ export interface SettingsDialogOptions {
    * there is one; resolves whether there was. Without it (the dev server) there is no Check now button.
    */
   checkForUpdates?: () => Promise<boolean>;
+  /**
+   * Deletes the saved scrollback and command lines; called once settings that turn "Restore scrollback and
+   * commands" off are saved.
+   */
+  clearRestored?: () => Promise<void>;
 }
 
 export interface SettingsDialog {
@@ -579,6 +584,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const scrollback = numberInput("scrollback", SCROLLBACK_RANGE);
+  const restoreScrollback = element("input", { type: "checkbox", name: "restoreScrollback" });
   scrollback.setAttribute("aria-label", "Scrollback lines");
   const zenWidth = numberInput("zenWidth", ZEN_WIDTH_RANGE);
   zenWidth.setAttribute("aria-label", "Zen width in columns");
@@ -707,6 +713,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           "faster.")),
       row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse")),
       row("Scrollback lines", scrollback),
+      row("Reopen", check(restoreScrollback, "Restore scrollback and commands"),
+        infoButton("Reopen",
+          "tiili always reopens its windows, panes and folders. With this on, each pane also gets back its " +
+          "scrollback and a line naming the command that was running. Off, neither is kept on disk.")),
       row("Zen width", zenWidth, element("span", { className: "settings-row-sub" }, "columns"),
         infoButton("Zen width",
           `Zen mode (${options.platform === "macos" ? "⇧⌘↩" : "Ctrl+Shift+Enter"}) shows the focused pane alone, ` +
@@ -810,6 +820,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
     startupSplash.checked = settings.behaviour.startupSplash;
     scrollback.value = String(settings.behaviour.scrollback);
+    restoreScrollback.checked = settings.behaviour.restoreScrollback;
     zenWidth.value = String(settings.zen.width);
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
@@ -842,6 +853,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       hoverHighlight: hoverHighlight.checked,
       startupSplash: startupSplash.checked,
       scrollback: scrollback.valueAsNumber,
+      restoreScrollback: restoreScrollback.checked,
     },
     zen: { width: zenWidth.valueAsNumber },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
@@ -910,9 +922,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     changed();
     lock(true);
     const written = session.draft;
+    const turnedOff = turnsOffRestore(session.saved, written);
     try {
       await options.save(written);
       session.commit(written);
+      if (turnedOff) await options.clearRestored?.().catch(() => {});
       status.textContent = "";
       close();
     } catch (error) {

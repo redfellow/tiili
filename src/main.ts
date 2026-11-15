@@ -1,6 +1,6 @@
 import "./styles.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { loadBackend, selectBackend } from "./backend";
+import { loadBackend, selectBackend, type Backend } from "./backend";
 import { currentPlatform } from "./keymap";
 import { Panes } from "./panes";
 import { normalize, type Settings } from "./settings";
@@ -70,6 +70,7 @@ async function startSettings(owner: string): Promise<void> {
       await windows.preview(owner, next);
     },
     save: (next) => backend.saveSettings(next),
+    clearRestored: clearRestoredOf(backend),
     onClose: () => void backend.closeWindow().catch((error: unknown) => console.error(error)),
     copy: (text) => backend.writeClipboard(text),
     checkForUpdates: async () => {
@@ -86,6 +87,12 @@ async function startSettings(owner: string): Promise<void> {
     showTheme(next);
   });
   await windows.onCloseRequested(() => page.discard());
+}
+
+/** Deletes the saved scrollback and commands once Restore scrollback and commands is turned off, where any are kept. */
+function clearRestoredOf(backend: Backend): (() => Promise<void>) | undefined {
+  const session = backend.session;
+  return session ? () => session.clearScrollback() : undefined;
 }
 
 const SPLASH_KEY = "tiili.splash.lastShown";
@@ -184,6 +191,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       showAppIcon: platform === "macos",
       apply,
       save: (next) => backend.saveSettings(next),
+      clearRestored: clearRestoredOf(backend),
       onClose: () => panes.focusCurrent(),
       copy: (text) => backend.writeClipboard(text),
     });
@@ -243,12 +251,15 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
   // A window New Window opened names its first pane's folder in its address; one Move to New Window opened names
-  // the pane it is to take over, which falls back to a fresh shell if that pane is no longer waiting.
+  // the pane it is to take over, which falls back to a fresh shell if that pane is no longer waiting. A window
+  // reopened from the last session gets its panes back instead.
   const params = new URLSearchParams(window.location.search);
   const startCwd = params.get("cwd") ?? undefined;
   const moveToken = params.get("move");
   const arrived = moveToken ? await panes.arrive(moveToken).catch(() => false) : false;
-  if (!arrived) await panes.open(startCwd || undefined);
+  const restored = arrived ? undefined : await backend.session?.load().catch(() => undefined);
+  const reopened = restored ? await panes.restore(restored).catch(() => false) : false;
+  if (!arrived && !reopened) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 
   // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top. Before
