@@ -307,10 +307,6 @@ export class TileView {
     divider.addEventListener("pointercancel", onEnd);
   }
 
-  /**
-   * While a grab strip is dragged, shows a ghost label following the pointer with the source pane dimmed, so the
-   * drag is visible from the first pixels; highlights the pane under the pointer and swaps with it on drop.
-   */
   /** A miniature of `pane` as it looks now: a scaled-down copy of its elements, kept from taking part in the page. */
   private dragPreview(pane: HTMLElement): HTMLElement {
     const { width, height } = pane.getBoundingClientRect();
@@ -337,6 +333,10 @@ export class TileView {
     return ghost;
   }
 
+  /**
+   * While a grab strip is dragged, shows a miniature of the pane following the pointer with the source pane dimmed,
+   * so the drag is visible from the first pixels; highlights the pane under the pointer and swaps with it on drop.
+   */
   private dragPane(grab: HTMLElement, source: HTMLElement, down: PointerEvent): void {
     const from = Number(source.dataset[PANE_ID]);
     let target: HTMLElement | undefined;
