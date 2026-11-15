@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://github.com/redfellow/tiili/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/redfellow/tiili?color=A4472B&label=release"></a>
   <a href="https://github.com/redfellow/tiili/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/redfellow/tiili/total?color=A4472B"></a>
-  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/github/license/redfellow/tiili?color=A4472B"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 licence" src="https://img.shields.io/badge/license-GPL--3.0-A4472B"></a>
 </p>
 
 ---
@@ -115,9 +115,12 @@ tiili exists and the technology choices; the [brand](docs/brand/README.md) holds
 
 ## License
 
-[MIT](LICENSE). The bundled fonts keep their own licences: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
+[GNU GPL 3.0 or later](LICENSE): you may use, change and share tiili, and anything you distribute that is built on
+it must share its source under the same licence. Releases up to 0.3.0 came out under the MIT License. The
+bundled fonts keep their own licences: see [`src/assets/fonts/LICENSES.md`](src/assets/fonts/LICENSES.md).
 
 The Heynote pane bundles [Heynote](https://github.com/heyman/heynote) by Jonatan Heyman, built from its source by
 `npm run heynote` into [`public/heynote`](public/heynote). Heynote is licensed under the MIT License with the
 "Commons Clause" License Condition v1.0, which does not allow selling it: see
-[`public/heynote/LICENSE`](public/heynote/LICENSE). Thank you, Jonatan, for making Heynote.
+[`public/heynote/LICENSE`](public/heynote/LICENSE). tiili's [licence](LICENSE) grants an additional permission to
+combine tiili with Heynote, so the two can ship together. Thank you, Jonatan, for making Heynote.
