@@ -3,6 +3,7 @@ name = "tiili"
 version = "0.2.0"
 description = "A terminal for working in many repositories at once"
 edition = "2021"
+license = "GPL-3.0-or-later"
 publish = false
 default-run = "tiili"
 

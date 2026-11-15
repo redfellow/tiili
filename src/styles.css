@@ -98,6 +98,16 @@
   font-display: block;
 }
 
+/* Nerd Font icon fallback: only the icon codepoints its cmap has, so it never replaces letters or box drawing. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+23FB-23FE, U+2630, U+2665, U+26A1, U+276C-2771, U+2B58;
+}
+
 html,
 body {
   margin: 0;
