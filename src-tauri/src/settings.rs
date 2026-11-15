@@ -222,12 +222,15 @@ pub async fn settings_open(app: AppHandle, window: WebviewWindow) -> Result<(), 
         None => settings_window_place(owner, owner, SETTINGS_WINDOW_SIZE),
     };
     let url = format!("index.html?settings={}", window.label());
-    WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
+    let opened = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
         .title("Settings")
         .inner_size(place.width, place.height)
         .position(place.x, place.y)
+        // Hidden until its page has painted, so the webview's white never flashes.
+        .visible(false)
         .build()
         .map_err(text)?;
+    crate::windows::reveal_later(&opened);
     Ok(())
 }
 
