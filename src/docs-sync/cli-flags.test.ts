@@ -4,15 +4,20 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-/** The flags each subcommand takes, from the USAGE text in control.rs: `tiili open [--cwd DIR] …` gives open → --cwd. */
+/**
+ * The flags each subcommand takes, from `tiili describe`'s golden output: open → --cwd, --title. The Rust test
+ * `describe_matches_the_golden_file` keeps that file equal to the `COMMANDS` table in control.rs.
+ */
 function usageFlags(): Map<string, Set<string>> {
-  const usage = /pub const USAGE: &str =\s*"((?:[^"\\]|\\.)*)"/.exec(read("src-tauri/src/control.rs"))?.[1];
-  if (!usage) throw new Error("no USAGE in control.rs");
-  const flags = new Map<string, Set<string>>();
-  for (const [, command, rest] of usage.matchAll(/tiili (\w+)([^\\]*)/g)) {
-    flags.set(command, new Set(rest.split(" -- ")[0].match(/--[a-z][a-z-]*/g) ?? []));
-  }
-  return flags;
+  const describe = JSON.parse(read("src-tauri/tests/fixtures/describe.json")) as {
+    commands: { name: string; args: { kind: string; name: string }[] }[];
+  };
+  return new Map(
+    describe.commands.map(({ name, args }) => [
+      name,
+      new Set(args.filter((arg) => arg.kind === "option").map((arg) => arg.name)),
+    ]),
+  );
 }
 
 /** The `tiili open` and `tiili list` examples of a doc, with the flags each passes to tiili (those before `--`). */
@@ -33,11 +38,12 @@ const DOCS = [
 describe("tiili CLI examples", () => {
   const usage = usageFlags();
 
-  it("reads open and list from the usage text", () => {
-    expect([...usage.keys()].sort()).toEqual(["list", "open"]);
+  it("reads open and list from the command table", () => {
+    expect([...usage.keys()]).toEqual(expect.arrayContaining(["list", "open"]));
+    expect(usage.get("open")).toContain("--cwd");
   });
 
-  it.each(DOCS)("A documented flag the CLI lacks: every flag in %s's examples is in the usage text", (file) => {
+  it.each(DOCS)("A documented flag the CLI lacks: every flag in %s's examples is in the command table", (file) => {
     const found = examples(read(file));
     expect(found.length, `no tiili open or list example in ${file}`).toBeGreaterThan(0);
     const unknown = found.flatMap(({ example, command, flags }) =>
