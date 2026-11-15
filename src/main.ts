@@ -14,6 +14,25 @@ import { findUpdate, startupCheck, takeWhatsNew } from "./updates";
 import { APP_VERSION } from "./version";
 import { showWhatsNewDialog } from "./whatsNewDialog";
 
+/**
+ * Shows this window, which opens hidden so the webview's white never flashes, once the page has painted in its theme.
+ * The second frame is the one after the first paint; the timeout covers a hidden page that gets no frames. Nothing
+ * to show in the browser preview.
+ */
+function reveal(): void {
+  if (selectBackend(window) !== "tauri") return;
+  let shown = false;
+  const show = () => {
+    if (shown) return;
+    shown = true;
+    getCurrentWindow().show().catch((error: unknown) => console.error(error));
+  };
+  requestAnimationFrame(() => requestAnimationFrame(show));
+  setTimeout(show, REVEAL_TIMEOUT_MS);
+}
+/** How long {@link reveal} waits for the page's first frames before showing the window anyway. */
+const REVEAL_TIMEOUT_MS = 150;
+
 /** Event sent when the macOS app menu's Settings… item is chosen. */
 const OPEN_SETTINGS_EVENT = "open-settings";
 /** Event sent when another window saved the settings; its payload is the saved value. */
@@ -57,6 +76,7 @@ async function startSettings(owner: string): Promise<void> {
       return update !== undefined;
     },
   });
+  reveal();
   // Settings saved in another window are the ones Cancel returns to from now on.
   await backend.onAppEvent(SETTINGS_CHANGED_EVENT, (value) => {
     const next = normalize(value);
@@ -103,6 +123,8 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
         },
       })
     : undefined;
+  // In its theme, and under the splash when one plays; the first pane opens in the shown window.
+  reveal();
 
   const platform = currentPlatform();
   const settingsWindows = backend.settingsWindows;
@@ -212,9 +234,11 @@ const root = document.getElementById("panes");
 if (settingsOwner) {
   startSettings(settingsOwner).catch((error: unknown) => {
     document.body.textContent = `tiili could not show the settings: ${String(error)}`;
+    reveal();
   });
 } else if (root) {
   start(root, document.getElementById("top-bar")).catch((error: unknown) => {
     root.textContent = `tiili could not start the terminal: ${String(error)}`;
+    reveal();
   });
 }
