@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Pane motion
-When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL animate from its old place and size to its new one with an ease-out motion in about 280 ms. A new pane SHALL rise, grow and fade in, with a slight spring, in about 380 ms. A closing pane SHALL shrink and fade out above the other panes in about 180 ms, and its terminal SHALL stay visible until then. When the OS asks for reduced motion, the change SHALL apply instantly. Dragging a divider SHALL stay instant. Each pane's PTY SHALL be resized once, to its final size.
+When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL animate from its old place and size to its new one with an ease-out motion in about 280 ms. A new pane SHALL rise, grow and fade in, with a slight spring, in about 380 ms. A closing pane SHALL shrink and fade out above the other panes in about 180 ms, and its terminal SHALL stay visible until then. When the OS asks for reduced motion, the change SHALL apply instantly. Dragging a divider SHALL stay instant.
 
 #### Scenario: Opening a pane animates
 - **WHEN** 2 panes are open and the user opens a third
@@ -27,7 +27,7 @@ When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL anim
 ## ADDED Requirements
 
 ### Requirement: Gliding pane content scaling
-While a pane glides, its terminal and title SHALL scale evenly rather than stretch. The terminal's line wrapping SHALL change once at the start, and its text SHALL then scale smoothly from its old size to its new one, while the title keeps a constant size.
+While a pane glides, its terminal and title SHALL scale evenly rather than stretch. The terminal's line wrapping SHALL change once at the start, and its text SHALL then scale smoothly from its old size to its new one, while the title keeps a constant size. Each pane's PTY SHALL be resized once, to its final size.
 
 #### Scenario: Gliding pane keeps its proportions
 - **WHEN** a pane grows to twice its width because another pane closes
