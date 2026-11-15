@@ -9,6 +9,7 @@ pub mod control;
 mod control_app;
 pub mod control_server;
 pub mod cwd;
+pub mod intents;
 pub mod links;
 pub mod notes;
 pub mod pty;
@@ -168,7 +169,8 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
     app.state::<SessionReports>().forget(id);
-    app.state::<control_app::PaneTitles>().forget(id);
+    app.state::<control_app::PaneOpens>().forget(id);
+    app.state::<control_app::PaneOwners>().forget(id);
     attention::forget(app, id);
 }
 
@@ -332,7 +334,8 @@ fn window_destroyed(app: &AppHandle, label: &str) {
     let registry = app.state::<SessionRegistry>();
     for id in app.state::<WindowSessions>().take(label) {
         app.state::<Tints>().forget(id);
-        app.state::<control_app::PaneTitles>().forget(id);
+        app.state::<control_app::PaneOpens>().forget(id);
+        app.state::<control_app::PaneOwners>().forget(id);
         attention::forget(app, id);
         let _ = registry.close(id);
     }
@@ -547,7 +550,8 @@ pub fn run() {
         .manage(MoveMenu::default())
         .manage(attention::Attention::default())
         .manage(control_app::PendingOpens::default())
-        .manage(control_app::PaneTitles::default())
+        .manage(control_app::PaneOpens::default())
+        .manage(control_app::PaneOwners::default())
         .manage(control_app::ControlState::default())
         .manage(control_app::PaneOrders::default())
         .manage(session_app::SessionState::default())
@@ -668,6 +672,7 @@ pub fn run() {
             attention::attention_list,
             attention::attention_next,
             control_app::pane_open_done,
+            control_app::pane_close_done,
             control_app::pane_order_set,
             links::link_open,
             links::path_resolve,

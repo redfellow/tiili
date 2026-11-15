@@ -81,6 +81,15 @@ export function sanitizeMessage(text: string): string | undefined {
   return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
 }
 
+/**
+ * The signal a `tiili attention` request makes: a notification with `message` made safe as an OSC 9 report's is, or
+ * undefined when the message is too long to show.
+ */
+export function requestedSignal(message: string): AttentionSignal | undefined {
+  const text = sanitizeMessage(message);
+  return text === undefined ? undefined : { kind: "message", text };
+}
+
 /** What the gate makes of a signal: a new mark (with its message, if any), a message for the mark just made, or nothing. */
 export type GateResult =
   | { action: "mark"; message?: string }

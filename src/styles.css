@@ -149,7 +149,7 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  font: 500 13px/38px var(--font-sans);
+  font: 500 var(--text-terminal)/38px var(--font-sans);
   color: var(--fg);
 }
 
@@ -199,9 +199,9 @@ body {
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--fg);
-  font: 500 11.5px/16px var(--font-sans);
+  font: 500 var(--text-label)/16px var(--font-sans);
   white-space: nowrap;
-  box-shadow: 0 4px 12px color-mix(in srgb, #000 35%, transparent);
+  box-shadow: var(--shadow-1);
   pointer-events: none;
   opacity: 0;
 }
@@ -221,7 +221,7 @@ body {
   padding: 0 var(--space-1);
   gap: 3px;
   color: var(--fg);
-  font: 600 11.5px/16px var(--font-sans);
+  font: 600 var(--text-label)/16px var(--font-sans);
   font-variant-numeric: tabular-nums;
   cursor: default;
 }
@@ -270,7 +270,7 @@ body {
   border-radius: var(--radius-brick);
   background: color-mix(in srgb, var(--surface) 55%, transparent);
   color: var(--muted);
-  font: 500 11.5px/18px var(--font-sans);
+  font: 500 var(--text-label)/18px var(--font-sans);
   white-space: nowrap;
   cursor: default;
   opacity: 0.7;
@@ -459,8 +459,8 @@ body {
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
-  font: 500 11.5px/16px var(--font-sans);
-  box-shadow: 0 4px 12px color-mix(in srgb, #000 25%, transparent);
+  font: 500 var(--text-label)/16px var(--font-sans);
+  box-shadow: var(--shadow-1);
   pointer-events: auto;
 }
 
@@ -545,7 +545,7 @@ body {
   background: var(--surface);
   color: var(--muted);
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: var(--text-label);
   white-space: nowrap;
   text-overflow: ellipsis;
   pointer-events: none;
@@ -581,7 +581,7 @@ body {
   border-radius: var(--radius-brick);
   background: var(--surface);
   color: var(--muted);
-  font: 500 11.5px/18px var(--font-sans);
+  font: 500 var(--text-label)/18px var(--font-sans);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -672,7 +672,7 @@ html[data-pane-dragging] * {
   overflow: hidden;
   border-radius: var(--radius-brick);
   background: var(--term-bg);
-  box-shadow: 0 12px 32px color-mix(in srgb, #000 50%, transparent);
+  box-shadow: var(--shadow-3);
   opacity: 0.92;
   pointer-events: none;
 }
@@ -818,7 +818,7 @@ dialog.settings {
   background: var(--surface);
   color: var(--fg);
   font: 400 12.5px/1.5 var(--font-sans);
-  box-shadow: 0 8px 32px color-mix(in srgb, #000 45%, transparent), 0 2px 8px color-mix(in srgb, #000 30%, transparent);
+  box-shadow: var(--shadow-2);
 }
 
 /* No dimming, so the terminal behind shows the live effect of each setting; the dialogue's shadow lifts it instead. */
@@ -1011,7 +1011,7 @@ body.settings-window {
 
 .settings-range input::-webkit-slider-runnable-track {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-brick);
   background: linear-gradient(to right, var(--focus) var(--fill), var(--line) var(--fill));
 }
 
@@ -1019,7 +1019,7 @@ body.settings-window {
   -webkit-appearance: none;
   width: 14px;
   height: 14px;
-  margin-top: -4px;
+  margin-top: calc(-1 * var(--space-1));
   border: 2px solid var(--surface);
   border-radius: 50%;
   background: var(--focus);
@@ -1028,13 +1028,13 @@ body.settings-window {
 
 .settings-range input::-moz-range-track {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-brick);
   background: var(--line);
 }
 
 .settings-range input::-moz-range-progress {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-brick);
   background: var(--focus);
 }
 
@@ -1055,7 +1055,7 @@ body.settings-window {
 .settings-range output {
   min-width: 4ch;
   text-align: right;
-  font: 500 11.5px var(--font-mono);
+  font: 500 var(--text-label) var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
@@ -1153,7 +1153,7 @@ body.settings-window {
   border: 0;
   border-radius: 50%;
   color: var(--muted);
-  font: 400 13px/1 var(--font-sans);
+  font: 400 var(--text-terminal)/1 var(--font-sans);
 }
 
 .settings .settings-info:hover {
@@ -1173,10 +1173,10 @@ body.settings-window {
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--fg);
-  font: 400 11.5px/1.45 var(--font-sans);
+  font: 400 var(--text-label)/1.45 var(--font-sans);
   letter-spacing: normal;
   text-transform: none;
-  box-shadow: 0 4px 16px color-mix(in srgb, #000 30%, transparent);
+  box-shadow: var(--shadow-1);
 }
 
 /* In a row the ⓘ sits at the right, so its tooltip opens above it, leftwards. */
@@ -1254,7 +1254,7 @@ body.settings-window {
 
 .settings-card-name {
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: var(--text-label);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1539,7 +1539,7 @@ body.settings-window {
   border-radius: var(--radius-control);
   background: var(--sunken);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-label);
   line-height: 1.4;
   user-select: text;
 }
@@ -1566,7 +1566,7 @@ dialog.update-dialog {
   border-radius: var(--radius-control);
   background: var(--sunken);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-label);
   line-height: 1.4;
   white-space: pre-wrap;
   user-select: text;
@@ -1590,7 +1590,7 @@ dialog.link-dialog {
   border-radius: var(--radius-control);
   background: var(--sunken);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-label);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1658,7 +1658,7 @@ dialog.link-dialog {
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--fg);
-  font: 400 13px/1.4 var(--font-sans);
+  font: 400 var(--text-terminal)/1.4 var(--font-sans);
 }
 
 .context-menu-item {

@@ -1,4 +1,4 @@
-//! The local endpoint `tiili open` and `tiili list` talk to (see [`crate::control`]): a Unix domain socket with 0600
+//! The local endpoint `tiili open`, `list`, `attention` and `close` talk to (see [`crate::control`]): a Unix domain socket with 0600
 //! permissions in a 0700 folder on macOS and Linux, a named pipe only the current user and local clients can open on
 //! Windows. Each connection carries one request line and gets one reply line. What a request does is up to a
 //! [`Handler`], so the endpoint tests without the app.
@@ -9,7 +9,8 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::control::{
-    error_reply, listed_reply, opened_reply, parse_request, Op, PaneInfo, Request,
+    done_reply, error_reply, listed_reply, opened_reply, parse_request, CliError, Op, PaneInfo,
+    Request,
 };
 use crate::pty::SessionId;
 
@@ -19,7 +20,8 @@ const MAX_REQUEST: u64 = 1 << 20;
 /// Carries out requests that passed the token check, for the pane `caller` they came from.
 pub trait Handler: Send + Sync + 'static {
     /// Opens a pane in `caller`'s window running `command` in `cwd`, titled `title`, looked up on and run with
-    /// `path`; returns the new pane's id.
+    /// `path`; returns the new pane's id. With `key`, `caller`'s live pane opened with that key is returned instead
+    /// when there is one, with `true` for reused.
     fn open(
         &self,
         caller: SessionId,
@@ -27,16 +29,29 @@ pub trait Handler: Send + Sync + 'static {
         title: Option<String>,
         command: Vec<String>,
         path: Option<String>,
-    ) -> Result<SessionId, String>;
+        key: Option<String>,
+    ) -> Result<(SessionId, bool), String>;
 
     /// The panes of `caller`'s window, in grid order.
     fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String>;
+
+    /// Marks `caller`'s own pane for attention with `message`, or clears its mark with `clear`.
+    fn attention(
+        &self,
+        caller: SessionId,
+        message: Option<String>,
+        clear: bool,
+    ) -> Result<(), String>;
+
+    /// Closes pane `target` when `caller` opened it; the error is the reply's (`not_opened_by_you`,
+    /// `no_such_pane` or `close_failed`).
+    fn close(&self, caller: SessionId, target: SessionId) -> Result<(), CliError>;
 }
 
 /// The reply line (without its newline) to request `line`, checked against this run's `token`.
 pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
     match parse_request(line.trim_end(), token) {
-        Err(refusal) => error_reply(&refusal.message()),
+        Err(refusal) => error_reply(&refusal),
         Ok(Request {
             pane,
             op:
@@ -45,13 +60,28 @@ pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
                     title,
                     command,
                     path,
+                    key,
                 },
-        }) => match handler.open(pane, cwd, title, command, path) {
-            Ok(id) => opened_reply(id),
-            Err(error) => error_reply(&error),
+        }) => match handler.open(pane, cwd, title, command, path, key) {
+            Ok((id, reused)) => opened_reply(id, reused),
+            Err(error) => error_reply(&CliError::OpenFailed(error)),
         },
         Ok(Request { pane, op: Op::List }) => match handler.list(pane) {
             Ok(panes) => listed_reply(&panes),
+            Err(error) => error_reply(&CliError::ListFailed(error)),
+        },
+        Ok(Request {
+            pane,
+            op: Op::Attention { message, clear },
+        }) => match handler.attention(pane, message, clear) {
+            Ok(()) => done_reply(),
+            Err(error) => error_reply(&CliError::AttentionFailed(error)),
+        },
+        Ok(Request {
+            pane,
+            op: Op::Close { target },
+        }) => match handler.close(pane, target) {
+            Ok(()) => done_reply(),
             Err(error) => error_reply(&error),
         },
     }

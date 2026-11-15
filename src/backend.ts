@@ -29,12 +29,33 @@ export interface PaneOpenRequest {
   path: string | null;
 }
 
+/** The window is asked by `tiili close` to close the pane running `session`; it answers {@link PaneControl.closed}. */
+export interface PaneCloseRequest {
+  requestId: number;
+  session: SessionId;
+}
+
+/**
+ * `tiili attention` from the pane running `session`: mark it with `message` as a notification escape code would, or
+ * with `clear` take its mark away.
+ */
+export interface PaneAttentionRequest {
+  session: SessionId;
+  message: string | null;
+  clear: boolean;
+}
+
 /** Answering the `tiili` command line, where the backend runs it (the Tauri app). */
 export interface PaneControl {
   /** Answers request `requestId`: the session of the pane it opened, else why it could not. */
   done(requestId: number, result: { pane: SessionId } | { error: string }): Promise<void>;
-  /** Tells the app this window's sessions in grid order (left to right, top to bottom), which `tiili list` follows. */
-  setOrder(sessions: SessionId[]): Promise<void>;
+  /** Answers close request `requestId`: closed, else why it could not. */
+  closed(requestId: number, error?: string): Promise<void>;
+  /**
+   * Tells the app this window's sessions tab by tab in strip order, each in grid order (left to right, top to
+   * bottom), which `tiili list` follows.
+   */
+  setOrder(tabs: SessionId[][]): Promise<void>;
 }
 
 /** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
@@ -155,6 +176,8 @@ export interface AppEvents {
   "attention-changed": { marks: AttentionMark[] };
   "attention-focus": SessionId;
   "pane-open-request": PaneOpenRequest;
+  "pane-close-request": PaneCloseRequest;
+  "pane-attention-request": PaneAttentionRequest;
   "session-flush": undefined;
 }
 
