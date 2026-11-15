@@ -450,22 +450,50 @@ pub struct SessionRegistry {
     /// The command line each session's shell reported running, by session.
     lines: Mutex<HashMap<SessionId, Arc<Mutex<CommandLineScanner>>>>,
     control: OnceLock<ControlEnv>,
+    /// The user's own folder restored history lines are handed to shells in; none are handed over until it is set.
+    history_dir: OnceLock<PathBuf>,
 }
 
 /// The environment variable naming the file whose text tiili's shell integration adds to the shell's history and
 /// then deletes.
 pub const RESTORE_HISTORY_VAR: &str = "TIILI_RESTORE_HISTORY";
 
-/// Writes `line` to a file only the user can read, for session `id`'s shell to add to its history.
-fn history_file(id: SessionId, line: &str) -> io::Result<PathBuf> {
-    let path = std::env::temp_dir().join(format!("tiili-history-{}-{id}", std::process::id()));
-    crate::session::write_private(&path, line.as_bytes())?;
+/// Writes `line` to a new file in `dir` (created readable by the user only) that only the user can read, for
+/// session `id`'s shell to add to its history. The file is created exclusively: a file or link already at its
+/// name is removed first, and one that appears in between makes the write fail rather than follow it.
+pub fn history_file(dir: &Path, id: SessionId, line: &str) -> io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        options.mode(0o600);
+    }
+    let path = dir.join(format!("{}-{id}", std::process::id()));
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    let written = options
+        .open(&path)
+        .and_then(|mut file| file.write_all(line.as_bytes()));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
     Ok(path)
 }
 
 impl SessionRegistry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Hands restored history lines to shells through files in `dir`, which only the user can read.
+    pub fn set_history_dir(&self, dir: PathBuf) {
+        let _ = self.history_dir.set(dir);
     }
 
     /// Starts a default shell in `cwd` (home folder when `None` or unreadable) with `prompt` (see
@@ -557,9 +585,18 @@ impl SessionRegistry {
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
         let (mut cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
-        if let Some(line) = history.filter(|l| command.is_none() && !l.trim().is_empty()) {
-            cmd.env(RESTORE_HISTORY_VAR, history_file(id, line)?);
+        // The integration deletes the file once read; one a shell without it leaves goes when the session ends.
+        let history = match (
+            history.filter(|l| command.is_none() && !l.trim().is_empty()),
+            self.history_dir.get(),
+        ) {
+            (Some(line), Some(dir)) => Some(history_file(dir, id, line)?),
+            _ => None,
+        };
+        if let Some(path) = &history {
+            cmd.env(RESTORE_HISTORY_VAR, path);
         }
+        let exit_history = history.clone();
         let lines = Arc::new(Mutex::new(CommandLineScanner::default()));
         let output_lines = Arc::clone(&lines);
         let session = PtySession::spawn_integrated(
@@ -581,9 +618,17 @@ impl SessionRegistry {
             }),
             Box::new(move |code| {
                 exit_alive.store(false, Ordering::Relaxed);
+                if let Some(path) = &exit_history {
+                    let _ = std::fs::remove_file(path);
+                }
                 on_exit(id, code)
             }),
-        )?;
+        )
+        .inspect_err(|_| {
+            if let Some(path) = &history {
+                let _ = std::fs::remove_file(path);
+            }
+        })?;
         let _ = reader.set(session.foreground_reader());
         let mut ticks: Vec<Box<dyn FnMut() + Send>> = Vec::new();
         if let Some(tracker) = tracker {
@@ -698,5 +743,54 @@ impl SessionRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn restored_history_is_written_privately_and_never_through_a_planted_link() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("tiili-history-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("history");
+        let target = root.join("target");
+        let planted = dir.join(format!("{}-1", std::process::id()));
+        // (name, plant a link at the file's name first)
+        for (name, plant) in [("fresh folder", false), ("planted link", true)] {
+            if plant {
+                std::fs::remove_file(&planted).unwrap();
+                std::fs::write(&target, "kept").unwrap();
+                std::os::unix::fs::symlink(&target, &planted).unwrap();
+            }
+            let path = super::history_file(&dir, 1, "npm run dev").unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                "npm run dev",
+                "{name}"
+            );
+            assert!(
+                !std::fs::symlink_metadata(&path)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink(),
+                "{name}"
+            );
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600,
+                "{name}"
+            );
+            assert_eq!(
+                std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+                0o700,
+                "{name}"
+            );
+            if plant {
+                assert_eq!(std::fs::read_to_string(&target).unwrap(), "kept", "{name}");
+            }
+        }
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

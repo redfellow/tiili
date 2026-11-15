@@ -8,7 +8,7 @@ import {
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
-import { createSettingsSession, same, whileTyping } from "./settingsSession";
+import { createSettingsSession, same, turnsOffRestore, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION, VERSION_LABEL } from "./version";
 
@@ -914,7 +914,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     changed();
     lock(true);
     const written = session.draft;
-    const turnedOff = session.saved.behaviour.restoreScrollback && !written.behaviour.restoreScrollback;
+    const turnedOff = turnsOffRestore(session.saved, written);
     try {
       await options.save(written);
       session.commit(written);

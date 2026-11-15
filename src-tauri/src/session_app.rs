@@ -34,6 +34,8 @@ pub struct Restored {
     /// Where each local terminal pane with a saved folder opens, by saved pane id: that folder, else its nearest
     /// existing parent, else `None` for home.
     pub folders: HashMap<u32, Option<String>>,
+    /// The home folder, which the window's notes write as `~`.
+    pub home: Option<String>,
 }
 
 /// The folder each of `window`'s local terminal panes opens in (see [`Restored::folders`]).
@@ -191,6 +193,10 @@ pub fn restore(app: &tauri::App) -> tauri::Result<()> {
         .map(|w| take_scrollback(&dir, w))
         .collect();
     let _ = std::fs::remove_dir_all(dir.join(session::SCROLLBACK_DIR));
+    // History lines a shell without tiili's integration never read, left by an earlier run.
+    let _ = std::fs::remove_dir_all(dir.join(session::HISTORY_DIR));
+    app.state::<crate::pty::SessionRegistry>()
+        .set_history_dir(dir.join(session::HISTORY_DIR));
     let Some(main) = app.get_webview_window(MAIN_WINDOW) else {
         return Ok(());
     };
@@ -230,12 +236,18 @@ pub fn restore(app: &tauri::App) -> tauri::Result<()> {
             store.update(&label, window.state.clone());
         }
         let folders = open_folders(&window);
+        let home = app
+            .path()
+            .home_dir()
+            .ok()
+            .map(|dir| dir.to_string_lossy().into_owned());
         lock(&state.restore).insert(
             label,
             Restored {
                 window,
                 scrollback,
                 folders,
+                home,
             },
         );
     }
@@ -374,6 +386,7 @@ pub fn session_save_scrollback(
 pub fn session_clear_scrollback(state: State<'_, SessionState>) {
     if let Some(dir) = lock(&state.dir).clone() {
         let _ = std::fs::remove_dir_all(dir.join(session::SCROLLBACK_DIR));
+        let _ = std::fs::remove_dir_all(dir.join(session::HISTORY_DIR));
     }
     lock(&state.store).forget_commands();
     state.save();

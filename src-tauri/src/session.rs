@@ -14,6 +14,8 @@ pub const VERSION: u32 = 1;
 pub const FILE: &str = "session.json";
 /// The folder, beside the session file, that holds one scrollback file per pane.
 pub const SCROLLBACK_DIR: &str = "scrollback";
+/// The folder in the app data folder that restored history lines are handed to shells through.
+pub const HISTORY_DIR: &str = "history";
 
 /// What a pane is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

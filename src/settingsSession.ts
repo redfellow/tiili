@@ -22,6 +22,10 @@ export const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.str
  * committed (left or Enter), since the partial numbers on the way to 50 000 clamp to 1 000 and would cut every open
  * pane's history.
  */
+/** Whether saving `written` over `saved` turns Restore scrollback and commands off, so what was kept is deleted. */
+export const turnsOffRestore = (saved: Settings, written: Settings) =>
+  saved.behaviour.restoreScrollback && !written.behaviour.restoreScrollback;
+
 export function whileTyping(read: Settings, draft: Settings): Settings {
   return { ...read, behaviour: { ...read.behaviour, scrollback: draft.behaviour.scrollback } };
 }

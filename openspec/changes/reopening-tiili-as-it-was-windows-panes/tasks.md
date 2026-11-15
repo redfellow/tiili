@@ -10,11 +10,13 @@
 - [x] 2.1 Preexec hook in zsh, bash and pwsh scripts emitting the command sequence; history seeding from `TIILI_RESTORE_HISTORY`; sequence parsed per pane in the PTY sink, cleared at prompt; fallback program name from `command.rs`; test in `src-tauri/tests/pty_session.rs` that a zsh/bash pane reports a typed command
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib -- command::tests pty::tests`
 
 ## 3. Frontend
 - [x] 3.1 `restoreScrollback` setting (default on) in src/settings.ts and the Behaviour tab in src/settingsDialog.ts; turning it off deletes saved scrollback/commands
   - proof: `npx vitest run src/settings.test.ts`
-  - proof: `npx eslint src/settings.ts src/settingsDialog.ts`
+  - proof: `npx vitest run src/settingsSession.test.ts`
+  - proof: `npx eslint src/settings.ts src/settingsDialog.ts src/settingsSession.ts src/settingsSession.test.ts`
 - [x] 3.2 `src/session.ts`: pure snapshot of a window and restore plan (reminder line, folder note, divider), table-driven src/session.test.ts (`// @harvaaja-test-tier: fast`)
   - proof: `npx vitest run src/session.test.ts`
 - [x] 3.3 Wire into src/panes.ts, src/main.ts, src/terminal.ts and src/backend*.ts: debounced updates on layout/pane/cwd changes, restore on launch (layout, focus, zoom, titles, Heynote), scrollback written before the shell output, flush on app end; ws backend no-ops

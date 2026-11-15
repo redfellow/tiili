@@ -50,6 +50,8 @@ export interface Restored {
   window: SavedWindow;
   scrollback: Record<string, string>;
   folders: Record<string, string | null>;
+  /** The home folder, written `~` in the notes. */
+  home?: string | null;
 }
 
 /** A pane as the window holds it, for {@link snapshotWindow}. */
@@ -160,6 +162,14 @@ export function restorePlan(restored: Restored, withScrollback: boolean): Window
   return { panes: saved.map((pane) => paneRestore(restored, pane, withScrollback)), mode, sizes, focused };
 }
 
+/** `path` with the `home` folder written `~`; home itself when `path` is null. */
+function tildify(path: string | null, home: string | null | undefined): string {
+  if (path === null) return "~";
+  if (!home) return path;
+  const rest = path.startsWith(home) ? path.slice(home.length) : undefined;
+  return rest !== undefined && (rest === "" || rest.startsWith("/") || rest.startsWith("\\")) ? `~${rest}` : path;
+}
+
 function paneRestore(restored: Restored, pane: SavedPane, withScrollback: boolean): PaneRestore {
   const base = { kind: pane.kind, zoom: Number.isFinite(pane.zoom) ? pane.zoom : 0, title: pane.title };
   if (pane.kind === "heynote") return { ...base, preface: "" };
@@ -172,7 +182,8 @@ function paneRestore(restored: Restored, pane: SavedPane, withScrollback: boolea
     const opened = key in restored.folders ? restored.folders[key] : pane.cwd;
     cwd = opened ?? undefined;
     if (opened !== pane.cwd) {
-      preface += dimLine(`— folder ${plain(pane.cwd)} no longer exists; opened ${plain(opened ?? "home")} —`);
+      const shown = (path: string | null) => plain(tildify(path, restored.home));
+      preface += dimLine(`— folder ${shown(pane.cwd)} no longer exists; opened ${shown(opened)} —`);
     }
   }
   const command = pane.command ? plain(pane.command) : "";

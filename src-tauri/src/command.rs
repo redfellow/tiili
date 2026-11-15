@@ -326,6 +326,55 @@ pub fn catches_signal(_pid: u32, _signal: i32) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn command_line_follows_the_shells_reports() {
+        const ESC: &str = "\x1b]";
+        let make = format!("{ESC}1337;TiiliCmd=bWFrZQ==\x07");
+        let cases: [(&str, Vec<String>, Option<&str>); 6] = [
+            (
+                "a reported command sets the line",
+                vec![make.clone()],
+                Some("make"),
+            ),
+            (
+                "the next prompt clears it",
+                vec![make.clone(), format!("{ESC}7;file:///tmp\x07")],
+                None,
+            ),
+            (
+                "an empty report (pwsh) clears it",
+                vec![make.clone(), format!("{ESC}1337;TiiliCmd=\x07")],
+                None,
+            ),
+            (
+                "a report split across chunks",
+                vec![
+                    format!("out{ESC}1337;Tiil"),
+                    "iCmd=bWFr".into(),
+                    "ZQ==\x07more".into(),
+                ],
+                Some("make"),
+            ),
+            (
+                "invalid base64 leaves no line",
+                vec![make.clone(), format!("{ESC}1337;TiiliCmd=*not*\x07")],
+                None,
+            ),
+            (
+                "other sequences change nothing",
+                vec![make, format!("{ESC}0;title\x07")],
+                Some("make"),
+            ),
+        ];
+        for (name, chunks, line) in cases {
+            let mut scanner = super::CommandLineScanner::default();
+            for chunk in &chunks {
+                scanner.feed(chunk.as_bytes());
+            }
+            assert_eq!(scanner.line(), line, "{name}");
+        }
+    }
+
+    #[test]
     fn caught_signals_read_from_the_sigcgt_mask() {
         // SIGUSR1 is 10 on Linux: bit 9, 0x200.
         let cases = [
