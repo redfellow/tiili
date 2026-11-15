@@ -1,0 +1,7 @@
+## Approach
+
+- `src/shortcuts.ts` exports `SHORTCUTS: Shortcut[]` with `{ action, group, label, mac, other }`. `action` is a tagged id like `pane:new`, `tab:next`, resolved by a helper `keymapAction(chord, platform)` in the test that calls each keymap function and tags its result. Chords are stored as structured `KeyChord`-like specs (key, code, modifiers) plus a display string; ranges (focus 1–9, move pane + arrow) are one entry with several chords.
+- Coverage test: enumerate keys (letters, digits, punctuation, F1–F12, arrows, Enter, Tab, PageUp/Down, numpad) × 16 modifier sets × 3 platforms; every non-null result must be the action of an entry whose chords include it (or an entry's alternative chords, e.g. ⌘+, numpad); every entry chord must produce its action.
+- `scripts/docs.mjs` imports the list via a small `.mjs`-readable build (vite-node is unavailable, so the list lives in `src/shortcuts.ts` and the script uses `tsx`-free approach: the renderer `renderShortcuts(list, "md"|"html")` lives in `scripts/docs-render.mjs` with a `.d.mts`, and the script loads the TS list with Node's `--experimental-strip-types` (Node ≥ 22.6) — implementer confirms the Node version, else moves the data to `src/shortcuts.data.mjs` imported by both).
+- Freshness test renders both tables and compares with the text between markers; message names `npm run docs`. Marker comment notes that conflicts are fixed by re-running it.
+- Checks live in `src/docs-sync/*.test.ts`, reading files as text with `fs`; each first-line `@harvaaja-test-tier: fast`.
