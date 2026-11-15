@@ -294,6 +294,10 @@ pub fn bind_pipe(
     let access = UserOnly::new()?;
     // Creates the next instance; the first must be new, so nobody else's pipe can sit under the name.
     let create = move |first: bool| -> io::Result<std::fs::File> {
+        // Names `access` whole, so the closure owns all of it. Using only `access.descriptor` would capture just that
+        // field (Rust 2021 closures capture disjoint fields): the ACL and user buffers the descriptor points into
+        // would be freed when `bind_pipe` returns, and the field alone is not `Send`.
+        let access = &access;
         let attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
             lpSecurityDescriptor: (&*access.descriptor as *const _ as *mut _),
