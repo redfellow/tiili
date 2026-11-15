@@ -2,9 +2,9 @@
 //! the token check, the replies and the `tiili` command line. The control server
 //! ([`control_server`](crate::control_server)) and the CLI ([`cli`](crate::cli)) carry it out.
 //!
-//! A request is one JSON line, `{"protocol":1,"token","pane","op":"open"|"list",...}`; the reply is one JSON line,
-//! `{"ok":true,"protocol":1,"pane":7}`, `{"ok":true,"protocol":1,"panes":[...]}` or
-//! `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
+//! A request is one JSON line, `{"protocol":1,"token","pane","op":"open"|"list"|"attention"|"close",...}`; the reply
+//! is one JSON line, `{"ok":true,"protocol":1,"pane":7,"reused":false}`, `{"ok":true,"protocol":1,"panes":[...]}`,
+//! `{"ok":true,"protocol":1,"done":true}` or `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
 //! failures one, [`ERRORS`].
 
 use serde::{Deserialize, Serialize};
@@ -30,9 +30,21 @@ pub enum Op {
         command: Vec<String>,
         #[serde(default)]
         path: Option<String>,
+        /// Reuse the caller's live pane opened with this key instead of opening another.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
     },
     /// List the panes of the caller's window.
     List,
+    /// Mark the caller's own pane for attention with `message`, or clear its mark.
+    Attention {
+        #[serde(default)]
+        message: Option<String>,
+        #[serde(default)]
+        clear: bool,
+    },
+    /// Close pane `target`, which the caller must have opened. (Not `pane`: that is the caller.)
+    Close { target: SessionId },
 }
 
 /// A request that passed the token check: the caller's pane and what it asks for.
@@ -127,6 +139,30 @@ pub const ERRORS: &[ErrorSpec] = &[
         suggestion:
             "set HOME (USERPROFILE on Windows) to a home folder you can write to and run it again",
     },
+    ErrorSpec {
+        code: "not_opened_by_you",
+        exit: 1,
+        summary: "the pane to close was not opened by this pane with tiili open",
+        suggestion: "ask the user to close it",
+    },
+    ErrorSpec {
+        code: "no_such_pane",
+        exit: 1,
+        summary: "no open pane has that id",
+        suggestion: "run tiili list to see the open panes",
+    },
+    ErrorSpec {
+        code: "attention_failed",
+        exit: 1,
+        summary: "the app could not mark or clear this pane",
+        suggestion: "check that this pane is still open in a tiili window",
+    },
+    ErrorSpec {
+        code: "close_failed",
+        exit: 1,
+        summary: "the app could not close the pane",
+        suggestion: "check that the pane is still open, or ask the user to close it",
+    },
 ];
 
 /// Why a `tiili` command failed, in the app or on the command line.
@@ -150,6 +186,14 @@ pub enum CliError {
     BadReply(String),
     /// The Claude skill could not be installed.
     InstallFailed(String),
+    /// The pane to close was not opened by the caller; the text names it.
+    NotOpenedByYou(String),
+    /// No open pane has the id; the text names it.
+    NoSuchPane(String),
+    /// The app could not mark or clear the caller's pane.
+    AttentionFailed(String),
+    /// The app could not close the pane.
+    CloseFailed(String),
     /// An error the app replied with, carrying the app's own suggestion, which may differ from this binary's
     /// [`ERRORS`] when the two are different versions.
     FromApp {
@@ -171,6 +215,10 @@ impl CliError {
             CliError::ListFailed(_) => "list_failed",
             CliError::BadReply(_) => "bad_reply",
             CliError::InstallFailed(_) => "install_failed",
+            CliError::NotOpenedByYou(_) => "not_opened_by_you",
+            CliError::NoSuchPane(_) => "no_such_pane",
+            CliError::AttentionFailed(_) => "attention_failed",
+            CliError::CloseFailed(_) => "close_failed",
             CliError::FromApp { error, .. } => error.code(),
         }
     }
@@ -207,7 +255,11 @@ impl CliError {
             CliError::OpenFailed(why)
             | CliError::ListFailed(why)
             | CliError::BadReply(why)
-            | CliError::InstallFailed(why) => why.clone(),
+            | CliError::InstallFailed(why)
+            | CliError::NotOpenedByYou(why)
+            | CliError::NoSuchPane(why)
+            | CliError::AttentionFailed(why)
+            | CliError::CloseFailed(why) => why.clone(),
             CliError::FromApp { error, .. } => error.message(),
         }
     }
@@ -225,6 +277,10 @@ impl CliError {
             ),
             Some("open_failed") => CliError::OpenFailed(message),
             Some("list_failed") => CliError::ListFailed(message),
+            Some("not_opened_by_you") => CliError::NotOpenedByYou(message),
+            Some("no_such_pane") => CliError::NoSuchPane(message),
+            Some("attention_failed") => CliError::AttentionFailed(message),
+            Some("close_failed") => CliError::CloseFailed(message),
             _ => CliError::BadReply(message),
         };
         match suggestion.filter(|s| !s.is_empty()) {
@@ -256,10 +312,18 @@ pub fn parse_request(line: &str, token: &str) -> Result<Request, CliError> {
     }
     let body: Body =
         serde_json::from_value(value).map_err(|e| CliError::Malformed(e.to_string()))?;
-    if let Op::Open { command, .. } = &body.op {
-        if command.is_empty() || command[0].is_empty() {
+    match &body.op {
+        Op::Open { command, .. } if command.is_empty() || command[0].is_empty() => {
             return Err(CliError::Malformed("no command to run".into()));
         }
+        Op::Open { key: Some(key), .. } if key.is_empty() => {
+            return Err(CliError::Malformed("an empty key".into()));
+        }
+        Op::Attention {
+            message: Some(_),
+            clear: true,
+        } => return Err(CliError::Malformed("a message with clear".into())),
+        _ => {}
     }
     Ok(Request {
         pane: body.pane,
@@ -278,17 +342,35 @@ pub fn request_line(token: &str, pane: SessionId, op: &Op) -> String {
     .unwrap_or_default()
 }
 
-/// A pane as `tiili list` shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+/// A pane as `tiili list` shows it. The fields after `title` are newer: an older app's reply leaves them unset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PaneInfo {
     pub id: SessionId,
     pub cwd: String,
     pub title: String,
+    /// The command its shell last reported running, empty when none.
+    #[serde(default)]
+    pub command: String,
+    /// The tab it is in, counting from 1.
+    #[serde(default)]
+    pub tab: Option<u32>,
+    /// The key it was opened with by `tiili open --key`.
+    #[serde(default)]
+    pub key: Option<String>,
+    /// The pane that opened it with `tiili open`.
+    #[serde(default)]
+    pub opened_by: Option<SessionId>,
 }
 
-/// The reply to an open that made pane `id`.
-pub fn opened_reply(id: SessionId) -> String {
-    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "pane": id }).to_string()
+/// The reply to an open that made pane `id`, or found it already open under its key (`reused`).
+pub fn opened_reply(id: SessionId, reused: bool) -> String {
+    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "pane": id, "reused": reused })
+        .to_string()
+}
+
+/// The reply to an attention or close that was carried out.
+pub fn done_reply() -> String {
+    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "done": true }).to_string()
 }
 
 /// The reply to a list.
@@ -311,14 +393,19 @@ pub fn error_reply(error: &CliError) -> String {
 /// A reply as the CLI reads it.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Reply {
-    Opened(SessionId),
+    Opened { pane: SessionId, reused: bool },
     Listed(Vec<PaneInfo>),
+    Done,
 }
 
 #[derive(Deserialize)]
 struct WireReply {
     ok: bool,
     pane: Option<SessionId>,
+    #[serde(default)]
+    reused: bool,
+    #[serde(default)]
+    done: bool,
     panes: Option<Vec<PaneInfo>>,
     error: Option<String>,
     code: Option<String>,
@@ -338,14 +425,20 @@ pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
     match reply {
         WireReply {
             ok: true,
-            pane: Some(id),
+            pane: Some(pane),
+            reused,
             ..
-        } => Ok(Reply::Opened(id)),
+        } => Ok(Reply::Opened { pane, reused }),
         WireReply {
             ok: true,
             panes: Some(panes),
             ..
         } => Ok(Reply::Listed(panes)),
+        WireReply {
+            ok: true,
+            done: true,
+            ..
+        } => Ok(Reply::Done),
         WireReply {
             ok: false,
             error: Some(error),
@@ -363,6 +456,27 @@ pub fn list_lines(panes: &[PaneInfo]) -> String {
         .iter()
         .map(|p| format!("{}\t{}\t{}\n", p.id, p.cwd, p.title))
         .collect()
+}
+
+/// `tiili list --json`'s output for a caller in pane `me`: one compact JSON array, with each pane's `self` and
+/// `opened_by_you` worked out from `me`.
+pub fn list_json(panes: &[PaneInfo], me: SessionId) -> String {
+    let panes: Vec<serde_json::Value> = panes
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "id": p.id,
+                "cwd": p.cwd,
+                "title": p.title,
+                "command": p.command,
+                "tab": p.tab,
+                "key": p.key,
+                "self": p.id == me,
+                "opened_by_you": p.opened_by == Some(me),
+            })
+        })
+        .collect();
+    format!("{}\n", serde_json::Value::Array(panes))
 }
 
 /// A window's `sessions` in the grid order its frontend last reported (`grid`, left to right, top to bottom); sessions
@@ -408,9 +522,22 @@ pub enum CliCommand {
     Open {
         cwd: Option<String>,
         title: Option<String>,
+        key: Option<String>,
         command: Vec<String>,
     },
-    List,
+    /// `tiili list [--json]`.
+    List {
+        json: bool,
+    },
+    /// `tiili attention [MSG]` or `tiili attention --clear`.
+    Attention {
+        message: Option<String>,
+        clear: bool,
+    },
+    /// `tiili close PANE`.
+    Close(SessionId),
+    /// `tiili prompt`.
+    Prompt,
     InstallClaudeSkill,
     /// `tiili describe [CMD]`.
     Describe(Option<String>),
@@ -420,7 +547,8 @@ pub enum CliCommand {
     Version,
 }
 
-/// An option a command takes before `--`, with the placeholder for its value.
+/// An option a command takes before `--`, with the placeholder for its value; an empty placeholder makes it a
+/// flag that takes no value.
 #[derive(Debug, Clone, Copy)]
 pub struct OptSpec {
     pub name: &'static str,
@@ -464,7 +592,7 @@ const PANE_NEEDS: &[&str] = &[SOCKET_VAR, TOKEN_VAR, PANE_VAR];
 const DESCRIBE_OUTPUT_SCHEMA: &str = r#"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "version", "protocol", "env", "commands"],
+  "required": ["schema", "version", "protocol", "env", "commands", "intents"],
   "properties": {
     "schema": { "const": "tiili.describe/1" },
     "version": { "type": "string" },
@@ -522,6 +650,19 @@ const DESCRIBE_OUTPUT_SCHEMA: &str = r#"{
           }
         }
       }
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "when", "recipe", "notes"],
+        "properties": {
+          "name": { "type": "string" },
+          "when": { "type": "string" },
+          "recipe": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
     }
   }
 }"#;
@@ -531,7 +672,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "open",
         summary: "Open a pane in this pane's window running a command",
-        usage: "tiili open [--cwd DIR] [--title TITLE] -- CMD [ARGS...]",
+        usage: "tiili open [--cwd DIR] [--title TITLE] [--key KEY] -- CMD [ARGS...]",
         options: &[
             OptSpec {
                 name: "--cwd",
@@ -543,6 +684,11 @@ pub const COMMANDS: &[CommandSpec] = &[
                 value: "TITLE",
                 summary: "the pane's title",
             },
+            OptSpec {
+                name: "--key",
+                value: "KEY",
+                summary: "reuse this pane's live pane opened with KEY instead of opening another",
+            },
         ],
         positionals: &[],
         rest: Some(ArgSpec {
@@ -551,7 +697,7 @@ pub const COMMANDS: &[CommandSpec] = &[
             summary: "the command and its arguments, looked up on the caller's PATH",
         }),
         needs: PANE_NEEDS,
-        output_text: "the new pane's id on one line",
+        output_text: "the new pane's id on one line; with --key, opened ID or reused ID",
         output_schema: None,
         exit_codes: &[0, 1, 2, 3, 4],
         errors: &[
@@ -567,12 +713,16 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "list",
         summary: "List the panes of this pane's window in grid order",
-        usage: "tiili list",
-        options: &[],
+        usage: "tiili list [--json]",
+        options: &[OptSpec {
+            name: "--json",
+            value: "",
+            summary: "print a JSON array of panes with id, cwd, title, command, tab, key, self and opened_by_you",
+        }],
         positionals: &[],
         rest: None,
         needs: PANE_NEEDS,
-        output_text: "one line per pane: id, folder and title separated by tabs",
+        output_text: "one line per pane: id, folder and title separated by tabs; with --json, one JSON array",
         output_schema: None,
         exit_codes: &[0, 1, 2, 3, 4],
         errors: &[
@@ -584,6 +734,75 @@ pub const COMMANDS: &[CommandSpec] = &[
             "list_failed",
             "bad_reply",
         ],
+    },
+    CommandSpec {
+        name: "attention",
+        summary: "Mark this pane for the user's attention, or clear its mark",
+        usage: "tiili attention [MSG] | tiili attention --clear",
+        options: &[OptSpec {
+            name: "--clear",
+            value: "",
+            summary: "clear this pane's mark instead",
+        }],
+        positionals: &[ArgSpec {
+            name: "MSG",
+            required: false,
+            summary: "what the user is needed for, shown with the mark",
+        }],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "nothing",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "attention_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "close",
+        summary: "Close a pane this pane opened with tiili open",
+        usage: "tiili close PANE",
+        options: &[],
+        positionals: &[ArgSpec {
+            name: "PANE",
+            required: true,
+            summary: "the id of the pane to close",
+        }],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "nothing",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "not_opened_by_you",
+            "no_such_pane",
+            "close_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "prompt",
+        summary: "Print the agent intents as text to paste into an agent's prompt, without contacting the app",
+        usage: "tiili prompt",
+        options: &[],
+        positionals: &[],
+        rest: None,
+        needs: &[],
+        output_text: "the intents and their recipes as plain text",
+        output_schema: None,
+        exit_codes: &[0, 2],
+        errors: &["usage"],
     },
     CommandSpec {
         name: "install-claude-skill",
@@ -697,6 +916,10 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
             break;
         }
         if let Some(opt) = spec.options.iter().find(|o| o.name == arg) {
+            if opt.value.is_empty() {
+                options.push((opt.name, String::new()));
+                continue;
+            }
             let value = iter
                 .next()
                 .cloned()
@@ -761,13 +984,40 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
             None => Ok(None),
         }
     };
+    let flag = |name: &str| options.iter().any(|(n, _)| *n == name);
     Ok(match spec.name {
         "open" => CliCommand::Open {
             cwd: option("--cwd"),
             title: option("--title"),
+            key: match option("--key") {
+                Some(key) if key.is_empty() => {
+                    return Err(CliError::Usage("--key needs a non-empty KEY".to_string()))
+                }
+                key => key,
+            },
             command: words.unwrap_or_default(),
         },
-        "list" => CliCommand::List,
+        "list" => CliCommand::List {
+            json: flag("--json"),
+        },
+        "attention" => {
+            let message = positionals.into_iter().next();
+            let clear = flag("--clear");
+            if clear && message.is_some() {
+                return Err(CliError::Usage(
+                    "attention takes MSG or --clear, not both".to_string(),
+                ));
+            }
+            CliCommand::Attention { message, clear }
+        }
+        "close" => {
+            let pane = &positionals[0];
+            CliCommand::Close(
+                pane.parse()
+                    .map_err(|_| CliError::Usage(format!("close needs a pane id, not {pane}")))?,
+            )
+        }
+        "prompt" => CliCommand::Prompt,
         "install-claude-skill" => CliCommand::InstallClaudeSkill,
         "describe" => CliCommand::Describe(target(positionals)?),
         "help" => CliCommand::Help(target(positionals)?),
@@ -781,7 +1031,12 @@ fn command_help(spec: &CommandSpec) -> String {
     let args: Vec<(String, &str)> = spec
         .options
         .iter()
-        .map(|o| (format!("{} {}", o.name, o.value), o.summary))
+        .map(|o| {
+            (
+                format!("{} {}", o.name, o.value).trim_end().to_string(),
+                o.summary,
+            )
+        })
         .chain(
             spec.positionals
                 .iter()
@@ -827,7 +1082,11 @@ fn describe_command(spec: &CommandSpec) -> serde_json::Value {
         .options
         .iter()
         .map(|o| {
-            json!({ "name": o.name, "kind": "option", "value": o.value, "required": false, "summary": o.summary })
+            let mut arg = json!({ "name": o.name, "kind": "option", "required": false, "summary": o.summary });
+            if !o.value.is_empty() {
+                arg["value"] = json!(o.value);
+            }
+            arg
         })
         .collect();
     args.extend(spec.positionals.iter().map(|a| {
@@ -879,6 +1138,7 @@ pub fn describe(cmd: Option<&str>) -> Result<serde_json::Value, CliError> {
         "protocol": PROTOCOL,
         "env": env,
         "commands": commands,
+        "intents": crate::intents::describe_intents(),
     }))
 }
 
@@ -894,6 +1154,35 @@ mod tests {
             title: title.map(Into::into),
             command: command.iter().map(|s| s.to_string()).collect(),
             path: path.map(Into::into),
+            key: None,
+        }
+    }
+
+    fn keyed(key: &str, command: &[&str]) -> Op {
+        match open(None, None, command, None) {
+            Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                ..
+            } => Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                key: Some(key.into()),
+            },
+            other => other,
+        }
+    }
+
+    fn pane(id: SessionId, cwd: &str, title: &str) -> PaneInfo {
+        PaneInfo {
+            id,
+            cwd: cwd.into(),
+            title: title.into(),
+            ..PaneInfo::default()
         }
     }
 
@@ -916,6 +1205,36 @@ mod tests {
                 format!(r#"{{"token":"{TOKEN}","pane":2,"op":"open","command":["ls"]}}"#),
                 2,
                 open(None, None, &["ls"], None),
+            ),
+            (
+                format!(
+                    r#"{{"token":"{TOKEN}","pane":2,"op":"open","command":["npm"],"key":"dev"}}"#
+                ),
+                2,
+                keyed("dev", &["npm"]),
+            ),
+            (
+                format!(
+                    r#"{{"token":"{TOKEN}","pane":3,"op":"attention","message":"Review ready"}}"#
+                ),
+                3,
+                Op::Attention {
+                    message: Some("Review ready".into()),
+                    clear: false,
+                },
+            ),
+            (
+                format!(r#"{{"token":"{TOKEN}","pane":3,"op":"attention","clear":true}}"#),
+                3,
+                Op::Attention {
+                    message: None,
+                    clear: true,
+                },
+            ),
+            (
+                format!(r#"{{"token":"{TOKEN}","pane":3,"op":"close","target":8}}"#),
+                3,
+                Op::Close { target: 8 },
             ),
         ];
         for (line, pane, op) in cases {
@@ -968,6 +1287,12 @@ mod tests {
             "[1,2]".to_string(),
             format!(r#"{{"token":"{TOKEN}","op":"list"}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":3,"op":"close"}}"#),
+            format!(r#"{{"token":"{TOKEN}","pane":3,"op":"close","target":"x"}}"#),
+            format!(r#"{{"token":"{TOKEN}","pane":3,"op":"frobnicate"}}"#),
+            format!(
+                r#"{{"token":"{TOKEN}","pane":3,"op":"attention","message":"hi","clear":true}}"#
+            ),
+            format!(r#"{{"token":"{TOKEN}","pane":3,"op":"open","command":["ls"],"key":""}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":-1,"op":"list"}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":3,"op":"open","cwd":null,"title":null}}"#),
             format!(
@@ -1014,6 +1339,10 @@ mod tests {
             CliError::ListFailed(String::new()),
             CliError::BadReply(String::new()),
             CliError::InstallFailed(String::new()),
+            CliError::NotOpenedByYou(String::new()),
+            CliError::NoSuchPane(String::new()),
+            CliError::AttentionFailed(String::new()),
+            CliError::CloseFailed(String::new()),
         ];
         assert_eq!(errors.len(), ERRORS.len());
         for (error, spec) in errors.iter().zip(ERRORS) {
@@ -1037,8 +1366,9 @@ mod tests {
     fn requests_and_replies_carry_the_protocol() {
         for line in [
             request_line(TOKEN, 1, &Op::List),
-            opened_reply(1),
+            opened_reply(1, false),
             listed_reply(&[]),
+            done_reply(),
             error_reply(&CliError::BadToken),
         ] {
             let value: serde_json::Value = serde_json::from_str(&line).unwrap();
@@ -1063,6 +1393,16 @@ mod tests {
                 Some("/opt/bin"),
             ),
             open(None, None, &["sh", "-c", "echo \"hi\"\n"], None),
+            keyed("dev", &["npm", "run", "dev"]),
+            Op::Attention {
+                message: Some("Review ready".into()),
+                clear: false,
+            },
+            Op::Attention {
+                message: None,
+                clear: true,
+            },
+            Op::Close { target: 8 },
         ] {
             let line = request_line(TOKEN, 9, &op);
             assert!(!line.contains('\n'), "one line: {line}");
@@ -1073,21 +1413,46 @@ mod tests {
     #[test]
     fn replies_read_back() {
         let panes = vec![
+            pane(3, "/Users/red/src/app", "app"),
             PaneInfo {
-                id: 3,
-                cwd: "/Users/red/src/app".into(),
-                title: "app".into(),
-            },
-            PaneInfo {
-                id: 7,
-                cwd: "/tmp".into(),
-                title: "logs".into(),
+                command: "npm".into(),
+                tab: Some(2),
+                key: Some("dev".into()),
+                opened_by: Some(3),
+                ..pane(7, "/tmp", "logs")
             },
         ];
         let unreadable = || Err(CliError::BadReply("tiili sent an unreadable reply".into()));
         let mut cases: Vec<(String, Result<Reply, CliError>)> = vec![
-            (opened_reply(7), Ok(Reply::Opened(7))),
+            (
+                opened_reply(7, false),
+                Ok(Reply::Opened {
+                    pane: 7,
+                    reused: false,
+                }),
+            ),
+            (
+                opened_reply(7, true),
+                Ok(Reply::Opened {
+                    pane: 7,
+                    reused: true,
+                }),
+            ),
+            // An older app's open reply, without reused.
+            (
+                r#"{"ok":true,"protocol":1,"pane":7}"#.into(),
+                Ok(Reply::Opened {
+                    pane: 7,
+                    reused: false,
+                }),
+            ),
+            (done_reply(), Ok(Reply::Done)),
             (listed_reply(&panes), Ok(Reply::Listed(panes.clone()))),
+            // An older app's list, without the newer fields.
+            (
+                r#"{"ok":true,"panes":[{"id":3,"cwd":"/tmp","title":"tmp"}]}"#.into(),
+                Ok(Reply::Listed(vec![pane(3, "/tmp", "tmp")])),
+            ),
             (listed_reply(&[]), Ok(Reply::Listed(vec![]))),
             ("garbage".into(), unreadable()),
             (r#"{"ok":true}"#.into(), unreadable()),
@@ -1125,6 +1490,10 @@ mod tests {
             CliError::Malformed("not an object".into()),
             CliError::OpenFailed("no such program".into()),
             CliError::ListFailed("pane 9 is in no window".into()),
+            CliError::NotOpenedByYou("pane 5 was not opened by this pane".into()),
+            CliError::NoSuchPane("no open pane 9".into()),
+            CliError::AttentionFailed("pane 9 is not open in tiili".into()),
+            CliError::CloseFailed("the window did not answer in time".into()),
         ] {
             let suggestion = error.suggestion().to_string();
             cases.push((
@@ -1144,22 +1513,59 @@ mod tests {
     #[test]
     fn list_panes_prints_one_line_per_pane() {
         let panes = [
-            PaneInfo {
-                id: 3,
-                cwd: "/Users/red/src/app".into(),
-                title: "app".into(),
-            },
-            PaneInfo {
-                id: 7,
-                cwd: "/tmp".into(),
-                title: "logs".into(),
-            },
+            pane(3, "/Users/red/src/app", "app"),
+            pane(7, "/tmp", "logs"),
         ];
         assert_eq!(
             list_lines(&panes),
             "3\t/Users/red/src/app\tapp\n7\t/tmp\tlogs\n"
         );
         assert_eq!(list_lines(&[]), "");
+    }
+
+    /// Own and opened panes: the caller's pane has self true, and the pane it opened with key dev has
+    /// opened_by_you true and key dev; a pane another pane opened has neither.
+    #[test]
+    fn own_and_opened_panes_are_marked_in_the_json_list() {
+        let panes = [
+            PaneInfo {
+                command: "zsh".into(),
+                tab: Some(1),
+                ..pane(3, "/w", "app")
+            },
+            PaneInfo {
+                command: "npm".into(),
+                tab: Some(1),
+                key: Some("dev".into()),
+                opened_by: Some(3),
+                ..pane(8, "/w", "dev")
+            },
+            PaneInfo {
+                tab: Some(2),
+                opened_by: Some(4),
+                ..pane(9, "/w", "other")
+            },
+        ];
+        let listed: serde_json::Value = serde_json::from_str(&list_json(&panes, 3)).unwrap();
+        // id, self, opened_by_you, key, tab and command of each.
+        type Row<'a> = (u32, bool, bool, Option<&'a str>, u32, &'a str);
+        let expected: &[Row] = &[
+            (3, true, false, None, 1, "zsh"),
+            (8, false, true, Some("dev"), 1, "npm"),
+            (9, false, false, None, 2, ""),
+        ];
+        let rows = listed.as_array().unwrap();
+        assert_eq!(rows.len(), expected.len());
+        for (row, (id, me, mine, key, tab, command)) in rows.iter().zip(expected) {
+            assert_eq!(row["id"], *id);
+            assert_eq!(row["self"], *me, "{id}");
+            assert_eq!(row["opened_by_you"], *mine, "{id}");
+            assert_eq!(row["key"].as_str(), *key, "{id}");
+            assert_eq!(row["tab"], *tab, "{id}");
+            assert_eq!(row["command"], *command, "{id}");
+            assert!(row["cwd"].is_string() && row["title"].is_string(), "{id}");
+        }
+        assert_eq!(list_json(&[], 3), "[]\n");
     }
 
     #[test]
@@ -1194,13 +1600,19 @@ mod tests {
         let args = |s: &[&str]| s.iter().map(|a| a.to_string()).collect::<Vec<_>>();
         let cmd = |s: &[&str]| s.iter().map(|a| a.to_string()).collect::<Vec<_>>();
         let cases: Vec<(Vec<String>, Result<CliCommand, ()>)> = vec![
-            (args(&["list"]), Ok(CliCommand::List)),
+            (args(&["list"]), Ok(CliCommand::List { json: false })),
+            (
+                args(&["list", "--json"]),
+                Ok(CliCommand::List { json: true }),
+            ),
             (args(&["list", "-a"]), Err(())),
+            (args(&["list", "--json", "x"]), Err(())),
             (
                 args(&["open", "--", "npm", "run", "dev"]),
                 Ok(CliCommand::Open {
                     cwd: None,
                     title: None,
+                    key: None,
                     command: cmd(&["npm", "run", "dev"]),
                 }),
             ),
@@ -1211,6 +1623,7 @@ mod tests {
                 Ok(CliCommand::Open {
                     cwd: Some("/tmp".into()),
                     title: Some("logs".into()),
+                    key: None,
                     command: cmd(&["tail", "-f", "x.log"]),
                 }),
             ),
@@ -1220,9 +1633,50 @@ mod tests {
                 Ok(CliCommand::Open {
                     cwd: None,
                     title: None,
+                    key: None,
                     command: cmd(&["ls", "--cwd", "--"]),
                 }),
             ),
+            (
+                args(&["open", "--key", "dev", "--", "npm", "run", "dev"]),
+                Ok(CliCommand::Open {
+                    cwd: None,
+                    title: None,
+                    key: Some("dev".into()),
+                    command: cmd(&["npm", "run", "dev"]),
+                }),
+            ),
+            (args(&["open", "--key", "", "--", "ls"]), Err(())),
+            (args(&["open", "--key", "--", "ls"]), Err(())),
+            (
+                args(&["attention", "Review ready"]),
+                Ok(CliCommand::Attention {
+                    message: Some("Review ready".into()),
+                    clear: false,
+                }),
+            ),
+            (
+                args(&["attention"]),
+                Ok(CliCommand::Attention {
+                    message: None,
+                    clear: false,
+                }),
+            ),
+            (
+                args(&["attention", "--clear"]),
+                Ok(CliCommand::Attention {
+                    message: None,
+                    clear: true,
+                }),
+            ),
+            (args(&["attention", "--clear", "hi"]), Err(())),
+            (args(&["attention", "hi", "there"]), Err(())),
+            (args(&["close", "8"]), Ok(CliCommand::Close(8))),
+            (args(&["close", "abc"]), Err(())),
+            (args(&["close", "-1"]), Err(())),
+            (args(&["close", "8", "9"]), Err(())),
+            (args(&["prompt"]), Ok(CliCommand::Prompt)),
+            (args(&["prompt", "x"]), Err(())),
             (args(&["open"]), Err(())),
             (args(&["open", "--"]), Err(())),
             (args(&["open", "--", ""]), Err(())),
@@ -1301,6 +1755,9 @@ mod tests {
         let list = &all["commands"][1];
         assert_eq!(list["name"], "list");
         assert!(list["output"]["json"].is_null());
+        // Describe intents: the four intents, also when describing one command.
+        assert_eq!(all["intents"].as_array().map(Vec::len), Some(4));
+        assert_eq!(one["intents"], all["intents"]);
         assert_eq!(
             describe(Some("frobnicate")).map_err(|e| e.code()),
             Err("usage")

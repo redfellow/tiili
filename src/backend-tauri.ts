@@ -124,7 +124,8 @@ export function tauriBackend(): Backend {
           pane: "pane" in result ? result.pane : null,
           error: "error" in result ? result.error : null,
         }),
-      setOrder: (sessions) => invoke("pane_order_set", { sessions }),
+      closed: (requestId, error) => invoke("pane_close_done", { requestId, error: error ?? null }),
+      setOrder: (tabs) => invoke("pane_order_set", { tabs }),
     },
     session: {
       load: async () => (await invoke<Restored | null>("session_load")) ?? undefined,
