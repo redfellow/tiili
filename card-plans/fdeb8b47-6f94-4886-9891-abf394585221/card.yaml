@@ -6,3 +6,14 @@ x-harvaaja-card: fdeb8b47-6f94-4886-9891-abf394585221
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: New observable CLI contract (help/version/describe, error codes, wire
+    reply code/suggestion, protocol field); no active change covers
+    pane-control.
+  citations:
+    - openspec/specs/pane-control/spec.md
+    - src-tauri/src/control.rs
+    - src-tauri/src/cli.rs
+    - src-tauri/src/main.rs
+  revision: 43cfb3a6-b3c7-4130-990a-561629f807da
