@@ -1,0 +1,19 @@
+format: 1
+slug: hold-the-docs-to-the-code-with-tests-gen
+title: "Hold the docs to the code with tests: generate the shortcut tables,
+  check the other copies"
+x-harvaaja-card: 8dce4abe-4000-4f14-b734-1f1b8430ff66
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "New contract: README and site list every shortcut, generated from a
+    keymap list, and the build checks other doc copies against code. No existing
+    change covers docs-held-to-code."
+  citations:
+    - src/keymap.ts
+    - README.md:72-82
+    - site/index.html:351-362
+    - package.json scripts
+  revision: b793b764-acde-43c6-abe7-236e1f9126c7

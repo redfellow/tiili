@@ -1,12 +1,12 @@
 //! The bundled tiili-tiles Claude Code skill and `tiili install-claude-skill`, which writes it into the user's
 //! `~/.claude/skills`. The skill text is embedded so the command works from any installed build.
 
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The subcommand that installs the skill instead of starting the app.
-pub const SUBCOMMAND: &str = "install-claude-skill";
+use crate::control::CliError;
 
 /// The skill file, as shipped in `integrations/claude/skills/tiili-tiles/SKILL.md`.
 pub const SKILL: &str = include_str!("../../integrations/claude/skills/tiili-tiles/SKILL.md");
@@ -30,34 +30,29 @@ pub fn install(home: &Path) -> io::Result<PathBuf> {
     Ok(path)
 }
 
-/// The user's home folder: `HOME`, or `USERPROFILE` on Windows when `HOME` is unset.
-fn home_dir() -> Option<PathBuf> {
+/// The user's home folder from the variables `env` reads: `HOME`, or `USERPROFILE` on Windows when `HOME` is unset.
+fn home_dir(env: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     ["HOME", "USERPROFILE"]
         .iter()
-        .filter_map(std::env::var_os)
+        .filter_map(|name| env(name))
         .find(|value| !value.is_empty())
         .map(PathBuf::from)
 }
 
-/// Runs `tiili install-claude-skill`: installs the skill, prints where it went and returns the process exit code.
-pub fn run_install() -> i32 {
-    let Some(home) = home_dir() else {
-        eprintln!("Could not install the tiili-tiles skill: no home folder: HOME (or USERPROFILE on Windows) is not set. Set it to your home folder and run the command again.");
-        return 1;
-    };
-    match install(&home) {
-        Ok(path) => {
-            println!("Installed the tiili-tiles skill to {}", path.display());
-            0
-        }
-        Err(err) => {
-            eprintln!(
-                "Could not install the tiili-tiles skill to {}: {err}",
-                skill_path(&home).display()
-            );
-            1
-        }
-    }
+/// Runs `tiili install-claude-skill` with the variables `env` reads: installs the skill and returns where it went.
+pub fn install_from_env(env: &dyn Fn(&str) -> Option<OsString>) -> Result<PathBuf, CliError> {
+    let home = home_dir(env).ok_or_else(|| {
+        CliError::InstallFailed(
+            "could not install the tiili-tiles skill: HOME (or USERPROFILE on Windows) is not set"
+                .into(),
+        )
+    })?;
+    install(&home).map_err(|err| {
+        CliError::InstallFailed(format!(
+            "could not install the tiili-tiles skill to {}: {err}",
+            skill_path(&home).display()
+        ))
+    })
 }
 
 #[cfg(test)]

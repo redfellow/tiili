@@ -8,7 +8,7 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use tiili_lib::control::{parse_reply, request_line, Op, PaneInfo, Reply};
+use tiili_lib::control::{parse_reply, request_line, CliError, Op, PaneInfo, Reply};
 use tiili_lib::control_server::{bind, respond, Handler};
 use tiili_lib::pty::SessionId;
 
@@ -60,7 +60,7 @@ fn temp_dir(name: &str) -> PathBuf {
     dir
 }
 
-fn ask(socket: &Path, line: &str) -> Result<Reply, String> {
+fn ask(socket: &Path, line: &str) -> Result<Reply, CliError> {
     let mut stream = UnixStream::connect(socket).expect("socket accepts");
     stream
         .write_all(format!("{line}\n").as_bytes())
@@ -168,8 +168,9 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
     let recorder = Recorder::default();
     let list = Op::List;
     let wrong = "f".repeat(64);
-    let cases: Vec<(String, Result<Reply, ()>, usize)> = vec![
-        (request_line(&wrong, 3, &list), Err(()), 0),
+    // The line, the reply expected (an error by its code) and how many calls reached the handler.
+    let cases: Vec<(String, Result<Reply, &str>, usize)> = vec![
+        (request_line(&wrong, 3, &list), Err("bad_token"), 0),
         (
             format!("{}\n", request_line(TOKEN, 3, &list)),
             Ok(Reply::Listed(vec![PaneInfo {
@@ -179,7 +180,12 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
             }])),
             1,
         ),
-        ("{}".into(), Err(()), 1),
+        ("{}".into(), Err("bad_token"), 1),
+        (
+            format!(r#"{{"token":"{TOKEN}","op":"list"}}"#),
+            Err("malformed_request"),
+            1,
+        ),
         (
             request_line(
                 TOKEN,
@@ -194,12 +200,19 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
             Ok(Reply::Opened(45)),
             2,
         ),
-        (request_line(TOKEN, 99, &list), Err(()), 3),
+        (request_line(TOKEN, 99, &list), Err("list_failed"), 3),
     ];
     for (line, reply, calls) in cases {
         let answer = respond(&line, TOKEN, &recorder);
         assert!(!answer.contains('\n'), "one line: {answer}");
-        assert_eq!(parse_reply(&answer).map_err(|_| ()), reply, "{line}");
+        assert_eq!(parse_reply(&answer).map_err(|e| e.code()), reply, "{line}");
+        if reply.is_err() {
+            let wire: serde_json::Value = serde_json::from_str(&answer).expect("json reply");
+            assert!(
+                wire["suggestion"].as_str().is_some_and(|s| !s.is_empty()),
+                "{answer}"
+            );
+        }
         assert_eq!(recorder.0.lock().unwrap().len(), calls, "{line}");
     }
 }

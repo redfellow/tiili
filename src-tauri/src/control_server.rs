@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::control::{
-    error_reply, listed_reply, opened_reply, parse_request, Op, PaneInfo, Request,
+    error_reply, listed_reply, opened_reply, parse_request, CliError, Op, PaneInfo, Request,
 };
 use crate::pty::SessionId;
 
@@ -36,7 +36,7 @@ pub trait Handler: Send + Sync + 'static {
 /// The reply line (without its newline) to request `line`, checked against this run's `token`.
 pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
     match parse_request(line.trim_end(), token) {
-        Err(refusal) => error_reply(&refusal.message()),
+        Err(refusal) => error_reply(&refusal),
         Ok(Request {
             pane,
             op:
@@ -48,11 +48,11 @@ pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
                 },
         }) => match handler.open(pane, cwd, title, command, path) {
             Ok(id) => opened_reply(id),
-            Err(error) => error_reply(&error),
+            Err(error) => error_reply(&CliError::OpenFailed(error)),
         },
         Ok(Request { pane, op: Op::List }) => match handler.list(pane) {
             Ok(panes) => listed_reply(&panes),
-            Err(error) => error_reply(&error),
+            Err(error) => error_reply(&CliError::ListFailed(error)),
         },
     }
 }

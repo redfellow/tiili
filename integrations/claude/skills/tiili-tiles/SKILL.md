@@ -29,6 +29,13 @@ gh auth status
 
 If any check fails, stop here and open no tiles.
 
+## Command reference
+
+`tiili help` lists the commands and `tiili help <command>` shows one; `tiili describe` prints the whole command
+line as JSON (arguments, needed variables, output, exit codes, and each error with its fix), and works outside a
+pane. When a `tiili` command fails it prints `tiili: <what went wrong>` and then a `hint:` line naming the fix: tell
+the user both, and follow the hint before trying again.
+
 ## 2. Generic recipe: one tile per task
 
 For each task:

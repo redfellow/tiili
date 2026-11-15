@@ -22,7 +22,9 @@ fn tiili(args: &[&str], env: &[(&str, &str)]) -> Output {
     cmd.output().expect("tiili runs")
 }
 
-/// Outside tiili, Missing command: `tiili` exits non-zero, prints nothing on stdout and says why on stderr.
+/// Outside a pane with a hint, Unknown command, Missing command, Help from a pane, Version, Describe outside a
+/// pane: a failure exits with its code, prints nothing on stdout and a message and a hint on stderr; help, version
+/// and describe print on stdout and exit 0 without a pane or the app.
 #[test]
 fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     let nowhere = std::env::temp_dir()
@@ -36,20 +38,42 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     ];
     // Arguments, variables, the exit code expected.
     let cases: &[(&[&str], Vars, i32)] = &[
-        (&["open", "--", "ls"], &[], 1),
-        (&["list"], &[], 1),
+        (&["open", "--", "ls"], &[], 3),
+        (&["list"], &[], 3),
         (&["open"], &inside, 2),
         (&["open", "--"], &inside, 2),
         (&["list", "extra"], &inside, 2),
+        (&["frobnicate"], &[], 2),
+        (&["describe", "frobnicate"], &[], 2),
         // Inside a pane whose app has gone.
-        (&["list"], &inside, 1),
+        (&["list"], &inside, 4),
+        (&["--help"], &[], 0),
+        (&["-h"], &[], 0),
+        (&["help", "open"], &[], 0),
+        (&["--version"], &[], 0),
+        (&["describe"], &[], 0),
+        (&["describe", "open"], &[], 0),
     ];
     for (args, env, code) in cases {
         let out = tiili(args, env);
         assert_eq!(out.status.code(), Some(*code), "{args:?} {env:?}");
-        assert!(out.stdout.is_empty(), "{args:?} printed {:?}", out.stdout);
-        assert!(!out.stderr.is_empty(), "{args:?} said nothing");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if *code == 0 {
+            assert!(!out.stdout.is_empty(), "{args:?} printed nothing");
+            assert!(stderr.is_empty(), "{args:?} said {stderr}");
+        } else {
+            assert!(out.stdout.is_empty(), "{args:?} printed {:?}", out.stdout);
+            let lines: Vec<&str> = stderr.lines().collect();
+            assert_eq!(lines.len(), 2, "{args:?}: {stderr}");
+            assert!(lines[0].starts_with("tiili: "), "{args:?}: {stderr}");
+            assert!(lines[1].starts_with("hint: "), "{args:?}: {stderr}");
+        }
     }
+    // Describe is the same on every run.
+    assert_eq!(
+        tiili(&["describe"], &[]).stdout,
+        tiili(&["describe"], &[]).stdout
+    );
 }
 
 #[cfg(unix)]
@@ -188,6 +212,13 @@ mod listener {
             assert_eq!(out.status.code(), Some(code), "{args:?}");
             assert_eq!(String::from_utf8_lossy(&out.stdout), stdout, "{args:?}");
             assert_eq!(out.stderr.is_empty(), code == 0, "{args:?}");
+            if code != 0 {
+                // Refused request carries a code: the CLI prints the app's suggestion.
+                assert!(
+                    String::from_utf8_lossy(&out.stderr).contains("\nhint: "),
+                    "{args:?}"
+                );
+            }
             let recorded = recorder.0.lock().unwrap();
             assert_eq!(recorded.len(), before + seen.is_some() as usize, "{args:?}");
             if let Some(seen) = seen {
