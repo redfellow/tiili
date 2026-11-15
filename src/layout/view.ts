@@ -24,9 +24,6 @@ export interface TileHooks {
 /** The pane id stored on each pane element. */
 const PANE_ID = "paneId";
 
-/** The width of the miniature that follows the pointer while a pane is dragged. */
-const DRAG_PREVIEW_WIDTH = 200;
-
 function sum(sizes: number[], count: number): number {
   return sizes.slice(0, count).reduce((total, s) => total + s, 0);
 }
@@ -311,32 +308,6 @@ export class TileView {
    * While a grab strip is dragged, shows a ghost label following the pointer with the source pane dimmed, so the
    * drag is visible from the first pixels; highlights the pane under the pointer and swaps with it on drop.
    */
-  /** A miniature of `pane` as it looks now: a scaled-down copy of its elements, kept from taking part in the page. */
-  private dragPreview(pane: HTMLElement): HTMLElement {
-    const { width, height } = pane.getBoundingClientRect();
-    const scale = Math.min(1, DRAG_PREVIEW_WIDTH / Math.max(width, 1));
-    const ghost = document.createElement("div");
-    ghost.className = "pane-drag-ghost";
-    ghost.style.width = `${width * scale}px`;
-    ghost.style.height = `${height * scale}px`;
-    const copy = pane.cloneNode(true) as HTMLElement;
-    copy.removeAttribute("data-drag-source");
-    copy.removeAttribute("data-drop-target");
-    copy.querySelectorAll("textarea, .pane-grab, .find-bar-frame").forEach((e) => e.remove());
-    Object.assign(copy.style, {
-      position: "absolute",
-      left: "0",
-      top: "0",
-      width: `${width}px`,
-      height: `${height}px`,
-      flex: "none",
-      transformOrigin: "0 0",
-      transform: `scale(${scale})`,
-    });
-    ghost.append(copy);
-    return ghost;
-  }
-
   private dragPane(grab: HTMLElement, source: HTMLElement, down: PointerEvent): void {
     const from = Number(source.dataset[PANE_ID]);
     let target: HTMLElement | undefined;
@@ -351,7 +322,9 @@ export class TileView {
     };
     /** The drag has begun once the pointer has moved a few pixels: until then a click is just a click. */
     const begin = () => {
-      ghost = this.dragPreview(source);
+      ghost = document.createElement("div");
+      ghost.className = "pane-drag-ghost";
+      ghost.textContent = source.querySelector(".pane-chip")?.textContent?.trim() || "Terminal";
       document.body.append(ghost);
       source.toggleAttribute("data-drag-source", true);
       document.documentElement.toggleAttribute("data-pane-dragging", true);
