@@ -8,7 +8,9 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use tiili_lib::control::{parse_reply, request_line, CliError, Op, PaneInfo, Reply};
+use tiili_lib::control::{
+    parse_reply, request_line, AttentionRecord, CliError, Op, PaneInfo, Reply, RunningRecord,
+};
 use tiili_lib::control_server::{bind, respond, Handler};
 use tiili_lib::pty::SessionId;
 
@@ -46,11 +48,28 @@ impl Handler for Recorder {
         if caller == 99 {
             return Err("pane 99 is in no window".into());
         }
-        Ok(vec![PaneInfo {
-            id: caller,
-            cwd: "/tmp".into(),
-            title: "tmp".into(),
-        }])
+        Ok(vec![tmp_pane(caller)])
+    }
+}
+
+/// The pane the recorder lists: every field of the record set, so all of it crosses the wire.
+fn tmp_pane(id: SessionId) -> PaneInfo {
+    PaneInfo {
+        id,
+        is_self: true,
+        window: "main".into(),
+        cwd: "/tmp".into(),
+        host: None,
+        repo: None,
+        title: Some("logs".into()),
+        label: "tmp".into(),
+        running: Some(RunningRecord {
+            command: Some("tail -f x.log".into()),
+            program: Some("tail".into()),
+        }),
+        attention: Some(AttentionRecord {
+            message: Some("done".into()),
+        }),
     }
 }
 
@@ -134,11 +153,7 @@ fn request_with_the_right_token_reaches_the_handler_and_others_are_refused() {
         ),
         (
             request_line(TOKEN, 3, &Op::List),
-            Ok(Reply::Listed(vec![PaneInfo {
-                id: 3,
-                cwd: "/tmp".into(),
-                title: "tmp".into(),
-            }])),
+            Ok(Reply::Listed(vec![tmp_pane(3)])),
             vec![(3, Op::List)],
         ),
         (
@@ -173,11 +188,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
         (request_line(&wrong, 3, &list), Err("bad_token"), 0),
         (
             format!("{}\n", request_line(TOKEN, 3, &list)),
-            Ok(Reply::Listed(vec![PaneInfo {
-                id: 3,
-                cwd: "/tmp".into(),
-                title: "tmp".into(),
-            }])),
+            Ok(Reply::Listed(vec![tmp_pane(3)])),
             1,
         ),
         ("{}".into(), Err("bad_token"), 1),
