@@ -11,7 +11,7 @@ import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
 import { showUpdateDialog } from "./updateDialog";
 import { findUpdate, startupCheck, takeWhatsNew } from "./updates";
-import { APP_VERSION } from "./version";
+import { APP_VERSION, DEV_BUILD } from "./version";
 import { showWhatsNewDialog } from "./whatsNewDialog";
 
 /**
@@ -222,7 +222,8 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       const items = takeWhatsNew(APP_VERSION);
       if (items?.length) showWhatsNewDialog(APP_VERSION, items, () => panes.focusCurrent());
       return startupCheck({
-        enabled: settings.updates.autoCheck,
+        // A local dev build would always find the release "newer" and offer to replace itself.
+        enabled: settings.updates.autoCheck && !DEV_BUILD,
         show: (update) => showUpdateDialog(update, () => panes.focusCurrent()),
       });
     });
