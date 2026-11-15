@@ -4,16 +4,16 @@
 // It runs `npm ci` first when node_modules does not match package-lock.json, so it also works right after a pull or
 // a promotion that added or changed dependencies (härvääjä runs it after each Release).
 //
-// The app gets a version from git, since releases stamp theirs only in CI and package.json's is a stale fallback: the
+// The app gets a version from git, since releases stamp theirs only in CI and Cargo.toml's is a 0.0.0-dev fallback: the
 // tag's version on a tagged commit, and a dev version past the last tag otherwise (see buildVersion). It is written
-// into package.json, Cargo.toml and Cargo.lock for the build and the files are put back afterwards.
+// into Cargo.toml and Cargo.lock for the build and the files are put back afterwards.
 //
 // The steps are pure helpers, exported for scripts/install-app.test.ts; `main` runs them in order.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { bumpVersion, setCargoLockVersion, setCargoVersion, setJsonVersion } from "./release.mjs";
+import { bumpVersion, setCargoLockVersion, setCargoVersion } from "./release.mjs";
 
 export const APP_NAME = "tiili.app";
 export const APP_IDENTIFIER = "app.tiili";
@@ -41,7 +41,7 @@ export function buildArgs() {
  * The version to build, from `git describe --tags --long --match "v[0-9]*"` output (undefined when there is no tag):
  * `v0.3.0-0-gd2c41ae` (on the tag) gives `0.3.0`; `v0.3.0-145-gd2c41ae` gives `0.3.1-dev.145+d2c41ae`, which sorts
  * after 0.3.0 and before any next release, so the in-app updater neither offers 0.3.0 again nor misses the next one.
- * Without a tag it is `fallback`, package.json's version.
+ * Without a tag it is `fallback`, Cargo.toml's version.
  */
 export function buildVersion(describe, fallback) {
   const match = /^v(\d+\.\d+\.\d+)-(\d+)-g([0-9a-f]+)$/.exec(describe?.trim() ?? "");
@@ -114,7 +114,6 @@ function quitTiili() {
  */
 export function withVersion(root, version, build) {
   const files = [
-    ["package.json", setJsonVersion],
     ["src-tauri/Cargo.toml", setCargoVersion],
     ["src-tauri/Cargo.lock", setCargoLockVersion],
   ].map(([file, stamp]) => {
@@ -145,7 +144,7 @@ function main() {
     console.log("Dependencies changed: running npm ci...");
     run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: root });
   }
-  const fallback = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version;
+  const fallback = /^version\s*=\s*"([^"]+)"/m.exec(readFileSync(resolve(root, "src-tauri/Cargo.toml"), "utf8"))?.[1];
   const describe = spawnSync("git", ["describe", "--tags", "--long", "--match", "v[0-9]*"], { cwd: root, encoding: "utf8" });
   const version = buildVersion(describe.status === 0 ? describe.stdout : undefined, fallback);
   console.log(`Building tiili ${version}...`);

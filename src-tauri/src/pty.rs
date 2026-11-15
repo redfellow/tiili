@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
-use crate::command::{CommandTracker, Foreground};
+use crate::command::{CommandLineScanner, CommandTracker, Foreground, Running};
 use crate::control::{PANE_VAR, SOCKET_VAR, TOKEN_VAR};
 use crate::cwd::{CwdTracker, PaneCwd};
 
@@ -447,12 +447,53 @@ fn unknown(id: SessionId) -> io::Error {
 pub struct SessionRegistry {
     next_id: AtomicU32,
     sessions: Mutex<HashMap<SessionId, PtySession>>,
+    /// The command line each session's shell reported running, by session.
+    lines: Mutex<HashMap<SessionId, Arc<Mutex<CommandLineScanner>>>>,
     control: OnceLock<ControlEnv>,
+    /// The user's own folder restored history lines are handed to shells in; none are handed over until it is set.
+    history_dir: OnceLock<PathBuf>,
+}
+
+/// The environment variable naming the file whose text tiili's shell integration adds to the shell's history and
+/// then deletes.
+pub const RESTORE_HISTORY_VAR: &str = "TIILI_RESTORE_HISTORY";
+
+/// Writes `line` to a new file in `dir` (created readable by the user only) that only the user can read, for
+/// session `id`'s shell to add to its history. The file is created exclusively: a file or link already at its
+/// name is removed first, and one that appears in between makes the write fail rather than follow it.
+pub fn history_file(dir: &Path, id: SessionId, line: &str) -> io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        options.mode(0o600);
+    }
+    let path = dir.join(format!("{}-{id}", std::process::id()));
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    let written = options
+        .open(&path)
+        .and_then(|mut file| file.write_all(line.as_bytes()));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
+    Ok(path)
 }
 
 impl SessionRegistry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Hands restored history lines to shells through files in `dir`, which only the user can read.
+    pub fn set_history_dir(&self, dir: PathBuf) {
+        let _ = self.history_dir.set(dir);
     }
 
     /// Starts a default shell in `cwd` (home folder when `None` or unreadable) with `prompt` (see
@@ -493,6 +534,27 @@ impl SessionRegistry {
         command: Option<&PaneCommand>,
         rows: u16,
         cols: u16,
+        on_output: SessionOutputFn,
+        on_cwd: Option<SessionCwdFn>,
+        on_command: Option<SessionCommandFn>,
+        on_exit: SessionExitFn,
+    ) -> io::Result<SessionId> {
+        self.spawn_restored(
+            cwd, prompt, command, None, rows, cols, on_output, on_cwd, on_command, on_exit,
+        )
+    }
+
+    /// Like [`spawn_tracked`](Self::spawn_tracked); with `history`, a shell with tiili's zsh, bash or PowerShell
+    /// integration starts with that line as the newest entry of its history, so Up then Enter runs it again.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_restored(
+        &self,
+        cwd: Option<&Path>,
+        prompt: &str,
+        command: Option<&PaneCommand>,
+        history: Option<&str>,
+        rows: u16,
+        cols: u16,
         mut on_output: SessionOutputFn,
         on_cwd: Option<SessionCwdFn>,
         on_command: Option<SessionCommandFn>,
@@ -522,7 +584,21 @@ impl SessionRegistry {
         let output_reader = Arc::clone(&reader);
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
-        let (cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        let (mut cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        // The integration deletes the file once read; one a shell without it leaves goes when the session ends.
+        let history = match (
+            history.filter(|l| command.is_none() && !l.trim().is_empty()),
+            self.history_dir.get(),
+        ) {
+            (Some(line), Some(dir)) => Some(history_file(dir, id, line)?),
+            _ => None,
+        };
+        if let Some(path) = &history {
+            cmd.env(RESTORE_HISTORY_VAR, path);
+        }
+        let exit_history = history.clone();
+        let lines = Arc::new(Mutex::new(CommandLineScanner::default()));
+        let output_lines = Arc::clone(&lines);
         let session = PtySession::spawn_integrated(
             cmd,
             redraws,
@@ -535,13 +611,24 @@ impl SessionRegistry {
                 if let Some(Ok(mut commands)) = output_commands.as_ref().map(|t| t.lock()) {
                     commands.feed_output(data, || output_reader.get().and_then(|r| r.read()));
                 }
+                if let Ok(mut lines) = output_lines.lock() {
+                    lines.feed(data);
+                }
                 on_output(id, data)
             }),
             Box::new(move |code| {
                 exit_alive.store(false, Ordering::Relaxed);
+                if let Some(path) = &exit_history {
+                    let _ = std::fs::remove_file(path);
+                }
                 on_exit(id, code)
             }),
-        )?;
+        )
+        .inspect_err(|_| {
+            if let Some(path) = &history {
+                let _ = std::fs::remove_file(path);
+            }
+        })?;
         let _ = reader.set(session.foreground_reader());
         let mut ticks: Vec<Box<dyn FnMut() + Send>> = Vec::new();
         if let Some(tracker) = tracker {
@@ -585,6 +672,7 @@ impl SessionRegistry {
             }));
         }
         poll(ticks, alive)?;
+        self.lines.lock().map_err(to_io)?.insert(id, lines);
         self.sessions.lock().map_err(to_io)?.insert(id, session);
         Ok(id)
     }
@@ -610,10 +698,31 @@ impl SessionRegistry {
 
     /// Removes session `id`, killing its shell if it still runs. Closing an unknown id does nothing.
     pub fn close(&self, id: SessionId) -> io::Result<()> {
+        self.lines.lock().map_err(to_io)?.remove(&id);
         let removed = self.sessions.lock().map_err(to_io)?.remove(&id);
         // Dropped outside the lock: killing the shell must not hold up the other sessions.
         drop(removed);
         Ok(())
+    }
+
+    /// What runs in session `id`: the command line its shell reported, and the foreground program's name when
+    /// that is not the shell itself (macOS and Linux).
+    pub fn running(&self, id: SessionId) -> io::Result<Running> {
+        let command = self
+            .lines
+            .lock()
+            .map_err(to_io)?
+            .get(&id)
+            .and_then(|l| l.lock().ok()?.line().map(str::to_string));
+        self.with(id, |s| {
+            let shell = s.pid().and_then(|p| i32::try_from(p).ok());
+            let program = s
+                .foreground_reader()
+                .read()
+                .filter(|f| Some(f.pgid) != shell)
+                .map(|f| f.name);
+            Ok(Running { command, program })
+        })
     }
 
     /// The working directory of session `id`'s shell, where the platform can read it.
@@ -634,5 +743,54 @@ impl SessionRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn restored_history_is_written_privately_and_never_through_a_planted_link() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("tiili-history-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("history");
+        let target = root.join("target");
+        let planted = dir.join(format!("{}-1", std::process::id()));
+        // (name, plant a link at the file's name first)
+        for (name, plant) in [("fresh folder", false), ("planted link", true)] {
+            if plant {
+                std::fs::remove_file(&planted).unwrap();
+                std::fs::write(&target, "kept").unwrap();
+                std::os::unix::fs::symlink(&target, &planted).unwrap();
+            }
+            let path = super::history_file(&dir, 1, "npm run dev").unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                "npm run dev",
+                "{name}"
+            );
+            assert!(
+                !std::fs::symlink_metadata(&path)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink(),
+                "{name}"
+            );
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600,
+                "{name}"
+            );
+            assert_eq!(
+                std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+                0o700,
+                "{name}"
+            );
+            if plant {
+                assert_eq!(std::fs::read_to_string(&target).unwrap(), "kept", "{name}");
+            }
+        }
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

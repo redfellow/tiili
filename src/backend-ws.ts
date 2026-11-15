@@ -184,5 +184,7 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     // in the page instead.
     newWindow: async () => undefined,
     settingsWindows: undefined,
+    // Nothing of the page is kept for the next load.
+    session: undefined,
   };
 }

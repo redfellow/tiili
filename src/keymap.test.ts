@@ -7,13 +7,16 @@ import {
   layoutAction,
   paneAction,
   settingsShortcut,
+  tabAction,
   type ClipboardAction,
   type FindAction,
   type KeyChord,
   type LayoutAction,
   type PaneAction,
   type Platform,
+  type TabAction,
   type ZoomAction,
+  zenAction,
   zoomAction,
 } from "./keymap";
 
@@ -246,6 +249,91 @@ describe("findAction", () => {
       expect(settingsShortcut(event, platform)).toBeNull();
       expect(zoomAction(event, platform)).toBeNull();
       expect(attentionShortcut(event, platform)).toBeNull();
+    }
+  });
+});
+
+const macBracket = (code: "BracketRight" | "BracketLeft", mods: Partial<Omit<KeyChord, "key">>): KeyChord => ({
+  ...chord(code === "BracketRight" ? "}" : "{", { metaKey: true, shiftKey: true, ...mods }),
+  code,
+});
+
+const tabCases: [string, Platform, KeyChord, TabAction | null][] = [
+  ["Tab shortcuts: ⇧⌘T opens a new tab on macOS", "macos", { ...chord("T", { metaKey: true, shiftKey: true }), code: "KeyT" }, "new"],
+  ["Tab shortcuts: Ctrl+Alt+Shift+T opens a new tab on Windows", "windows", { ...chord("T", pc), code: "KeyT" }, "new"],
+  ["Tab shortcuts: Ctrl+Alt+Shift+T opens a new tab on Linux", "linux", { ...chord("T", pc), code: "KeyT" }, "new"],
+  ["Next tab: ⇧⌘] shows the next tab on macOS", "macos", macBracket("BracketRight", {}), "next"],
+  ["Next tab: ⇧⌘[ shows the previous tab on macOS", "macos", macBracket("BracketLeft", {}), "previous"],
+  ["Next tab: Ctrl+Tab shows the next tab on macOS", "macos", chord("Tab", { ctrlKey: true }), "next"],
+  ["Next tab: Ctrl+Shift+Tab shows the previous tab on macOS", "macos", chord("Tab", { ctrlKey: true, shiftKey: true }), "previous"],
+  ["Next tab: Ctrl+PageDown shows the next tab on Linux", "linux", chord("PageDown", { ctrlKey: true }), "next"],
+  ["Next tab: Ctrl+PageUp shows the previous tab on Windows", "windows", chord("PageUp", { ctrlKey: true }), "previous"],
+  ["Move pane to next tab: ⌃⇧⌘] on macOS", "macos", macBracket("BracketRight", { ctrlKey: true }), "moveNext"],
+  ["Move pane to next tab: ⌃⇧⌘[ moves to the previous tab on macOS", "macos", macBracket("BracketLeft", { ctrlKey: true }), "movePrevious"],
+  ["Move pane to next tab: Ctrl+Shift+PageDown on Linux", "linux", chord("PageDown", { ctrlKey: true, shiftKey: true }), "moveNext"],
+  ["Move pane to next tab: Ctrl+Shift+PageUp moves to the previous tab on Windows", "windows", chord("PageUp", { ctrlKey: true, shiftKey: true }), "movePrevious"],
+  ["Linux: Ctrl+Shift+T stays the new pane key", "linux", chord("T", { ctrlKey: true, shiftKey: true }), null],
+  ["macOS: ⌘T stays the new pane key", "macos", { ...chord("t", { metaKey: true }), code: "KeyT" }, null],
+  ["macOS: ⌘] without Shift reaches the shell", "macos", { ...chord("]", { metaKey: true }), code: "BracketRight" }, null],
+  ["Linux: Ctrl+Tab is not a tab key", "linux", chord("Tab", { ctrlKey: true }), null],
+  ["macOS: Ctrl+PageDown is not a tab key", "macos", chord("PageDown", { ctrlKey: true }), null],
+  ["Linux: plain PageDown reaches the shell", "linux", chord("PageDown"), null],
+  ["Linux: Ctrl+Alt+PageDown is not a tab key", "linux", chord("PageDown", { ctrlKey: true, altKey: true }), null],
+  ["Windows: Win+Shift+T is not a tab key", "windows", chord("T", { metaKey: true, shiftKey: true }), null],
+];
+
+describe("tabAction", () => {
+  it.each(tabCases)("%s", (_name, platform, event, expected) => {
+    expect(tabAction(event, platform)).toBe(expected);
+  });
+
+  it("Tab shortcuts: tab keys are not pane, layout, settings, zoom, find, attention or clipboard keys", () => {
+    for (const [, platform, event, expected] of tabCases) {
+      if (expected === null) continue;
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(settingsShortcut(event, platform)).toBeNull();
+      expect(zoomAction(event, platform)).toBeNull();
+      expect(findAction(event, platform)).toBeNull();
+      expect(attentionShortcut(event, platform)).toBeNull();
+      expect(clipboardAction(event, platform)).toBeNull();
+    }
+  });
+
+  it("Tab shortcuts: pane and layout keys are not tab keys", () => {
+    for (const [, platform, event, expected] of [...paneCases, ...layoutCases]) {
+      if (expected === null) continue;
+      expect(tabAction(event, platform)).toBeNull();
+    }
+  });
+});
+
+const zenCases: [string, Platform, KeyChord, "zen" | null][] = [
+  ["Zen toggle: ⇧⌘Enter on macOS", "macos", chord("Enter", { metaKey: true, shiftKey: true }), "zen"],
+  ["Shortcut toggles: Ctrl+Shift+Enter on Linux", "linux", chord("Enter", { ctrlKey: true, shiftKey: true }), "zen"],
+  ["Zen toggle: Ctrl+Shift+Enter on Windows", "windows", chord("Enter", { ctrlKey: true, shiftKey: true }), "zen"],
+  ["macOS: Ctrl+Shift+Enter reaches the shell", "macos", chord("Enter", { ctrlKey: true, shiftKey: true }), null],
+  ["macOS: ⌘Enter reaches the shell", "macos", chord("Enter", { metaKey: true }), null],
+  ["Linux: Ctrl+Enter reaches the shell", "linux", chord("Enter", { ctrlKey: true }), null],
+  ["Linux: Shift+Enter reaches the shell", "linux", chord("Enter", { shiftKey: true }), null],
+  ["Windows: Win+Shift+Enter is not the shortcut", "windows", chord("Enter", { metaKey: true, shiftKey: true }), null],
+  ["Linux: Ctrl+Alt+Shift+Enter is not the shortcut", "linux", chord("Enter", { ctrlKey: true, altKey: true, shiftKey: true }), null],
+  ["A plain Enter reaches the shell", "macos", chord("Enter"), null],
+];
+
+describe("zenAction", () => {
+  it.each(zenCases)("%s", (_name, platform, event, expected) => {
+    expect(zenAction(event, platform)).toBe(expected);
+  });
+
+  it("Zen keys are not pane, layout, zoom, find or clipboard keys", () => {
+    for (const [, platform, event, expected] of zenCases) {
+      if (expected === null) continue;
+      expect(clipboardAction(event, platform)).toBeNull();
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(zoomAction(event, platform)).toBeNull();
+      expect(findAction(event, platform)).toBeNull();
     }
   });
 });

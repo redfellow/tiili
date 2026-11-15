@@ -1,0 +1,17 @@
+format: 1
+slug: on-hold-cargo-test-host
+title: "On hold: cargo-test-host"
+x-harvaaja-card: de0343cf-7208-4daf-bdcf-fec6cfaf5001
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Session restore's shell integration now emits an invisible OSC 1337
+    TiiliCmd mark right before command output, so the host test's "\ntiili-N-ok"
+    match fails. Behaviour is correct; the test must ignore OSC sequences.
+  citations:
+    - src-tauri/tests/pty_registry.rs:25
+    - src-tauri/src/shell_integration/zsh/zshrc.zsh
+  revision: 13bedbca-c45d-488b-b83f-be01db3f4cc5

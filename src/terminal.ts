@@ -10,7 +10,7 @@ import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
 import { SEARCH_LIMIT, searchDecorations } from "./search";
-import { fontFamilyList, type FontSettings, type Settings } from "./settings";
+import { fontFamilyList, SYMBOLS_FONT_FAMILY, type FontSettings, type Settings } from "./settings";
 import { attachLinks, type PaneLinks } from "./terminalLinks";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
@@ -41,6 +41,8 @@ export interface PaneTerminal {
   cellSize(): { width: number; height: number } | undefined;
   /** The terminal's scrollback and screen as text with escape codes, once everything written to it has landed. */
   serialize(): Promise<string>;
+  /** The scrollback and normal screen to keep for the next launch: never a full-screen program's alternate screen. */
+  scrollback(): Promise<string>;
   /** The shell session the terminal shows, while it runs. */
   session(): SessionId | undefined;
   /** Frees the terminal but leaves its shell running, for a pane that moved to another window. */
@@ -53,6 +55,12 @@ export interface PaneTerminal {
 export interface AdoptedSession {
   session: SessionId;
   scrollback: string;
+}
+
+/** What a pane reopened from the last session shows before its shell starts, and the line its history gets. */
+export interface RestoredPane {
+  preface: string;
+  history?: string;
 }
 
 /** The addons `applyFont` changes or refits with, per terminal. */
@@ -78,8 +86,10 @@ async function loadFont(font: FontSettings): Promise<void> {
   await Promise.all([
     document.fonts.load(`${font.weight} ${font.size}px ${family}`),
     document.fonts.load(`${font.weightBold} ${font.size}px ${family}`),
-    // A face loads only for text in its unicode-range, so a private-use sample loads the symbols font now.
-    document.fonts.load(`${font.weight} ${font.size}px ${family}`, ICON_SAMPLE),
+    // A face loads only for text in its unicode-range, so a private-use sample loads the symbols font now. It is named
+    // alone: WebKit stops at Geist Mono (no unicode-range, so it "covers" the sample) and never loads the symbols face,
+    // and xterm would then cache the icon's fallback width.
+    document.fonts.load(`${font.weight} ${font.size}px "${SYMBOLS_FONT_FAMILY}"`, ICON_SAMPLE),
   ]).catch(() => undefined);
 }
 
@@ -166,7 +176,8 @@ export function refreshTheme(term: Terminal): void {
  * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
  * shell sends, with its message made safe; an adopted scrollback rings nothing. With `launch` the session runs that
  * program instead of a shell, and a failure to start it rejects (after freeing the terminal) instead of being written
- * into the terminal.
+ * into the terminal. With `restore` (a pane reopened from the last session) the terminal first shows its preface,
+ * which rings nothing, and its shell starts with the restored line as its newest history entry.
  */
 export async function openTerminal(
   backend: Backend,
@@ -179,6 +190,7 @@ export async function openTerminal(
   adopt?: AdoptedSession,
   onSignal: (signal: AttentionSignal) => void = () => {},
   launch?: PaneLaunch,
+  restore?: RestoredPane,
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -253,7 +265,8 @@ export async function openTerminal(
   );
 
   const spawn = async (dir?: string) => {
-    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, (bytes) => term.write(bytes), launch);
+    const write = (bytes: Uint8Array) => term.write(bytes);
+    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, write, launch, restore?.history);
     running = true;
     onSession(session);
   };
@@ -317,6 +330,13 @@ export async function openTerminal(
     term.dispose();
   };
 
+  // The restored scrollback lands before anything the new shell prints.
+  if (restore?.preface) {
+    replaying = true;
+    await written(term, restore.preface).finally(() => {
+      replaying = false;
+    });
+  }
   if (adopt) await take(adopt).catch(reportError);
   else if (launch) {
     await spawn(cwd).catch((error: unknown) => {
@@ -356,6 +376,10 @@ export async function openTerminal(
     serialize: async () => {
       await written(term);
       return serializer.serialize();
+    },
+    scrollback: async () => {
+      await written(term);
+      return serializer.serialize({ excludeAltBuffer: true });
     },
     session: () => (running ? session : undefined),
     detach: () => {
