@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import type { LayoutState } from "./layout/model";
-import { DIVIDER, restorePlan, snapshotWindow, type Restored, type SavedPane } from "./session";
+import { DIVIDER, restorePlan, restorePlans, snapshotWindow, type Restored, type SavedPane } from "./session";
 
 const terminal = (id: number, patch: Partial<SavedPane> = {}): SavedPane => ({
   id, kind: "terminal", cwd: `/work/p${id}`, zoom: 0, ...patch,
@@ -75,6 +75,28 @@ describe("restorePlan", () => {
 
   it("a window with no pane gives no plan, so one fresh window opens", () => {
     expect(restorePlan(restored([]), true)).toBeUndefined();
+  });
+
+  it("each saved tab reopens with its name, the shown one active, and tabs with no pane left out", () => {
+    const saved: Restored = {
+      window: {
+        label: "main",
+        tabs: [
+          { layout: grid([1]), panes: [terminal(1)], focused: 1, name: "api" },
+          { layout: grid([]), panes: [] },
+          { layout: grid([2]), panes: [terminal(2)], focused: 2 },
+        ],
+        activeTab: 2,
+      },
+      scrollback: {},
+      folders: {},
+    };
+    const plans = restorePlans(saved, true);
+    expect(plans?.tabs.map((tab) => [tab.name, tab.panes.map((p) => p.cwd)])).toEqual([
+      ["api", ["/work/p1"]],
+      [undefined, ["/work/p2"]],
+    ]);
+    expect(plans?.active).toBe(1);
   });
 
   it.each([

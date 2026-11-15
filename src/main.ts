@@ -232,7 +232,16 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       onResetLayout: thenRefocus(() => panes.actLayout("reset")),
       onSettings: openSettings,
       attentionCount: attention !== undefined,
+      tabs: {
+        onShow: (index) => panes.showTab(index),
+        onReorder: (from, to) => panes.reorderTab(from, to),
+        onRename: (index, name) => panes.renameTab(index, name),
+        onMenu: (index, event) => {
+          panes.tabMenu(index, event).catch(report);
+        },
+      },
     });
+    panes.attachStrip(topBar.tabs);
     // The count covers every window's marked panes.
     if (attention) {
       await backend.onAppEvent("attention-changed", ({ marks }) => topBar.setAttentionCount(marks.length));

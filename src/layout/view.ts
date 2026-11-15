@@ -27,6 +27,10 @@ export interface TileHooks {
   zenResizeStart(): void;
   /** A Zen edge drag ended with the Zen pane `widthPx` wide: the terminal refits once and the width is saved. */
   zenResizeEnd(widthPx: number): void;
+  /** Pane `from`'s grab strip was dropped on `under`, outside the grid; true when the drop was taken. */
+  dropOutside?(from: PaneId, under: Element): boolean;
+  /** A pane's grab strip moved over `under` outside the grid, or back over the grid or nothing (null). */
+  dragOutside?(under: Element | null): void;
 }
 
 /** The pane id stored on each pane element. */
@@ -458,6 +462,8 @@ export class TileView {
     const from = Number(source.dataset[PANE_ID]);
     let target: HTMLElement | undefined;
     let ghost: HTMLElement | undefined;
+    /** The element under the pointer outside the grid, where the window may take the pane. */
+    let outside: Element | undefined;
     grab.setPointerCapture(down.pointerId);
 
     const mark = (pane: HTMLElement | undefined) => {
@@ -476,8 +482,11 @@ export class TileView {
     const onMove = (event: PointerEvent) => {
       if (!ghost && Math.hypot(event.clientX - down.clientX, event.clientY - down.clientY) > 3) begin();
       if (ghost) ghost.style.transform = `translate(${event.clientX + 14}px, ${event.clientY + 14}px)`;
-      const under = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(".pane");
+      const point = document.elementFromPoint(event.clientX, event.clientY);
+      const under = point?.closest<HTMLElement>(".pane");
       mark(under && under !== source && this.root.contains(under) ? under : undefined);
+      outside = ghost && point && !this.root.contains(point) ? point : undefined;
+      this.hooks.dragOutside?.(outside ?? null);
     };
     const finish = (drop: boolean) => {
       grab.removeEventListener("pointermove", onMove);
@@ -488,8 +497,10 @@ export class TileView {
       ghost?.remove();
       source.toggleAttribute("data-drag-source", false);
       document.documentElement.toggleAttribute("data-pane-dragging", false);
+      if (outside) this.hooks.dragOutside?.(null);
       if (ghost) this.draggedAt = performance.now();
       if (drop && to !== undefined) this.hooks.swap(from, to);
+      else if (drop && outside) this.hooks.dropOutside?.(from, outside);
     };
     const onUp = () => finish(true);
     const onCancel = () => finish(false);

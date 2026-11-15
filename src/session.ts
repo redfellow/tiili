@@ -136,16 +136,50 @@ function sumsToOne(sizes: number[]): boolean {
   return Math.abs(sizes.reduce((sum, s) => sum + s, 0) - 1) < 1e-6;
 }
 
+/** A saved tab's restore plan, with the name the user gave it. */
+export interface TabRestore extends WindowRestore {
+  name?: string;
+}
+
+/** Every saved tab that has a pane, in strip order, and the index in `tabs` of the tab shown. */
+export interface WindowPlans {
+  tabs: TabRestore[];
+  active: number;
+}
+
 /**
- * How `restored`'s first tab reopens, or `undefined` when it has no pane. Panes keep their saved grid order, and
+ * How `restored`'s active tab reopens, or `undefined` when it has no pane. See {@link tabPlan}.
+ */
+export function restorePlan(restored: Restored, withScrollback: boolean): WindowRestore | undefined {
+  const tab = restored.window.tabs[restored.window.activeTab] ?? restored.window.tabs[0];
+  return tab ? tabPlan(tab, restored, withScrollback) : undefined;
+}
+
+/**
+ * How each of `restored`'s tabs reopens, leaving out the tabs with no pane, and which of them is shown. Resolves to
+ * `undefined` when no tab has a pane.
+ */
+export function restorePlans(restored: Restored, withScrollback: boolean): WindowPlans | undefined {
+  const tabs: TabRestore[] = [];
+  let active = 0;
+  restored.window.tabs.forEach((tab, index) => {
+    const plan = tabPlan(tab, restored, withScrollback);
+    if (!plan) return;
+    if (index === restored.window.activeTab) active = tabs.length;
+    tabs.push({ ...plan, name: tab.name });
+  });
+  return tabs.length > 0 ? { tabs, active } : undefined;
+}
+
+/**
+ * How saved tab `tab` reopens, or `undefined` when it has no pane. Panes keep their saved grid order, and
  * the track sizes their saved values when they still match the grid. A terminal pane's preface holds, with
  * `withScrollback`, its saved scrollback and the dim divider; then a dim note when its folder no longer exists, and
  * a dim reminder of what ran: the connected host for a remote pane, else the command line or the program's name.
  * The command line, with `withScrollback`, also becomes the newest history entry. Nothing is ever re-run.
  */
-export function restorePlan(restored: Restored, withScrollback: boolean): WindowRestore | undefined {
-  const tab = restored.window.tabs[restored.window.activeTab] ?? restored.window.tabs[0];
-  if (!tab || tab.panes.length === 0) return undefined;
+function tabPlan(tab: SavedTab, restored: Restored, withScrollback: boolean): WindowRestore | undefined {
+  if (tab.panes.length === 0) return undefined;
   const layout: Partial<LayoutState> = tab.layout && typeof tab.layout === "object" ? tab.layout : {};
   const ids = tab.panes.map((pane) => pane.id);
   const order = Array.isArray(layout.order) && layout.order.length === ids.length &&

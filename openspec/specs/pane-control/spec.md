@@ -64,3 +64,14 @@ Every process tiili starts in a pane SHALL get `TIILI_SOCKET` (the endpoint's pa
 #### Scenario: List panes
 - **WHEN** a process in a window with two terminal panes runs `tiili list`
 - **THEN** two lines are printed, each with that pane's id, working directory and title
+
+### Requirement: Pane control with tabs
+`tiili open` SHALL add its pane to the caller's tab, even when that tab is not shown, without showing it. `tiili list` SHALL list the window's panes tab by tab in strip order, in grid order inside each tab.
+
+#### Scenario: Open from a hidden tab
+- **WHEN** a process in a pane of a hidden tab runs `tiili open -- npm test`
+- **THEN** the new pane joins that tab's grid and the shown tab does not change
+
+#### Scenario: List across tabs
+- **WHEN** tab 1 has panes A, B and tab 2 has pane C, and `tiili list` runs
+- **THEN** it prints A, B, C in that order
