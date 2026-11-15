@@ -1,5 +1,6 @@
 /* tiili design tokens. Source of truth for the website and the app's webview.
-   Light values on :root; dark values under [data-theme="dark"] and the dark colour-scheme media query. */
+   Light values on :root; dark values under [data-theme="dark"] and the dark colour-scheme media query; the
+   app's theme variants under [data-variant]. */
 
 :root {
   /* Core palette */
@@ -46,6 +47,20 @@
   --pane-gap: 3px;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+
+  /* Elevation: tooltips and menus, dialogues, a dragged pane */
+  --shadow-1: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
+  --shadow-2: 0 8px 32px color-mix(in srgb, #000 45%, transparent), 0 2px 8px color-mix(in srgb, #000 30%, transparent);
+  --shadow-3: 0 12px 32px color-mix(in srgb, #000 50%, transparent);
+
+  /* Font sizes, from the README type table */
+  --text-display: 56px;
+  --text-h1: 36px;
+  --text-h2: 24px;
+  --text-body: 16px;
+  --text-small: 13.5px;
+  --text-terminal: 13px;
+  --text-label: 11.5px;
 
   /* Semantic: light */
   --bg: #F6F1E9;
@@ -104,4 +119,45 @@
   --ansi-8: #56615F;  --ansi-9: #E57A57;  --ansi-10: #A9CBB0; --ansi-11: #EDC066;
   --ansi-12: #9DBCD0; --ansi-13: #D198AC; --ansi-14: #ADCBC8; --ansi-15: #F6F1E9;
   color-scheme: dark;
+}
+
+/* Theme variants, as src/themes.ts sets them inline. Only the drift test and the docs read these blocks. */
+/* Savi: warm light grounds, savi accent. */
+:root[data-variant="savi"] {
+  --bg: #F3EEE7; --surface: #FBF8F4; --fg: #2A2321; --muted: #6F6560; --line: #DDD3C8; --accent: #C9764F;
+  --on-accent: #2A2321; --focus: #C5744D; --term-bg: #F3EEE7; --term-fg: #2A2321; --term-dim: #8D877D; --term-gap: #DDD3C8;
+  --ansi-0: #2A2321;  --ansi-1: #A4472B;  --ansi-2: #5A7340;  --ansi-3: #8C5F0E;
+  --ansi-4: #3C6680;  --ansi-5: #844B66;  --ansi-6: #3F6E6B;  --ansi-7: #8D877D;
+  --ansi-8: #5E5650;  --ansi-9: #C5744D;  --ansi-10: #6E7F4E;  --ansi-11: #A87414;
+  --ansi-12: #4D7C99;  --ansi-13: #9C5A7A;  --ansi-14: #4F8481;  --ansi-15: #B9B1A6;
+}
+
+/* Muratti: warm dark grounds, muratti accent. */
+:root[data-variant="muratti"] {
+  --bg: #151112; --surface: #1E1919; --fg: #EFE7DE; --muted: #A0948C; --line: #342B29; --accent: #861B22;
+  --on-accent: #FFFFFF; --focus: #A14D53; --term-bg: #1E1919; --term-fg: #F3E7DC; --term-dim: #6F6560; --term-gap: #0E0B0B;
+  --ansi-0: #2A2222;  --ansi-1: #C0444B;  --ansi-2: #9AAE7A;  --ansi-3: #D9A43A;
+  --ansi-4: #7FA2B8;  --ansi-5: #B97C92;  --ansi-6: #8FB0AD;  --ansi-7: #CFC4B8;
+  --ansi-8: #6F6563;  --ansi-9: #D9625F;  --ansi-10: #B5C792;  --ansi-11: #EDC066;
+  --ansi-12: #9DBCD0;  --ansi-13: #D198AC;  --ansi-14: #ADCBC8;  --ansi-15: #F3E7DC;
+}
+
+/* Koski: rapids at night, savi cursor. */
+:root[data-variant="koski"] {
+  --bg: #0F1516; --surface: #182023; --fg: #C9CFCD; --muted: #8A9492; --line: #24302F; --accent: #C9764F;
+  --on-accent: #2A2321; --focus: #C9764F; --term-bg: #182023; --term-fg: #C9CFCD; --term-dim: #6E7876; --term-gap: #0B0F10;
+  --ansi-0: #222B2E;  --ansi-1: #D05B3F;  --ansi-2: #8FB59A;  --ansi-3: #D9A43A;
+  --ansi-4: #7FA2B8;  --ansi-5: #B97C92;  --ansi-6: #8FA6A4;  --ansi-7: #C9CFCD;
+  --ansi-8: #626C6A;  --ansi-9: #C9764F;  --ansi-10: #A9CBB0;  --ansi-11: #EDC066;
+  --ansi-12: #9DBCD0;  --ansi-13: #D198AC;  --ansi-14: #B3C7C5;  --ansi-15: #EEF1EF;
+}
+
+/* Laasti: the mortar grid on laasti. */
+:root[data-variant="laasti"] {
+  --bg: #E8DECD; --surface: #F6F1E9; --fg: #2A2321; --muted: #5E5650; --line: #D0C3AE; --accent: #A4472B;
+  --on-accent: #FFFFFF; --focus: #A4472B; --term-bg: #E8DECD; --term-fg: #2A2321; --term-dim: #7A746B; --term-gap: #CFC2AC;
+  --ansi-0: #2A2321;  --ansi-1: #A4472B;  --ansi-2: #4C7356;  --ansi-3: #7E5508;
+  --ansi-4: #3C6680;  --ansi-5: #6B2A1E;  --ansi-6: #3F6E6B;  --ansi-7: #7A746B;
+  --ansi-8: #3A3F45;  --ansi-9: #B5532F;  --ansi-10: #557E5F;  --ansi-11: #96680F;
+  --ansi-12: #4D7C99;  --ansi-13: #9C5A7A;  --ansi-14: #4F8481;  --ansi-15: #A89F92;
 }

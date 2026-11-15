@@ -28,6 +28,8 @@ function ansi(colours: string): Record<string, string> {
 interface Chrome {
   bg: string; surface: string; fg: string; muted: string; line: string; accent: string;
   termBg: string; termFg: string; termDim: string; termGap: string;
+  /** The focus ring, when the brand sets one; otherwise it is worked out from the accent. */
+  focus?: string;
 }
 
 function channels(colour: string): number[] {
@@ -48,9 +50,10 @@ export function contrast(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-/** The label colour for text on an accent fill: white, or near-black when that reads better. */
+/** The label colour for text on an accent fill: white, or the brand's light `--fg` when that reads better. */
 function onAccent(accent: string): string {
-  return contrast("#FFFFFF", accent) >= contrast("#1B1614", accent) ? "#FFFFFF" : "#1B1614";
+  // tokens-allow: theme values are hex, applied inline; white and light --fg are the brand's two accent labels
+  return contrast("#FFFFFF", accent) >= contrast("#2A2321", accent) ? "#FFFFFF" : "#2A2321";
 }
 
 /** The accent, moved towards white (dark grounds) or black (light) until it is 3:1 against both grounds: for focus rings. */
@@ -68,7 +71,7 @@ function focusRing(accent: string, grounds: string[]): string {
 function tokens(chrome: Chrome, colours: string): Record<ThemeToken, string> {
   return {
     "--on-accent": onAccent(chrome.accent),
-    "--focus": focusRing(chrome.accent, [chrome.bg, chrome.surface]),
+    "--focus": chrome.focus ?? focusRing(chrome.accent, [chrome.bg, chrome.surface]),
     "--bg": chrome.bg,
     "--surface": chrome.surface,
     "--fg": chrome.fg,
@@ -83,17 +86,21 @@ function tokens(chrome: Chrome, colours: string): Record<ThemeToken, string> {
   } as Record<ThemeToken, string>;
 }
 
-// The brand sets, as in docs/brand/tiili.css.
+// The brand sets, as in docs/brand/tiili.css; src/brandTokens.test.ts keeps them in step.
 const TIILI_LIGHT_ANSI =
+  // tokens-allow: theme values are hex, applied inline; checked against tiili.css by the drift test
   "#2A2321 #A4472B #4C7356 #8C5F0E #3C6680 #844B66 #3F6E6B #8D877D #5E5650 #C2512F #5E8A69 #A87414 #4D7C99 #9C5A7A #4F8481 #B9B1A6";
 const TIILI_DARK_ANSI =
-  "#222B2E #D05B3F #8DB596 #D9A43A #7FA2B8 #B97C92 #8FB0AD #CFC8BE #626C6A #E57A57 #A9CBB0 #EDC066 #9DBCD0 #D198AC #ADCBC8 #F6F1E9";
+  // tokens-allow: theme values are hex, applied inline; checked against tiili.css by the drift test
+  "#222B2E #D05B3F #8DB596 #D9A43A #7FA2B8 #B97C92 #8FB0AD #CFC8BE #56615F #E57A57 #A9CBB0 #EDC066 #9DBCD0 #D198AC #ADCBC8 #F6F1E9";
 
 // Solarized's published palette; light and dark share the accents and swap the base tones. A few of the accents
 // and the bright black are nudged until they reach 3:1 on their ground.
 const SOLARIZED_LIGHT_ANSI =
+  // tokens-allow: Solarized's published palette
   "#073642 #DC322F #849700 #B38800 #268BD2 #D33682 #299E95 #EEE8D5 #002B36 #CB4B16 #586E75 #657B83 #809193 #6C71C4 #849191 #FDF6E3";
 const SOLARIZED_DARK_ANSI =
+  // tokens-allow: Solarized's published palette
   "#073642 #DC322F #859900 #B58900 #268BD2 #D33682 #2AA198 #EEE8D5 #59757C #CB4B16 #5F747B #657B83 #839496 #6C71C4 #93A1A1 #FDF6E3";
 
 export const THEMES: readonly Theme[] = [
@@ -109,7 +116,7 @@ export const THEMES: readonly Theme[] = [
     id: "tiili-dark", name: "tiili Dark", kind: "dark",
     tokens: tokens({
       bg: "#111617", surface: "#182023", fg: "#EFE7DE", muted: "#A0978F", line: "#2A3437", accent: "#A4472B",
-      termBg: "#182023", termFg: "#D9D3CA", termDim: "#6E7876", termGap: "#0B0F10",
+      termBg: "#182023", termFg: "#D9D3CA", termDim: "#6E7876", termGap: "#0B0F10", focus: "#D3865F",
     }, TIILI_DARK_ANSI),
   },
   {

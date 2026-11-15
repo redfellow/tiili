@@ -1,0 +1,18 @@
+format: 1
+slug: brand-token-check-make-use-the-brand-tok
+title: "Brand-token check: make \"use the brand tokens, never invent colours\" a
+  check a card can't get past"
+x-harvaaja-card: 801d897f-0521-4ab1-b969-33991f65d6ff
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new brand-token contracts (shadow/text tokens, variant blocks,
+    semantic token table, drift test, lint rule); no active change shares this
+    intent.
+  citations:
+    - openspec/specs/brand-tokens/spec.md
+    - docs/brand/tiili.css
+    - src/themes.ts
+  revision: 4accd7cc-681c-42a7-88e4-8d9f4ece327b
