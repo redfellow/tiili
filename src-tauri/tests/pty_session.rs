@@ -651,17 +651,24 @@ fn up_re_runs_zsh_and_bash_seed_history_and_report_the_typed_command() {
             "{shell} kept reporting a command at the prompt"
         );
 
-        // A line the shell keeps out of its history (a leading space under the ignore-space option) is not
-        // reported while it runs.
-        let ignore_space = if shell.ends_with("zsh") {
-            "setopt hist_ignore_space\r"
+        // Under the ignore-space and ignore-dups options, a line repeating the newest entry is still reported, and
+        // a line the shell keeps out of its history (a leading space) is not reported while it runs.
+        let ignore = if shell.ends_with("zsh") {
+            "setopt hist_ignore_space hist_ignore_dups\r"
         } else {
-            "HISTCONTROL=ignorespace\r"
+            "HISTCONTROL=ignoreboth\r"
         };
-        session
-            .write(ignore_space.as_bytes())
-            .expect("set the option");
+        session.write(ignore.as_bytes()).expect("set the options");
         assert_eq!(poll(None), None, "{shell} did not come back to the prompt");
+        for run in ["first", "repeated"] {
+            session.write(b"sleep 2\r").expect("type the command");
+            assert_eq!(
+                poll(Some("sleep 2")).as_deref(),
+                Some("sleep 2"),
+                "{shell} never reported the {run} sleep 2"
+            );
+            assert_eq!(poll(None), None, "{shell} did not come back to the prompt");
+        }
         session
             .write(b" sleep 1; echo hidden-$((40 + 3))\r")
             .expect("type the hidden command");

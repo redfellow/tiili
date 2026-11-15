@@ -139,11 +139,17 @@ _tiili_preexec() {
   local line _tiili_reply=
   line=$(HISTTIMEFORMAT= builtin history 1)
   # The newest entry is the same as at the prompt when this line stayed out of the history (HISTCONTROL,
-  # HISTIGNORE, history off): it is not reported, neither is that older entry.
-  if [ "$line" != "$_tiili_last_history" ]; then
-    [[ $line =~ ^\ *[0-9]+\*?\ +(.*)$ ]] && line=${BASH_REMATCH[1]}
-    _tiili_base64 "$line"
+  # HISTIGNORE, history off), or when it repeats that entry (ignoredups, erasedups). Then it is reported only where
+  # that entry is the line now running: its first command is the one about to run. That text is in the history
+  # already, so a line kept out of it is never reported.
+  local changed=1 rest after='^[[:space:]]*([;&|)]|$)'
+  [ "$line" != "$_tiili_last_history" ] || changed=
+  [[ $line =~ ^\ *[0-9]+\*?\ +(.*)$ ]] && line=${BASH_REMATCH[1]}
+  if [ -z "$changed" ]; then
+    rest=${line#"$BASH_COMMAND"}
+    if [ -z "$BASH_COMMAND" ] || [ "$rest" = "$line" ] || ! [[ $rest =~ $after ]]; then line=; fi
   fi
+  if [ -n "$line" ]; then _tiili_base64 "$line"; fi
   printf '\e]1337;TiiliCmd=%s\a' "$_tiili_reply"
 }
 _tiili_last_history=
