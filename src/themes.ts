@@ -201,3 +201,49 @@ export function applyTheme(id: ThemeId, root: HTMLElement = document.documentEle
     if (value) root.style.setProperty(name, value);
   }
 }
+
+/** Whether a theme shows light or dark: System follows the OS, dark when `prefersDark`. */
+export function themeKind(id: ThemeId, prefersDark: boolean): "light" | "dark" {
+  const { kind } = themeById(id);
+  if (kind === "system") return prefersDark ? "dark" : "light";
+  return kind;
+}
+
+/** tiili's light or dark, as the main window hands it to the Heynote page (`window.tiiliTheme`). */
+export interface TiiliTheme {
+  kind(): "light" | "dark";
+  /** Calls `callback` with the new kind whenever it changes; returns what stops it. */
+  onChange(callback: (kind: "light" | "dark") => void): () => void;
+}
+
+/** A {@link TiiliTheme} for theme `theme()` under OS scheme `media`; `changed()` tells it the theme may have changed. */
+export function themeKindSource(
+  theme: () => ThemeId,
+  media: { readonly matches: boolean; addEventListener(type: "change", listener: () => void): void },
+): TiiliTheme & { changed(): void } {
+  const listeners = new Set<(kind: "light" | "dark") => void>();
+  const kind = () => themeKind(theme(), media.matches);
+  let last = kind();
+  const changed = () => {
+    const next = kind();
+    if (next === last) return;
+    last = next;
+    for (const listener of [...listeners]) {
+      try {
+        listener(next);
+      } catch (error) {
+        // A closed Heynote page's listener can throw; it must not keep the others from hearing the change.
+        console.error(error);
+      }
+    }
+  };
+  media.addEventListener("change", changed);
+  return {
+    kind,
+    changed,
+    onChange: (callback) => {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+  };
+}

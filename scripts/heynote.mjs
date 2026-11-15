@@ -4,7 +4,8 @@
 //   HEYNOTE_SRC=~/src/heynote npm run heynote   builds an existing checkout instead (left as it was afterwards)
 //
 // The build swaps Heynote's webapp/bridge.js for tiili's heynote/bridge.js and adds its heynote/save-on-close.js
-// (notes in tiili's files, not localStorage) and makes the page start Heynote only after the bridge has loaded the library. The output is
+// (notes in tiili's files, not localStorage), makes the page start Heynote only after the bridge has loaded the library
+// and gives the page tiili's light or dark ground before anything paints. The output is
 // committed, so tiili's own build and checks need neither the network nor Heynote's dependencies.
 
 import { execFileSync } from "node:child_process";
@@ -57,7 +58,25 @@ try {
     startup,
   );
   if (patched === original.index) throw new Error("Heynote's webapp/index.html changed: update scripts/heynote.mjs");
-  writeFileSync(index, patched);
+  // Heynote's page starts in the ground of the mode it opens in, tiili's light or dark (window.parent.tiiliTheme),
+  // before any script runs, so it never paints white first. The colours are Heynote's editor grounds, as in
+  // src/heynotePane.ts.
+  const ground =
+    "  <script>\n" +
+    "      try {\n" +
+    '        const kind = parent !== window && parent.tiiliTheme ? parent.tiiliTheme.kind() : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");\n' +
+    '        document.documentElement.dataset.tiiliGround = kind;\n' +
+    "      } catch {}\n" +
+    "    </script>\n" +
+    "    <style>\n" +
+    "      html { background: #ffffff; color-scheme: light; }\n" +
+    '      html[data-tiili-ground="dark"] { background: #252B37; color-scheme: dark; }\n' +
+    "      @media (prefers-color-scheme: dark) { html:not([data-tiili-ground]) { background: #252B37; color-scheme: dark; } }\n" +
+    "    </style>\n" +
+    "  </head>";
+  const grounded = patched.replace("</head>", ground);
+  if (grounded === patched) throw new Error("Heynote's webapp/index.html has no </head>: update scripts/heynote.mjs");
+  writeFileSync(index, grounded);
 
   run("npx", ["vite", "build", "webapp", "--base", "./", "--target", "es2022", "--outDir", out, "--emptyOutDir", "--logLevel", "warn"], src);
   copyFileSync(join(src, "LICENSE"), join(out, "LICENSE"));

@@ -7,7 +7,18 @@
     <meta name="color-scheme" content="light dark">
     <link rel="manifest" href="./site.webmanifest">
     <title>Heynote</title>
-    <script type="module" crossorigin src="./assets/index-CFDoj-62.js"></script>
+    <script>
+      try {
+        const kind = parent !== window && parent.tiiliTheme ? parent.tiiliTheme.kind() : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.tiiliGround = kind;
+      } catch {}
+    </script>
+    <style>
+      html { background: #ffffff; color-scheme: light; }
+      html[data-tiili-ground="dark"] { background: #252B37; color-scheme: dark; }
+      @media (prefers-color-scheme: dark) { html:not([data-tiili-ground]) { background: #252B37; color-scheme: dark; } }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CkGIVVek.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/library-search-query-bW7Xps6D.js">
   </head>
   <body>
