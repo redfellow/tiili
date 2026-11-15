@@ -76,7 +76,7 @@ The user SHALL be able to set font family, size, normal and bold weight (100–9
 - **THEN** the terminal draws its letters 1 px closer together
 
 ### Requirement: Font family list
-The family SHALL be chosen from a keyboard-navigable list with a Bundled group (Geist Mono, Victor Mono, Commit Mono, Recursive Mono, Cascadia Code) and an OS group (the fixed-width fonts installed on the machine), and moving through it SHALL apply the font at once; a missing font SHALL fall back to Geist Mono. Nerd Font icon codepoints that the chosen font and Geist Mono lack SHALL be drawn from a bundled Symbols Nerd Font Mono limited to icon ranges, so it never replaces the chosen font's letters or icons.
+The family SHALL be chosen from a keyboard-navigable list with a Bundled group (Geist Mono, Victor Mono, Commit Mono, Recursive Mono, Cascadia Code) and an OS group (installed fixed-width fonts); moving through it SHALL apply the font at once, and a missing font SHALL fall back to Geist Mono. Nerd Font icons the chosen font and Geist Mono lack SHALL come from a bundled, icon-only Symbols Nerd Font Mono.
 
 #### Scenario: Unavailable font
 - **WHEN** the saved font family is not installed
