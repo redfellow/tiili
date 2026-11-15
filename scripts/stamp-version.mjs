@@ -2,12 +2,11 @@
 //
 // The release workflow runs it with the pushed tag, so the installers, their file names and the app's About window
 // carry the tag's version. Releases do not commit version bumps; the version in the repository is only the fallback
-// for local builds. package.json is the one Vite and Tauri read (tauri.conf.json points at it); Cargo.toml and
-// Cargo.lock follow so the Rust side agrees.
+// for local builds. Cargo.toml is the one Cargo, Tauri and Vite read (package.json has no version); Cargo.lock follows.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { setCargoLockVersion, setCargoVersion, setJsonVersion } from "./release.mjs";
+import { setCargoLockVersion, setCargoVersion } from "./release.mjs";
 
 const SEMVER = /^v?(\d+\.\d+\.\d+)$/;
 
@@ -20,7 +19,6 @@ if (!version) {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const edit = (file, change) => writeFileSync(join(root, file), change(readFileSync(join(root, file), "utf8")));
-edit("package.json", (text) => setJsonVersion(text, version));
 edit("src-tauri/Cargo.toml", (text) => setCargoVersion(text, version));
 edit("src-tauri/Cargo.lock", (text) => setCargoLockVersion(text, version));
 console.log(`Stamped version ${version}.`);

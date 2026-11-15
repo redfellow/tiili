@@ -56,7 +56,20 @@ export interface BehaviourSettings {
   startupSplash: boolean;
   /** Lines of history each terminal keeps; applies live to open panes. */
   scrollback: number;
+  /**
+   * Panes reopen with their scrollback and the command that was running; off, neither is written to disk and any
+   * already saved is deleted.
+   */
+  restoreScrollback: boolean;
 }
+
+export interface ZenSettings {
+  /** Columns of the Zen pane's font, 80–400; capped at 90% of the window's pane area when shown. */
+  width: number;
+}
+
+/** Allowed range of the Zen width in columns. */
+export const ZEN_WIDTH_RANGE = { min: 80, max: 400, step: 1 } as const;
 
 export interface InactiveSettings {
   /** Opacity of a pane's content (title chip and text) while it has no focus, 0.3–1. */
@@ -113,6 +126,8 @@ export interface Settings {
   /** Text that shrinks in small panes. */
   responsive: ResponsiveSettings;
   behaviour: BehaviourSettings;
+  /** The centred one-pane view; applies in every window. */
+  zen: ZenSettings;
   inactive: InactiveSettings;
   appIcon: AppIcon;
   /** Applies to open panes and new ones. */
@@ -150,7 +165,8 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000 },
+  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000, restoreScrollback: true },
+  zen: { width: 140 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
@@ -202,6 +218,7 @@ export function normalize(value: unknown): Settings {
   const responsive = isRecord(raw.responsive) ? raw.responsive : {};
   const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
   const inactive = isRecord(raw.inactive) ? raw.inactive : {};
+  const zen = isRecord(raw.zen) ? raw.zen : {};
   const updates = isRecord(raw.updates) ? raw.updates : {};
   const attention = isRecord(raw.attention) ? raw.attention : {};
   return {
@@ -240,7 +257,12 @@ export function normalize(value: unknown): Settings {
           ? behaviour.startupSplash
           : DEFAULT_SETTINGS.behaviour.startupSplash,
       scrollback: number(behaviour.scrollback, DEFAULT_SETTINGS.behaviour.scrollback, SCROLLBACK_RANGE),
+      restoreScrollback:
+        typeof behaviour.restoreScrollback === "boolean"
+          ? behaviour.restoreScrollback
+          : DEFAULT_SETTINGS.behaviour.restoreScrollback,
     },
+    zen: { width: number(zen.width, DEFAULT_SETTINGS.zen.width, ZEN_WIDTH_RANGE) },
     inactive: {
       opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
       desaturate:

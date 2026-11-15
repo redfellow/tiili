@@ -40,6 +40,8 @@ if ($null -eq $global:TiiliWrappedPrompt) {
   }
 }
 function global:prompt {
+  # No command runs any more (see the history handler below).
+  [Console]::Write("$([char]27)]1337;TiiliCmd=$([char]7)")
   $location = $executionContext.SessionState.Path.CurrentLocation
   if ($location.Provider.Name -eq 'FileSystem' -and $location.ProviderPath -match '^[A-Za-z]:') {
     $bytes = [Text.Encoding]::UTF8.GetBytes(($location.ProviderPath -replace '\\', '/'))
@@ -56,4 +58,39 @@ function global:prompt {
   }
   & $global:TiiliWrappedPrompt
 }
-Remove-Variable tiiliPrompt, tiiliCurrent, tiiliBuiltIn -ErrorAction SilentlyContinue
+# A pane reopened after tiili ended: the command that was running becomes the newest history entry, so Up then Enter
+# runs it again.
+if ($env:TIILI_RESTORE_HISTORY) {
+  try {
+    $tiiliLine = [IO.File]::ReadAllText($env:TIILI_RESTORE_HISTORY).Trim()
+    if ($tiiliLine -and (Get-Module PSReadLine)) {
+      [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($tiiliLine)
+    }
+  } catch { }
+  Remove-Item -LiteralPath $env:TIILI_RESTORE_HISTORY -ErrorAction SilentlyContinue
+}
+Remove-Item Env:TIILI_RESTORE_HISTORY -ErrorAction SilentlyContinue
+# Tell tiili the command line about to run, in base64 (OSC 1337 TiiliCmd), so a pane reopened after tiili ends can
+# show what was running. PSReadLine hands every accepted line to this handler; the user's own handler, or PSReadLine's
+# default one, still decides whether it goes into the history, and only a line it keeps in the history file is
+# reported: one kept in memory only (the default handler's answer for a line with a password, token or secret) or
+# skipped is not.
+if (Get-Module PSReadLine) {
+  $global:TiiliHistoryHandler = (Get-PSReadLineOption).AddToHistoryHandler
+  Set-PSReadLineOption -AddToHistoryHandler {
+    param([string]$line)
+    $handler = $global:TiiliHistoryHandler
+    $result = $true
+    if ($handler -is [scriptblock]) {
+      $result = & $handler $line | Select-Object -Last 1
+    } elseif ($null -ne $handler) {
+      $result = $handler.Invoke($line)
+    }
+    $kept = if ($result -is [bool]) { $result } else { "$result" -eq 'MemoryAndFile' }
+    $encoded = ''
+    if ($kept) { $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line)) }
+    [Console]::Write("$([char]27)]1337;TiiliCmd=$encoded$([char]7)")
+    return $result
+  }
+}
+Remove-Variable tiiliPrompt, tiiliCurrent, tiiliBuiltIn, tiiliLine -ErrorAction SilentlyContinue

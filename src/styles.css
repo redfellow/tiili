@@ -239,6 +239,101 @@ body {
   display: none;
 }
 
+/* The window's tabs on the bar's left, hidden with one tab: each a brick-shaped label in its focused pane's tint,
+   the shown one raised. The centred title gives way to them. */
+.top-bar-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+}
+
+.top-bar-tabs[hidden] {
+  display: none;
+}
+
+.top-bar:has(> .top-bar-tabs:not([hidden])) .top-bar-title {
+  display: none;
+}
+
+.top-bar-tab {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 2.5em;
+  max-width: 16em;
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-brick);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  color: var(--muted);
+  font: 500 11.5px/18px var(--font-sans);
+  white-space: nowrap;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.top-bar-tab[data-tint] {
+  background: color-mix(in srgb, var(--tab-tint) 55%, transparent);
+  color: var(--tab-tint-on);
+}
+
+.top-bar-tab[data-shown] {
+  background: var(--surface);
+  color: var(--fg);
+  opacity: 1;
+}
+
+.top-bar-tab[data-tint][data-shown] {
+  background: var(--tab-tint);
+  color: var(--tab-tint-on);
+}
+
+.top-bar-tab:hover {
+  opacity: 1;
+}
+
+.top-bar-tab[data-dragging] {
+  cursor: grabbing;
+}
+
+.top-bar-tab[data-drop-target] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  opacity: 1;
+}
+
+.top-bar-tab .pane-chip-brick {
+  margin-right: 0;
+}
+
+.top-bar-tab[data-tint] .pane-chip-brick {
+  background: var(--tab-tint-on);
+}
+
+.top-bar-tab-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-bar-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-bar-tab-rename {
+  width: 10em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
 /* Panes sit on the mortar colour; the 3 px gaps between them read as mortar joints. */
 #panes {
   --pane-gap: 3px;
@@ -249,6 +344,20 @@ body {
   gap: var(--pane-gap);
   min-height: 0;
   background: var(--term-gap);
+}
+
+/* Each tab tiles its panes into its own grid; only the shown tab is displayed. */
+.pane-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  gap: var(--pane-gap);
+  min-height: 0;
+}
+
+.pane-tab[hidden] {
+  display: none;
 }
 
 /* One flex row per grid row: rows and the panes of a row are grown by their track sizes. */
@@ -446,13 +555,15 @@ body {
   display: none;
 }
 
-/* The Heynote pane's frame fills the pane's content area; Heynote draws its own background. */
+/* Heynote's frame: openHeynote gives it the ground and colour scheme of Heynote's starting mode and keeps it
+   hidden until Heynote has painted; the radius clips that ground with the pane's. */
 .pane-heynote {
   display: block;
   width: 100%;
   height: 100%;
   border: 0;
   border-radius: var(--radius-control);
+  overflow: hidden;
 }
 
 /* Title row: the chip naming the pane's repository, or its folder outside one. */
@@ -595,6 +706,97 @@ html[data-pane-dragging] * {
 }
 
 .pane-divider[data-dragging] {
+  background: var(--accent);
+}
+
+/* Zen mode: one pane alone, centred at the Zen width and full height, on the window background. The other panes
+   stay laid out in the grid underneath, hidden, so their terminals keep running at their grid size. */
+#panes[data-zen] {
+  background: var(--term-bg);
+}
+
+.pane[data-zen-hidden] {
+  visibility: hidden;
+}
+
+/* Keeps the Zen pane's grid slot, so the hidden panes keep their places. */
+.pane-placeholder {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pane-zen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  max-width: 100%;
+}
+
+.pane-zen-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-zen-edge-left {
+  left: -3px;
+}
+
+.pane-zen-edge-right {
+  right: -3px;
+}
+
+.pane-zen-edge:hover,
+.pane-zen-edge[data-dragging] {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* The Zen toggle at the right end of each pane's title row: lit in the accent on the Zen pane, with a dot while a
+   hidden pane needs the user. */
+.pane-zen-toggle {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pane-zen-toggle[hidden] {
+  display: none;
+}
+
+.pane-zen-toggle:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.pane-zen-toggle[data-on] {
+  color: var(--accent);
+}
+
+.pane-zen-toggle[data-marked]::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: var(--accent);
 }
 

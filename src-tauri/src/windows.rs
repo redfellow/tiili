@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindo
 
 use crate::pty::SessionId;
 
-/// The label of the window `tauri.conf.json` opens; the only one whose size and place are remembered.
+/// The label of the window `tauri.conf.json` opens at start.
 pub const MAIN_WINDOW: &str = "main";
 /// How far down and right of the focused window a new window opens, in logical pixels.
 pub const CASCADE_OFFSET: f64 = 28.0;
@@ -32,12 +32,6 @@ pub fn reveal_later(window: &WebviewWindow) {
             let _ = window.show();
         }
     });
-}
-
-/// Whether the window-state plugin saves and restores window `label`: only the main window, so extra windows'
-/// size and place never reach the saved state.
-pub fn is_remembered(label: &str) -> bool {
-    label == MAIN_WINDOW
 }
 
 /// Hands out `window-1`, `window-2`, …; labels of closed windows are never reused.
@@ -199,7 +193,9 @@ pub fn numbered_names(entries: &[WindowEntry]) -> Vec<String> {
         .collect()
 }
 
-/// What moves to another window: a terminal pane's session with its scrollback and zoom offset, or a Heynote pane.
+/// What moves to another window: a terminal pane's session with its scrollback and zoom offset, a Heynote pane, or
+/// a whole tab (Pop Out) with its name, its grid's track sizes (kept as the frontend sent them), its focused pane and
+/// its panes in grid order.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum MovePayload {
@@ -209,14 +205,23 @@ pub enum MovePayload {
         zoom: f64,
     },
     Heynote,
+    Tab {
+        name: Option<String>,
+        layout: serde_json::Value,
+        focused: usize,
+        panes: Vec<MovePayload>,
+    },
 }
 
 impl MovePayload {
-    /// The session that moves with the pane, if it is a terminal pane.
-    pub fn session(&self) -> Option<SessionId> {
+    /// The sessions that move with it: a terminal pane's, or those of a tab's terminal panes in grid order.
+    pub fn sessions(&self) -> Vec<SessionId> {
         match self {
-            MovePayload::Terminal { session, .. } => Some(*session),
-            MovePayload::Heynote => None,
+            MovePayload::Terminal { session, .. } => vec![*session],
+            MovePayload::Heynote => Vec::new(),
+            MovePayload::Tab { panes, .. } => {
+                panes.iter().flat_map(MovePayload::sessions).collect()
+            }
         }
     }
 }
@@ -305,19 +310,28 @@ fn open_window(
         .map_err(text)?
         .to_logical::<f64>(scale);
     let (x, y) = cascade(place.x, place.y);
+    let builder = window_builder(app, label, url)
+        .inner_size(size.width, size.height)
+        .position(x, y);
+    reveal_later(&builder.build().map_err(text)?);
+    Ok(())
+}
+
+/// A builder for a full tiili window `label` loading `url`, hidden until its page has painted and with the same
+/// title and decorations as the main window in `tauri.conf.json`.
+pub fn window_builder<'a>(
+    app: &'a AppHandle,
+    label: String,
+    url: String,
+) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title("tiili >_")
-        .inner_size(size.width, size.height)
-        .position(x, y)
-        // Hidden until its page has painted, as the main window in `tauri.conf.json`.
         .visible(false);
-    // The same decorations as the main window in `tauri.conf.json`.
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true);
-    reveal_later(&builder.build().map_err(text)?);
-    Ok(())
+    builder
 }
 
 /// Opens a full tiili window with one pane starting in `cwd`, or holding the pane of pending move `move_token`,
@@ -363,8 +377,8 @@ struct PaneArrive {
     token: String,
 }
 
-/// Moves the calling window's pane described by `payload` to window `target`, or to a new window when `target` is
-/// absent. Its session (if any) belongs to the target window from now on, so the calling window may close after
+/// Moves the calling window's pane or tab described by `payload` to window `target`, or to a new window when
+/// `target` is absent. Its sessions belong to the target window from now on, so the calling window may close after
 /// this returns without ending it. The target window takes the move with `pane_move_take`, comes to the front and
 /// focuses the pane.
 #[tauri::command]
@@ -377,18 +391,18 @@ pub async fn pane_move(
     target: Option<String>,
     payload: MovePayload,
 ) -> Result<(), String> {
-    let session = payload.session();
+    let moved = payload.sessions();
     match target {
         None => {
             let label = labels.next();
             let token = moves.put(payload);
-            if let Some(id) = session {
+            for &id in &moved {
                 sessions.reassign(id, &label);
             }
             let url = start_url(None, Some(&token));
             if let Err(error) = open_window(&app, &window, label, url) {
                 moves.take(&token);
-                if let Some(id) = session {
+                for &id in &moved {
                     sessions.reassign(id, window.label());
                 }
                 return Err(error);
@@ -399,7 +413,7 @@ pub async fn pane_move(
                 return Err(format!("Could not move the pane: no window {label}"));
             };
             let token = moves.put(payload);
-            if let Some(id) = session {
+            for &id in &moved {
                 sessions.reassign(id, &label);
             }
             let _ = to.unminimize();
@@ -413,7 +427,7 @@ pub async fn pane_move(
                 },
             ) {
                 moves.take(&token);
-                if let Some(id) = session {
+                for &id in &moved {
                     sessions.reassign(id, window.label());
                 }
                 return Err(format!("Could not move the pane: {error}"));
@@ -566,6 +580,22 @@ mod tests {
                 },
             ),
             (r#"{"kind":"heynote"}"#, MovePayload::Heynote),
+            (
+                r#"{"kind":"tab","name":"build","layout":{"colSizes":[1,1],"rowSizes":[1]},"focused":1,"panes":[{"kind":"terminal","session":3,"scrollback":"","zoom":0},{"kind":"heynote"}]}"#,
+                MovePayload::Tab {
+                    name: Some("build".into()),
+                    layout: serde_json::json!({"colSizes": [1, 1], "rowSizes": [1]}),
+                    focused: 1,
+                    panes: vec![
+                        MovePayload::Terminal {
+                            session: 3,
+                            scrollback: String::new(),
+                            zoom: 0.0,
+                        },
+                        MovePayload::Heynote,
+                    ],
+                },
+            ),
         ];
         for (json, expected) in cases {
             assert_eq!(
@@ -573,6 +603,32 @@ mod tests {
                 expected,
                 "{json}"
             );
+        }
+    }
+
+    #[test]
+    fn pop_out_a_tab_all_its_sessions_move() {
+        let terminal = |session| MovePayload::Terminal {
+            session,
+            scrollback: String::new(),
+            zoom: 0.0,
+        };
+        let cases = [
+            ("a terminal pane", terminal(4), vec![4]),
+            ("a Heynote pane", MovePayload::Heynote, vec![]),
+            (
+                "a tab of three panes",
+                MovePayload::Tab {
+                    name: None,
+                    layout: serde_json::Value::Null,
+                    focused: 0,
+                    panes: vec![terminal(1), MovePayload::Heynote, terminal(2)],
+                },
+                vec![1, 2],
+            ),
+        ];
+        for (name, payload, expected) in cases {
+            assert_eq!(payload.sessions(), expected, "{name}");
         }
     }
 
@@ -628,11 +684,5 @@ mod tests {
         assert_eq!(last.get().as_deref(), Some("window-1"));
         last.forget("window-1");
         assert_eq!(last.get(), None);
-    }
-
-    #[test]
-    fn extra_windows_are_not_remembered_only_main_is_saved() {
-        assert!(is_remembered("main"));
-        assert!(!is_remembered("window-1"));
     }
 }

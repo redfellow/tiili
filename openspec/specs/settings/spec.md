@@ -305,3 +305,17 @@ The Behaviour tab's Panes section SHALL have a "Scrollback lines" number field, 
 #### Scenario: Move a full scrollback
 - **WHEN** a pane with 100 000 lines of scrollback is moved to another window
 - **THEN** all its lines arrive in the new window
+
+### Requirement: Zen width setting
+The Behaviour tab SHALL have a "Zen width" field in columns, default 140, range 80–400, saved with the settings and applied in every window. A missing or invalid saved value SHALL fall back to 140; an out-of-range value SHALL clamp.
+
+#### Scenario: Invalid saved Zen width
+- **WHEN** the settings file has a Zen width of `"wide"`
+- **THEN** the Zen width is 140 and the other settings load
+
+### Requirement: Restore scrollback setting
+The Behaviour tab SHALL have a "Restore scrollback and commands" setting, on by default. With it off, tiili SHALL write neither scrollback nor command lines to disk and SHALL delete any already saved; layout, folders and reminder lines are still saved.
+
+#### Scenario: Turned off
+- **WHEN** the setting is off and the user quits and relaunches
+- **THEN** panes reopen in their folders without scrollback, and no command lines are on disk

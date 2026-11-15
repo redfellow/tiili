@@ -1,12 +1,12 @@
 import "./styles.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { loadBackend, selectBackend } from "./backend";
+import { loadBackend, selectBackend, type Backend } from "./backend";
 import { currentPlatform } from "./keymap";
 import { Panes } from "./panes";
 import { normalize, type Settings } from "./settings";
 import { createSettingsDialog, mountSettingsPage, type SettingsDialog } from "./settingsDialog";
 import { same } from "./settingsSession";
-import { applyTheme } from "./themes";
+import { applyTheme, themeKindSource, type TiiliTheme } from "./themes";
 import { documentTokens, followSystemTheme, highlightColour, terminalTheme } from "./theme";
 import type { ITheme } from "@xterm/xterm";
 import { localDay, playSplash, splashDue } from "./splash";
@@ -70,6 +70,7 @@ async function startSettings(owner: string): Promise<void> {
       await windows.preview(owner, next);
     },
     save: (next) => backend.saveSettings(next),
+    clearRestored: clearRestoredOf(backend),
     onClose: () => void backend.closeWindow().catch((error: unknown) => console.error(error)),
     copy: (text) => backend.writeClipboard(text),
     checkForUpdates: async () => {
@@ -86,6 +87,12 @@ async function startSettings(owner: string): Promise<void> {
     showTheme(next);
   });
   await windows.onCloseRequested(() => page.discard());
+}
+
+/** Deletes the saved scrollback and commands once Restore scrollback and commands is turned off, where any are kept. */
+function clearRestoredOf(backend: Backend): (() => Promise<void>) | undefined {
+  const session = backend.session;
+  return session ? () => session.clearScrollback() : undefined;
 }
 
 const SPLASH_KEY = "tiili.splash.lastShown";
@@ -107,6 +114,14 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   // A missing or broken settings file loads as null, which normalizes to the defaults.
   let settings: Settings = normalize(await backend.loadSettings().catch(() => null));
   applyTheme(settings.theme);
+  // Heynote panes take tiili's light or dark from here (heynote/bridge.js) and follow its changes.
+  const themeKinds = themeKindSource(() => settings.theme, window.matchMedia("(prefers-color-scheme: dark)"));
+  (window as Window & { tiiliTheme?: TiiliTheme }).tiiliTheme = themeKinds;
+  // The theme chosen inside Heynote, so a Heynote pane opens in Heynote's own mode; its pages report later choices.
+  backend.notes
+    .load()
+    .then((library) => themeKinds.heynoteChose(library.state?.theme))
+    .catch((error: unknown) => console.error(error));
   // The icon is cosmetic: a failure must not keep the terminal from starting.
   backend.setAppIcon(settings.appIcon).catch(() => undefined);
 
@@ -136,7 +151,14 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     if (!settingsWindows) return dialog?.open();
     settingsWindows.open().catch((error: unknown) => console.error(error));
   };
-  const panes = await Panes.create(backend, root, platform, () => settings, openSettings);
+  // Settings this window changes itself (the Zen width an edge drag sets): saved, sent to the other windows by the
+  // app, and taken on here.
+  const saveOwn = async (next: Settings) => {
+    await backend.saveSettings(next);
+    adoptSettings(next);
+    await apply(next);
+  };
+  const panes = await Panes.create(backend, root, platform, () => settings, openSettings, (next) => saveOwn(next));
   const report = (error: unknown) => console.error(error);
   // The shells paste in the selection's colour of the theme shown here, not in reverse video's block of text colour.
   const highlightShells = (theme: ITheme) => {
@@ -157,6 +179,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     if (themeChanged) {
       applyTheme(next.theme);
       highlightShells(terminalTheme(documentTokens()));
+      themeKinds.changed();
     }
     if (iconChanged) await backend.setAppIcon(next.appIcon);
     await panes.applySettings(next, themeChanged);
@@ -168,6 +191,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       showAppIcon: platform === "macos",
       apply,
       save: (next) => backend.saveSettings(next),
+      clearRestored: clearRestoredOf(backend),
       onClose: () => panes.focusCurrent(),
       copy: (text) => backend.writeClipboard(text),
     });
@@ -208,7 +232,16 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       onResetLayout: thenRefocus(() => panes.actLayout("reset")),
       onSettings: openSettings,
       attentionCount: attention !== undefined,
+      tabs: {
+        onShow: (index) => panes.showTab(index),
+        onReorder: (from, to) => panes.reorderTab(from, to),
+        onRename: (index, name) => panes.renameTab(index, name),
+        onMenu: (index, event) => {
+          panes.tabMenu(index, event).catch(report);
+        },
+      },
     });
+    panes.attachStrip(topBar.tabs);
     // The count covers every window's marked panes.
     if (attention) {
       await backend.onAppEvent("attention-changed", ({ marks }) => topBar.setAttentionCount(marks.length));
@@ -218,12 +251,15 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
 
   if (platform === "macos" && backend.nativeMenus) await backend.onAppEvent(OPEN_SETTINGS_EVENT, openSettings);
   // A window New Window opened names its first pane's folder in its address; one Move to New Window opened names
-  // the pane it is to take over, which falls back to a fresh shell if that pane is no longer waiting.
+  // the pane it is to take over, which falls back to a fresh shell if that pane is no longer waiting. A window
+  // reopened from the last session gets its panes back instead.
   const params = new URLSearchParams(window.location.search);
   const startCwd = params.get("cwd") ?? undefined;
   const moveToken = params.get("move");
   const arrived = moveToken ? await panes.arrive(moveToken).catch(() => false) : false;
-  if (!arrived) await panes.open(startCwd || undefined);
+  const restored = arrived ? undefined : await backend.session?.load().catch(() => undefined);
+  const reopened = restored ? await panes.restore(restored).catch(() => false) : false;
+  if (!arrived && !reopened) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 
   // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top. Before

@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import { createSettingsSession, type SettingsSession, whileTyping } from "./settingsSession";
+import { createSettingsSession, type SettingsSession, turnsOffRestore, whileTyping } from "./settingsSession";
 
 const opening: Settings = { ...DEFAULT_SETTINGS, theme: "nord" };
 const dracula: Settings = { ...DEFAULT_SETTINGS, theme: "dracula" };
@@ -59,5 +59,19 @@ const typingCases: [string, Settings, Settings, Settings][] = [
 describe("whileTyping", () => {
   it.each(typingCases)("%s", (_name, read, draft, applied) => {
     expect(whileTyping(read, draft)).toEqual(applied);
+  });
+});
+
+const restoring = (settings: Settings, restoreScrollback: boolean): Settings =>
+  ({ ...settings, behaviour: { ...settings.behaviour, restoreScrollback } });
+
+describe("turnsOffRestore", () => {
+  it.each([
+    ["Turned off: saving on to off deletes what was kept", true, false, true],
+    ["saving off to on keeps nothing to delete", false, true, false],
+    ["saving with it left on deletes nothing", true, true, false],
+    ["saving with it left off deletes nothing", false, false, false],
+  ])("%s", (_name, before, after, cleared) => {
+    expect(turnsOffRestore(restoring(dracula, before), restoring(big, after))).toBe(cleared);
   });
 });
