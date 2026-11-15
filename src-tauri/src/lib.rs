@@ -431,6 +431,31 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         )
         .separator()
         .item(
+            &MenuItemBuilder::with_id("tabNew", "New Tab")
+                .accelerator("Shift+Cmd+T")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("tabNext", "Next Tab")
+                .accelerator("Shift+Cmd+BracketRight")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("tabPrevious", "Previous Tab")
+                .accelerator("Shift+Cmd+BracketLeft")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("tabMoveNext", "Move Pane to Next Tab")
+                .accelerator("Ctrl+Shift+Cmd+BracketRight")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("tabMovePrevious", "Move Pane to Previous Tab")
+                .accelerator("Ctrl+Shift+Cmd+BracketLeft")
+                .build(app)?,
+        )
+        .item(
             &MenuItemBuilder::with_id("zen", "Zen Mode")
                 .accelerator("Shift+Cmd+Enter")
                 .build(app)?,
@@ -595,7 +620,18 @@ pub fn run() {
                         "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious"
                     ) {
                         let _ = app.emit_to(label, CLIPBOARD_EVENT, id);
-                    } else if matches!(id, "new" | "close" | "moveToNewWindow" | "zen") {
+                    } else if matches!(
+                        id,
+                        "new"
+                            | "close"
+                            | "moveToNewWindow"
+                            | "zen"
+                            | "tabNew"
+                            | "tabNext"
+                            | "tabPrevious"
+                            | "tabMoveNext"
+                            | "tabMovePrevious"
+                    ) {
                         let _ = app.emit_to(label, PANE_EVENT, id);
                     } else if id == "settings" {
                         let _ = app.emit_to(label, OPEN_SETTINGS_EVENT, ());

@@ -125,6 +125,28 @@ describe("Tauri backend pane moves", () => {
       "pane_move",
       { target: "window-2", payload: { kind: "terminal", session: 3, scrollback: "x", zoom: 1 } },
     ],
+    [
+      "Pop Out: the whole tab under one move",
+      (m) =>
+        m.move(undefined, {
+          kind: "tab",
+          name: "build",
+          layout: { colSizes: [1, 1], rowSizes: [1] },
+          focused: 1,
+          panes: [{ kind: "terminal", session: 3, scrollback: "x", zoom: 0 }, { kind: "heynote" }],
+        }),
+      "pane_move",
+      {
+        target: null,
+        payload: {
+          kind: "tab",
+          name: "build",
+          layout: { colSizes: [1, 1], rowSizes: [1] },
+          focused: 1,
+          panes: [{ kind: "terminal", session: 3, scrollback: "x", zoom: 0 }, { kind: "heynote" }],
+        },
+      },
+    ],
     ["output during the move is kept", (m) => m.detach(3), "pty_detach", { id: 3 }],
     ["the arriving pane attaches", (m) => m.attach(3, () => undefined), "pty_attach", { id: 3 }],
     ["other windows are listed", (m) => m.list(), "window_list", undefined],

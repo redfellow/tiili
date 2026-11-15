@@ -27,3 +27,23 @@ export function menuEntries(windows: WindowEntry[]): WindowMenuEntry[] {
     return { label, text: count === 1 ? name : `${name} (${count})` };
   });
 }
+
+/** A Move to Tab ▸ entry: the tab's index in the strip and the text the menu shows for it. */
+export interface TabMenuEntry {
+  index: number;
+  text: string;
+}
+
+/**
+ * The Move to Tab ▸ entries for a window whose tabs are labelled `labels` (in strip order), but tab `current`, the
+ * one the pane is in: each named by its label, with ` (2)`, ` (3)`… added to the second and later tabs of a label.
+ */
+export function tabMenuEntries(labels: string[], current: number): TabMenuEntry[] {
+  const seen = new Map<string, number>();
+  return labels.flatMap((label, index) => {
+    const count = (seen.get(label) ?? 0) + 1;
+    seen.set(label, count);
+    if (index === current) return [];
+    return [{ index, text: count === 1 ? label : `${label} (${count})` }];
+  });
+}
