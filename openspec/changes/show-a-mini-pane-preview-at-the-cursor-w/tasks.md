@@ -9,7 +9,7 @@
 
 ## 2. Pane motion
 
-- [ ] 2.1 Check that the existing motion tests, named after the "Pane motion" scenarios kept in the MODIFIED requirement (Opening/Closing a pane animates, Swap animates, Reduced motion), still pass with the retuned motion and that the pane-tiling delta validates
+- [x] 2.1 Check that the existing motion tests, named after the "Pane motion" scenarios kept in the MODIFIED requirement (Opening/Closing a pane animates, Swap animates, Reduced motion), still pass with the retuned motion and that the pane-tiling delta validates
   - Tests to update: src/layout/motion.test.ts (names still hold; no change expected)
   - proof: `npx vitest run src/layout/motion.test.ts`
   - proof: `openspec validate show-a-mini-pane-preview-at-the-cursor-w --strict`
