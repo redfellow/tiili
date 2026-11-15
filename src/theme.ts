@@ -2,6 +2,7 @@ import type { ITheme } from "@xterm/xterm";
 import { blendHex } from "./search";
 
 const ANSI_NAMES = [
+  // tokens-allow: xterm's theme keys, not colours
   "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
   "brightBlack", "brightRed", "brightGreen", "brightYellow",
   "brightBlue", "brightMagenta", "brightCyan", "brightWhite",
