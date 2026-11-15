@@ -42,7 +42,7 @@ tiili SHALL record, for each pane opened by `tiili open`, the pane that ran it a
 - **THEN** nothing closes and it fails with code `no_such_pane`, suggesting `tiili list`
 
 ### Requirement: List as JSON
-`tiili list --json` SHALL print a JSON array of the caller window's panes in `tiili list` order, each with `id`, `cwd`, `title`, `command`, `tab`, `key`, `self` and `opened_by_you`.
+Each pane record in `tiili list --json`'s `panes` SHALL also carry `tab` (counting from 1, `null` when unknown), `key` (the `--key` it was opened with, else `null`) and `opened_by_you`; a keyed `tiili open --json` that found its pane open SHALL add `"reused":true`.
 
 #### Scenario: Own and opened panes
 - **WHEN** pane 3 opened pane 8 with key dev and runs `tiili list --json`

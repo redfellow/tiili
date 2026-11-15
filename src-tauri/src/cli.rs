@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::control::{
-    describe, help_text, list_json, list_lines, parse_args, parse_reply, request_line,
-    version_line, CliCommand, CliError, Op, Reply, PANE_VAR, SOCKET_VAR, TOKEN_VAR,
+    describe, error_envelope, help_text, list_lines, listed_reply, opened_reply, parse_args,
+    parse_reply, request_line, version_line, wants_json, CliCommand, CliError, Op, Reply, PANE_VAR,
+    SOCKET_VAR, TOKEN_VAR,
 };
 
 /// How long `tiili` waits for the answer; an open waits up to 10 seconds for the window.
@@ -42,7 +43,7 @@ pub fn main(args: &[String]) -> ! {
 
 /// Runs `tiili ARGS` (without the program name) with the variables `env` reads, from folder `cwd`, printing to
 /// `out` and `err`; returns the exit code. A failure prints `tiili: <message>` and `hint: <suggestion>` on `err`
-/// and exits with its [`CliError`] code.
+/// and exits with its [`CliError`] code; asked for JSON, it also prints the error as JSON on `out`.
 pub fn run(
     args: &[String],
     env: &dyn Fn(&str) -> Option<OsString>,
@@ -52,7 +53,12 @@ pub fn run(
 ) -> i32 {
     match execute(args, env, cwd, out) {
         Ok(()) => 0,
-        Err(error) => report(&error, err),
+        Err(error) => {
+            if wants_json(args) {
+                let _ = writeln!(out, "{}", error_envelope(&error));
+            }
+            report(&error, err)
+        }
     }
 }
 
@@ -74,9 +80,7 @@ fn execute(
     cwd: Option<&Path>,
     out: &mut dyn Write,
 ) -> Result<(), CliError> {
-    let command = parse_args(args)?;
-    let json = matches!(command, CliCommand::List { json: true });
-    let op = match command {
+    let (op, json) = match parse_args(args)? {
         // Help, version and describe answer here, before anything reaches for the app.
         CliCommand::Help(cmd) => {
             let _ = write!(out, "{}", help_text(cmd.as_deref())?);
@@ -101,28 +105,32 @@ fn execute(
             let _ = write!(out, "{}", crate::intents::render_prompt());
             return Ok(());
         }
-        CliCommand::List { .. } => Op::List,
-        CliCommand::Attention { message, clear } => Op::Attention { message, clear },
-        CliCommand::Close(target) => Op::Close { target },
+        CliCommand::List { json } => (Op::List, json),
+        CliCommand::Attention { message, clear } => (Op::Attention { message, clear }, false),
+        CliCommand::Close(target) => (Op::Close { target }, false),
         CliCommand::Open {
             cwd: dir,
             title,
             key,
             command,
-        } => Op::Open {
-            cwd: dir
-                .map(PathBuf::from)
-                .map(|dir| match cwd {
-                    Some(here) if dir.is_relative() => here.join(dir),
-                    _ => dir,
-                })
-                .or_else(|| cwd.map(Path::to_path_buf))
-                .map(|dir| dir.to_string_lossy().into_owned()),
-            title,
-            command,
-            path: env("PATH").map(|p| p.to_string_lossy().into_owned()),
-            key,
-        },
+            json,
+        } => (
+            Op::Open {
+                cwd: dir
+                    .map(PathBuf::from)
+                    .map(|dir| match cwd {
+                        Some(here) if dir.is_relative() => here.join(dir),
+                        _ => dir,
+                    })
+                    .or_else(|| cwd.map(Path::to_path_buf))
+                    .map(|dir| dir.to_string_lossy().into_owned()),
+                title,
+                command,
+                path: env("PATH").map(|p| p.to_string_lossy().into_owned()),
+                key,
+            },
+            json,
+        ),
     };
     let socket = env(SOCKET_VAR)
         .filter(|s| !s.is_empty())
@@ -139,22 +147,18 @@ fn execute(
         .unwrap_or_default();
     let line = ask(Path::new(&socket), &request_line(&token, pane, &op))
         .map_err(|e| CliError::Unreachable(format!("{}: {e}", socket.to_string_lossy())))?;
-    match (parse_reply(&line)?, &op) {
+    let keyed = matches!(op, Op::Open { key: Some(_), .. });
+    let _ = match (parse_reply(&line)?, json) {
+        (Reply::Opened { pane, reused }, true) => writeln!(out, "{}", opened_reply(pane, reused)),
         // With a key the caller learns whether it got a new pane; without one the line stays the bare id.
-        (Reply::Opened { pane, reused }, Op::Open { key: Some(_), .. }) => {
-            let _ = writeln!(out, "{} {pane}", if reused { "reused" } else { "opened" });
+        (Reply::Opened { pane, reused }, false) if keyed => {
+            writeln!(out, "{} {pane}", if reused { "reused" } else { "opened" })
         }
-        (Reply::Opened { pane, .. }, _) => {
-            let _ = writeln!(out, "{pane}");
-        }
-        (Reply::Listed(panes), _) if json => {
-            let _ = write!(out, "{}", list_json(&panes, pane));
-        }
-        (Reply::Listed(panes), _) => {
-            let _ = write!(out, "{}", list_lines(&panes));
-        }
-        (Reply::Done, _) => {}
-    }
+        (Reply::Opened { pane, .. }, false) => writeln!(out, "{pane}"),
+        (Reply::Listed(panes), false) => write!(out, "{}", list_lines(&panes)),
+        (Reply::Listed(panes), true) => writeln!(out, "{}", listed_reply(&panes)),
+        (Reply::Done, _) => Ok(()),
+    };
     Ok(())
 }
 
@@ -272,7 +276,6 @@ mod tests {
             (&["list"], socket_only, 3),
             // TIILI_PANE set but not a pane id.
             (&["list"], bad_pane, 3),
-            (&["list", "--json"], nothing, 3),
             (&["attention", "hi"], nothing, 3),
             (&["attention", "--clear"], socket_only, 3),
             (&["close", "8"], nothing, 3),
@@ -301,6 +304,40 @@ mod tests {
             assert_eq!(lines.len(), 2, "{argv:?}: {err}");
             assert!(lines[0].starts_with("tiili: "), "{argv:?}: {err}");
             assert!(lines[1].starts_with("hint: "), "{argv:?}: {err}");
+        }
+    }
+
+    /// Outside a pane: with --json a failure also prints the error envelope on stdout, with the same message and
+    /// hint on stderr and the same exit code.
+    #[test]
+    fn outside_a_pane_with_json_prints_the_error_envelope() {
+        let nothing = |_: &str| None;
+        let cases: &[(&[&str], i32, &str)] = &[
+            (&["list", "--json"], 3, "not_in_pane"),
+            (&["open", "--json", "--", "npm", "test"], 3, "not_in_pane"),
+            (&["list", "--json", "extra"], 2, "usage"),
+            (&["open", "--json"], 2, "usage"),
+        ];
+        for (argv, code, error) in cases {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            assert_eq!(
+                run(&args(argv), &nothing, None, &mut out, &mut err),
+                *code,
+                "{argv:?}"
+            );
+            let out: serde_json::Value = serde_json::from_slice(&out).expect("one JSON object");
+            let err = String::from_utf8(err).unwrap();
+            let (message, hint) = err.split_once('\n').unwrap();
+            assert_eq!(
+                out,
+                serde_json::json!({
+                    "ok": false,
+                    "code": error,
+                    "error": message.strip_prefix("tiili: ").unwrap(),
+                    "suggestion": hint.trim_end().strip_prefix("hint: ").unwrap(),
+                }),
+                "{argv:?}"
+            );
         }
     }
 

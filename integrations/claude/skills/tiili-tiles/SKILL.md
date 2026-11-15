@@ -72,7 +72,7 @@ you write for another agent, and `tiili describe` lists it as `intents`.
   tiili list --json
   ```
 
-  Each pane has id, cwd, title, command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true.
+  Each of panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true.
 <!-- tiili:intents:end -->
 
 ### Run something beside you

@@ -40,7 +40,6 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     let cases: &[(&[&str], Vars, i32)] = &[
         (&["open", "--", "ls"], &[], 3),
         (&["list"], &[], 3),
-        (&["list", "--json"], &[], 3),
         (&["attention", "hi"], &[], 3),
         (&["close", "8"], &[], 3),
         (&["open"], &inside, 2),
@@ -77,6 +76,20 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
             assert!(lines[1].starts_with("hint: "), "{args:?}: {stderr}");
         }
     }
+    // Outside a pane: with --json the error envelope is on stdout as well, with the same exit code.
+    let out = tiili(&["list", "--json"], &[]);
+    assert_eq!(out.status.code(), Some(3));
+    let envelope: serde_json::Value = serde_json::from_slice(&out.stdout).expect("JSON on stdout");
+    assert_eq!(
+        envelope,
+        serde_json::json!({
+            "ok": false,
+            "code": "not_in_pane",
+            "error": "not inside a tiili pane (TIILI_SOCKET is not set)",
+            "suggestion": "run tiili from a pane of the running tiili app",
+        })
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stderr).lines().count(), 2);
     // Describe is the same on every run.
     assert_eq!(
         tiili(&["describe"], &[]).stdout,
@@ -88,7 +101,7 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
 mod listener {
     use std::sync::{Arc, Mutex};
 
-    use tiili_lib::control::{list_json, CliError, Op, PaneInfo};
+    use tiili_lib::control::{CliError, Op, PaneInfo, RunningRecord};
     use tiili_lib::control_server::{bind, Handler};
     use tiili_lib::pty::SessionId;
 
@@ -161,25 +174,32 @@ mod listener {
         }
     }
 
-    /// The panes the recorder lists for `caller`: its own, and one it opened with key dev.
+    /// The panes the recorder lists for `caller`: its own, and a dev server it opened with key dev.
     fn panes(caller: SessionId) -> Vec<PaneInfo> {
         vec![
             PaneInfo {
                 id: caller,
+                is_self: true,
+                window: "main".into(),
                 cwd: "/work/app".into(),
-                title: "app".into(),
-                command: "zsh".into(),
+                label: "app".into(),
                 tab: Some(1),
                 ..PaneInfo::default()
             },
             PaneInfo {
                 id: caller + 1,
+                window: "main".into(),
                 cwd: "/tmp".into(),
-                title: "logs".into(),
-                command: "npm".into(),
+                title: Some("logs".into()),
+                label: "tmp".into(),
+                running: Some(RunningRecord {
+                    command: Some("npm run dev".into()),
+                    program: None,
+                }),
                 tab: Some(1),
                 key: Some("dev".into()),
-                opened_by: Some(caller),
+                opened_by_you: true,
+                ..PaneInfo::default()
             },
         ]
     }
@@ -232,7 +252,6 @@ mod listener {
             },
             other => other,
         };
-        let listed = list_json(&panes(2), 2);
         // Arguments, token, exit code, stdout, and what the app has seen by then.
         let cases: Vec<(&[&str], &'static str, i32, &str, Reached)> = vec![
             (
@@ -256,7 +275,31 @@ mod listener {
                 "2\t/work/app\tapp\n3\t/tmp\tlogs\n",
                 Some((2, Op::List)),
             ),
-            (&["list", "--json"], TOKEN, 0, &listed, Some((2, Op::List))),
+            // Open as JSON.
+            (
+                &["open", "--json", "--", "npm", "test"],
+                TOKEN,
+                0,
+                "{\"ok\":true,\"protocol\":1,\"pane\":42}\n",
+                Some((2, open(Some(&here), None, &["npm", "test"]))),
+            ),
+            // Own pane and a dev server.
+            (
+                &["list", "--json"],
+                TOKEN,
+                0,
+                concat!(
+                    r#"{"ok":true,"protocol":1,"panes":["#,
+                    r#"{"id":2,"self":true,"window":"main","cwd":"/work/app","host":null,"repo":null,"#,
+                    r#""title":null,"label":"app","running":null,"attention":null,"#,
+                    r#""tab":1,"key":null,"opened_by_you":false},"#,
+                    r#"{"id":3,"self":false,"window":"main","cwd":"/tmp","host":null,"repo":null,"#,
+                    r#""title":"logs","label":"tmp","running":{"command":"npm run dev","program":null},"#,
+                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true}]}"#,
+                    "\n"
+                ),
+                Some((2, Op::List)),
+            ),
             (
                 &["open", "--key", "dev", "--", "npm", "run", "dev"],
                 TOKEN,
@@ -269,6 +312,16 @@ mod listener {
                 TOKEN,
                 0,
                 "reused 42\n",
+                Some((2, keyed("again", &["npm", "run", "dev"]))),
+            ),
+            // Second call reuses, as JSON.
+            (
+                &[
+                    "open", "--key", "again", "--json", "--", "npm", "run", "dev",
+                ],
+                TOKEN,
+                0,
+                "{\"ok\":true,\"protocol\":1,\"pane\":42,\"reused\":true}\n",
                 Some((2, keyed("again", &["npm", "run", "dev"]))),
             ),
             (

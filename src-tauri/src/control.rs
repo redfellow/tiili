@@ -342,52 +342,144 @@ pub fn request_line(token: &str, pane: SessionId, op: &Op) -> String {
     .unwrap_or_default()
 }
 
-/// A pane as `tiili list` shows it. The fields after `title` are newer: an older app's reply leaves them unset.
+/// A pane as `tiili list` shows it. Every field is sent, `null` when unknown; one missing from an older app's reply
+/// reads as its default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct PaneInfo {
     pub id: SessionId,
+    /// Whether this is the pane the request came from.
+    #[serde(rename = "self")]
+    pub is_self: bool,
+    /// The label of the window the pane is in.
+    pub window: String,
     pub cwd: String,
-    pub title: String,
-    /// The command its shell last reported running, empty when none.
-    #[serde(default)]
-    pub command: String,
+    /// The host a remote pane is on; `None` for this machine.
+    pub host: Option<String>,
+    pub repo: Option<RepoRecord>,
+    /// The title `tiili open --title` gave the pane.
+    pub title: Option<String>,
+    /// The pane's chip name.
+    pub label: String,
+    /// What runs in the pane; `None` at the prompt.
+    pub running: Option<RunningRecord>,
+    /// The pane's attention mark, when it has one.
+    pub attention: Option<AttentionRecord>,
     /// The tab it is in, counting from 1.
-    #[serde(default)]
     pub tab: Option<u32>,
     /// The key it was opened with by `tiili open --key`.
-    #[serde(default)]
     pub key: Option<String>,
-    /// The pane that opened it with `tiili open`.
-    #[serde(default)]
-    pub opened_by: Option<SessionId>,
+    /// Whether the pane the request came from opened it with `tiili open`, so may close it.
+    pub opened_by_you: bool,
+}
+
+/// A pane's repository: root folder, name and, in a linked worktree, its branch or worktree name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct RepoRecord {
+    pub root: String,
+    pub name: String,
+    pub worktree: Option<String>,
+}
+
+/// What runs in a pane: its command line and the foreground program's name, each when known.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct RunningRecord {
+    pub command: Option<String>,
+    pub program: Option<String>,
+}
+
+/// A pane's attention mark and the message it came with.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct AttentionRecord {
+    pub message: Option<String>,
+}
+
+/// A successful reply, its fields in the order they are printed.
+#[derive(Serialize, Default)]
+struct Success<'a> {
+    ok: bool,
+    protocol: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pane: Option<SessionId>,
+    /// Set, to true, only when a keyed open found its pane already open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reused: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    panes: Option<&'a [PaneInfo]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    done: Option<bool>,
 }
 
 /// The reply to an open that made pane `id`, or found it already open under its key (`reused`).
 pub fn opened_reply(id: SessionId, reused: bool) -> String {
-    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "pane": id, "reused": reused })
-        .to_string()
+    serde_json::to_string(&Success {
+        ok: true,
+        protocol: PROTOCOL,
+        pane: Some(id),
+        reused: reused.then_some(true),
+        ..Success::default()
+    })
+    .unwrap_or_default()
 }
 
 /// The reply to an attention or close that was carried out.
 pub fn done_reply() -> String {
-    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "done": true }).to_string()
+    serde_json::to_string(&Success {
+        ok: true,
+        protocol: PROTOCOL,
+        done: Some(true),
+        ..Success::default()
+    })
+    .unwrap_or_default()
 }
 
 /// The reply to a list.
 pub fn listed_reply(panes: &[PaneInfo]) -> String {
-    serde_json::json!({ "ok": true, "protocol": PROTOCOL, "panes": panes }).to_string()
+    serde_json::to_string(&Success {
+        ok: true,
+        protocol: PROTOCOL,
+        panes: Some(panes),
+        ..Success::default()
+    })
+    .unwrap_or_default()
+}
+
+/// A failure, its fields in the order they are printed.
+#[derive(Serialize)]
+struct Failure<'a> {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    protocol: Option<u32>,
+    code: &'a str,
+    error: String,
+    suggestion: &'a str,
+}
+
+impl<'a> Failure<'a> {
+    fn of(error: &'a CliError, protocol: Option<u32>) -> String {
+        serde_json::to_string(&Failure {
+            ok: false,
+            protocol,
+            code: error.code(),
+            error: error.message(),
+            suggestion: error.suggestion(),
+        })
+        .unwrap_or_default()
+    }
+}
+
+/// What `tiili list --json` and `tiili open --json` print on stdout when they fail: the error's code, message and
+/// suggestion.
+pub fn error_envelope(error: &CliError) -> String {
+    Failure::of(error, None)
 }
 
 /// The reply to a refused or failed request: its code, message and suggestion.
 pub fn error_reply(error: &CliError) -> String {
-    serde_json::json!({
-        "ok": false,
-        "protocol": PROTOCOL,
-        "code": error.code(),
-        "error": error.message(),
-        "suggestion": error.suggestion(),
-    })
-    .to_string()
+    Failure::of(error, Some(PROTOCOL))
 }
 
 /// A reply as the CLI reads it.
@@ -450,33 +542,15 @@ pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
     }
 }
 
-/// `tiili list`'s output: one line per pane, id, folder and title separated by tabs.
+/// `tiili list`'s output: one line per pane, id, folder and title (its chip name when it has none) separated by tabs.
 pub fn list_lines(panes: &[PaneInfo]) -> String {
     panes
         .iter()
-        .map(|p| format!("{}\t{}\t{}\n", p.id, p.cwd, p.title))
-        .collect()
-}
-
-/// `tiili list --json`'s output for a caller in pane `me`: one compact JSON array, with each pane's `self` and
-/// `opened_by_you` worked out from `me`.
-pub fn list_json(panes: &[PaneInfo], me: SessionId) -> String {
-    let panes: Vec<serde_json::Value> = panes
-        .iter()
         .map(|p| {
-            serde_json::json!({
-                "id": p.id,
-                "cwd": p.cwd,
-                "title": p.title,
-                "command": p.command,
-                "tab": p.tab,
-                "key": p.key,
-                "self": p.id == me,
-                "opened_by_you": p.opened_by == Some(me),
-            })
+            let title = p.title.as_deref().unwrap_or(&p.label);
+            format!("{}\t{}\t{title}\n", p.id, p.cwd)
         })
-        .collect();
-    format!("{}\n", serde_json::Value::Array(panes))
+        .collect()
 }
 
 /// A window's `sessions` in the grid order its frontend last reported (`grid`, left to right, top to bottom); sessions
@@ -524,8 +598,8 @@ pub enum CliCommand {
         title: Option<String>,
         key: Option<String>,
         command: Vec<String>,
+        json: bool,
     },
-    /// `tiili list [--json]`.
     List {
         json: bool,
     },
@@ -547,12 +621,11 @@ pub enum CliCommand {
     Version,
 }
 
-/// An option a command takes before `--`, with the placeholder for its value; an empty placeholder makes it a
-/// flag that takes no value.
+/// An option a command takes before `--`, with the placeholder for its value; a flag has none.
 #[derive(Debug, Clone, Copy)]
 pub struct OptSpec {
     pub name: &'static str,
-    pub value: &'static str,
+    pub value: Option<&'static str>,
     pub summary: &'static str,
 }
 
@@ -667,28 +740,135 @@ const DESCRIBE_OUTPUT_SCHEMA: &str = r#"{
   }
 }"#;
 
+/// The `--json` flag of the commands that can print JSON.
+const JSON_OPTION: OptSpec = OptSpec {
+    name: "--json",
+    value: None,
+    summary: "print one JSON object instead of text, also when it fails",
+};
+
+/// The JSON schema of the error object `--json` prints on failure.
+macro_rules! error_schema {
+    () => {
+        r#"{
+      "type": "object",
+      "required": ["ok", "code", "error", "suggestion"],
+      "properties": {
+        "ok": { "const": false },
+        "code": { "type": "string" },
+        "error": { "type": "string" },
+        "suggestion": { "type": "string" }
+      }
+    }"#
+    };
+}
+
+/// The JSON schema of `tiili open --json`'s output.
+const OPEN_OUTPUT_SCHEMA: &str = concat!(
+    r#"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["ok", "protocol", "pane"],
+      "properties": {
+        "ok": { "const": true },
+        "protocol": { "type": "integer" },
+        "pane": { "type": "integer" },
+        "reused": { "const": true }
+      }
+    },
+    "#,
+    error_schema!(),
+    r#"
+  ]
+}"#
+);
+
+/// The JSON schema of `tiili list --json`'s output.
+const LIST_OUTPUT_SCHEMA: &str = concat!(
+    r#"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["ok", "protocol", "panes"],
+      "properties": {
+        "ok": { "const": true },
+        "protocol": { "type": "integer" },
+        "panes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "self", "window", "cwd", "host", "repo", "title", "label", "running", "attention", "tab", "key", "opened_by_you"],
+            "properties": {
+              "id": { "type": "integer" },
+              "self": { "type": "boolean" },
+              "window": { "type": "string" },
+              "cwd": { "type": "string" },
+              "host": { "type": ["string", "null"] },
+              "repo": {
+                "type": ["object", "null"],
+                "required": ["root", "name", "worktree"],
+                "properties": {
+                  "root": { "type": "string" },
+                  "name": { "type": "string" },
+                  "worktree": { "type": ["string", "null"] }
+                }
+              },
+              "title": { "type": ["string", "null"] },
+              "label": { "type": "string" },
+              "running": {
+                "type": ["object", "null"],
+                "required": ["command", "program"],
+                "properties": {
+                  "command": { "type": ["string", "null"] },
+                  "program": { "type": ["string", "null"] }
+                }
+              },
+              "attention": {
+                "type": ["object", "null"],
+                "required": ["message"],
+                "properties": { "message": { "type": ["string", "null"] } }
+              },
+              "tab": { "type": ["integer", "null"] },
+              "key": { "type": ["string", "null"] },
+              "opened_by_you": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "#,
+    error_schema!(),
+    r#"
+  ]
+}"#
+);
+
 /// Every `tiili` command. The CLI's dispatch, parser, help and `tiili describe` all read it.
 pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "open",
         summary: "Open a pane in this pane's window running a command",
-        usage: "tiili open [--cwd DIR] [--title TITLE] [--key KEY] -- CMD [ARGS...]",
+        usage: "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--json] -- CMD [ARGS...]",
         options: &[
             OptSpec {
                 name: "--cwd",
-                value: "DIR",
+                value: Some("DIR"),
                 summary: "folder the command runs in (default: the current folder)",
             },
             OptSpec {
                 name: "--title",
-                value: "TITLE",
+                value: Some("TITLE"),
                 summary: "the pane's title",
             },
             OptSpec {
                 name: "--key",
-                value: "KEY",
+                value: Some("KEY"),
                 summary: "reuse this pane's live pane opened with KEY instead of opening another",
             },
+            JSON_OPTION,
         ],
         positionals: &[],
         rest: Some(ArgSpec {
@@ -697,8 +877,8 @@ pub const COMMANDS: &[CommandSpec] = &[
             summary: "the command and its arguments, looked up on the caller's PATH",
         }),
         needs: PANE_NEEDS,
-        output_text: "the new pane's id on one line; with --key, opened ID or reused ID",
-        output_schema: None,
+        output_text: "the new pane's id on one line; with --key, opened ID or reused ID; with --json, one JSON object",
+        output_schema: Some(OPEN_OUTPUT_SCHEMA),
         exit_codes: &[0, 1, 2, 3, 4],
         errors: &[
             "usage",
@@ -714,16 +894,13 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "list",
         summary: "List the panes of this pane's window in grid order",
         usage: "tiili list [--json]",
-        options: &[OptSpec {
-            name: "--json",
-            value: "",
-            summary: "print a JSON array of panes with id, cwd, title, command, tab, key, self and opened_by_you",
-        }],
+        options: &[JSON_OPTION],
         positionals: &[],
         rest: None,
         needs: PANE_NEEDS,
-        output_text: "one line per pane: id, folder and title separated by tabs; with --json, one JSON array",
-        output_schema: None,
+        output_text:
+            "one line per pane: id, folder and title separated by tabs; with --json, one JSON object",
+        output_schema: Some(LIST_OUTPUT_SCHEMA),
         exit_codes: &[0, 1, 2, 3, 4],
         errors: &[
             "usage",
@@ -741,7 +918,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage: "tiili attention [MSG] | tiili attention --clear",
         options: &[OptSpec {
             name: "--clear",
-            value: "",
+            value: None,
             summary: "clear this pane's mark instead",
         }],
         positionals: &[ArgSpec {
@@ -916,14 +1093,13 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
             break;
         }
         if let Some(opt) = spec.options.iter().find(|o| o.name == arg) {
-            if opt.value.is_empty() {
-                options.push((opt.name, String::new()));
-                continue;
-            }
-            let value = iter
-                .next()
-                .cloned()
-                .ok_or_else(|| CliError::Usage(format!("{} needs a value", opt.name)))?;
+            let value = match opt.value {
+                Some(_) => iter
+                    .next()
+                    .cloned()
+                    .ok_or_else(|| CliError::Usage(format!("{} needs a value", opt.name)))?,
+                None => String::new(),
+            };
             options.push((opt.name, value));
         } else if arg.starts_with('-') {
             let hint = if spec.rest.is_some() {
@@ -985,6 +1161,7 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
         }
     };
     let flag = |name: &str| options.iter().any(|(n, _)| *n == name);
+    let json = flag(JSON_OPTION.name);
     Ok(match spec.name {
         "open" => CliCommand::Open {
             cwd: option("--cwd"),
@@ -996,10 +1173,9 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
                 key => key,
             },
             command: words.unwrap_or_default(),
+            json,
         },
-        "list" => CliCommand::List {
-            json: flag("--json"),
-        },
+        "list" => CliCommand::List { json },
         "attention" => {
             let message = positionals.into_iter().next();
             let clear = flag("--clear");
@@ -1025,17 +1201,28 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
     })
 }
 
+/// Whether `args` ask a command that can print JSON for it, so that its failure, even a usage error, is printed as
+/// JSON too.
+pub fn wants_json(args: &[String]) -> bool {
+    let Some(spec) = args.first().and_then(|name| command(name)) else {
+        return false;
+    };
+    spec.options.iter().any(|o| o.name == JSON_OPTION.name)
+        && args[1..]
+            .iter()
+            .take_while(|a| *a != "--")
+            .any(|a| a == JSON_OPTION.name)
+}
+
 /// One command's help: usage, summary, options and arguments.
 fn command_help(spec: &CommandSpec) -> String {
     let mut text = format!("usage: {}\n\n{}\n", spec.usage, spec.summary);
     let args: Vec<(String, &str)> = spec
         .options
         .iter()
-        .map(|o| {
-            (
-                format!("{} {}", o.name, o.value).trim_end().to_string(),
-                o.summary,
-            )
+        .map(|o| match o.value {
+            Some(value) => (format!("{} {value}", o.name), o.summary),
+            None => (o.name.to_string(), o.summary),
         })
         .chain(
             spec.positionals
@@ -1083,8 +1270,8 @@ fn describe_command(spec: &CommandSpec) -> serde_json::Value {
         .iter()
         .map(|o| {
             let mut arg = json!({ "name": o.name, "kind": "option", "required": false, "summary": o.summary });
-            if !o.value.is_empty() {
-                arg["value"] = json!(o.value);
+            if let Some(value) = o.value {
+                arg["value"] = json!(value);
             }
             arg
         })
@@ -1177,13 +1364,46 @@ mod tests {
         }
     }
 
-    fn pane(id: SessionId, cwd: &str, title: &str) -> PaneInfo {
+    fn pane(id: SessionId, cwd: &str, title: Option<&str>, label: &str) -> PaneInfo {
         PaneInfo {
             id,
             cwd: cwd.into(),
-            title: title.into(),
+            title: title.map(Into::into),
+            label: label.into(),
             ..PaneInfo::default()
         }
+    }
+
+    /// Every field of a pane is sent, `null` when unknown.
+    #[test]
+    fn pane_records_send_every_field() {
+        let value = serde_json::to_value(pane(3, "/tmp", None, "tmp")).unwrap();
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "attention",
+                "cwd",
+                "host",
+                "id",
+                "key",
+                "label",
+                "opened_by_you",
+                "repo",
+                "running",
+                "self",
+                "tab",
+                "title",
+                "window"
+            ]
+        );
+        assert!(value["title"].is_null() && value["running"].is_null());
     }
 
     #[test]
@@ -1413,13 +1633,25 @@ mod tests {
     #[test]
     fn replies_read_back() {
         let panes = vec![
-            pane(3, "/Users/red/src/app", "app"),
+            pane(3, "/Users/red/src/app", None, "app"),
             PaneInfo {
-                command: "npm".into(),
+                is_self: true,
+                window: "main".into(),
+                host: Some("box".into()),
+                repo: Some(RepoRecord {
+                    root: "/tmp".into(),
+                    name: "tmp".into(),
+                    worktree: None,
+                }),
+                running: Some(RunningRecord {
+                    command: Some("tail -f x.log".into()),
+                    program: None,
+                }),
+                attention: Some(AttentionRecord { message: None }),
                 tab: Some(2),
                 key: Some("dev".into()),
-                opened_by: Some(3),
-                ..pane(7, "/tmp", "logs")
+                opened_by_you: true,
+                ..pane(7, "/tmp", Some("logs"), "tmp")
             },
         ];
         let unreadable = || Err(CliError::BadReply("tiili sent an unreadable reply".into()));
@@ -1448,12 +1680,12 @@ mod tests {
             ),
             (done_reply(), Ok(Reply::Done)),
             (listed_reply(&panes), Ok(Reply::Listed(panes.clone()))),
-            // An older app's list, without the newer fields.
-            (
-                r#"{"ok":true,"panes":[{"id":3,"cwd":"/tmp","title":"tmp"}]}"#.into(),
-                Ok(Reply::Listed(vec![pane(3, "/tmp", "tmp")])),
-            ),
             (listed_reply(&[]), Ok(Reply::Listed(vec![]))),
+            // An older app's panes carry only id, folder and title.
+            (
+                r#"{"ok":true,"protocol":1,"panes":[{"id":3,"cwd":"/tmp","title":"tmp"}]}"#.into(),
+                Ok(Reply::Listed(vec![pane(3, "/tmp", Some("tmp"), "")])),
+            ),
             ("garbage".into(), unreadable()),
             (r#"{"ok":true}"#.into(), unreadable()),
             // An older app's error, without code or suggestion.
@@ -1513,59 +1745,15 @@ mod tests {
     #[test]
     fn list_panes_prints_one_line_per_pane() {
         let panes = [
-            pane(3, "/Users/red/src/app", "app"),
-            pane(7, "/tmp", "logs"),
+            pane(3, "/Users/red/src/app", None, "app"),
+            pane(7, "/tmp", Some("logs"), "tmp"),
+            pane(9, "/tmp", None, ""),
         ];
         assert_eq!(
             list_lines(&panes),
-            "3\t/Users/red/src/app\tapp\n7\t/tmp\tlogs\n"
+            "3\t/Users/red/src/app\tapp\n7\t/tmp\tlogs\n9\t/tmp\t\n"
         );
         assert_eq!(list_lines(&[]), "");
-    }
-
-    /// Own and opened panes: the caller's pane has self true, and the pane it opened with key dev has
-    /// opened_by_you true and key dev; a pane another pane opened has neither.
-    #[test]
-    fn own_and_opened_panes_are_marked_in_the_json_list() {
-        let panes = [
-            PaneInfo {
-                command: "zsh".into(),
-                tab: Some(1),
-                ..pane(3, "/w", "app")
-            },
-            PaneInfo {
-                command: "npm".into(),
-                tab: Some(1),
-                key: Some("dev".into()),
-                opened_by: Some(3),
-                ..pane(8, "/w", "dev")
-            },
-            PaneInfo {
-                tab: Some(2),
-                opened_by: Some(4),
-                ..pane(9, "/w", "other")
-            },
-        ];
-        let listed: serde_json::Value = serde_json::from_str(&list_json(&panes, 3)).unwrap();
-        // id, self, opened_by_you, key, tab and command of each.
-        type Row<'a> = (u32, bool, bool, Option<&'a str>, u32, &'a str);
-        let expected: &[Row] = &[
-            (3, true, false, None, 1, "zsh"),
-            (8, false, true, Some("dev"), 1, "npm"),
-            (9, false, false, None, 2, ""),
-        ];
-        let rows = listed.as_array().unwrap();
-        assert_eq!(rows.len(), expected.len());
-        for (row, (id, me, mine, key, tab, command)) in rows.iter().zip(expected) {
-            assert_eq!(row["id"], *id);
-            assert_eq!(row["self"], *me, "{id}");
-            assert_eq!(row["opened_by_you"], *mine, "{id}");
-            assert_eq!(row["key"].as_str(), *key, "{id}");
-            assert_eq!(row["tab"], *tab, "{id}");
-            assert_eq!(row["command"], *command, "{id}");
-            assert!(row["cwd"].is_string() && row["title"].is_string(), "{id}");
-        }
-        assert_eq!(list_json(&[], 3), "[]\n");
     }
 
     #[test]
@@ -1605,6 +1793,28 @@ mod tests {
                 args(&["list", "--json"]),
                 Ok(CliCommand::List { json: true }),
             ),
+            (
+                args(&["open", "--json", "--", "npm", "test"]),
+                Ok(CliCommand::Open {
+                    cwd: None,
+                    title: None,
+                    key: None,
+                    command: cmd(&["npm", "test"]),
+                    json: true,
+                }),
+            ),
+            // --json after -- belongs to the command.
+            (
+                args(&["open", "--", "jq", "--json"]),
+                Ok(CliCommand::Open {
+                    cwd: None,
+                    title: None,
+                    key: None,
+                    command: cmd(&["jq", "--json"]),
+                    json: false,
+                }),
+            ),
+            (args(&["describe", "--json"]), Err(())),
             (args(&["list", "-a"]), Err(())),
             (args(&["list", "--json", "x"]), Err(())),
             (
@@ -1614,6 +1824,7 @@ mod tests {
                     title: None,
                     key: None,
                     command: cmd(&["npm", "run", "dev"]),
+                    json: false,
                 }),
             ),
             (
@@ -1625,6 +1836,7 @@ mod tests {
                     title: Some("logs".into()),
                     key: None,
                     command: cmd(&["tail", "-f", "x.log"]),
+                    json: false,
                 }),
             ),
             // Options after -- belong to the command.
@@ -1635,6 +1847,7 @@ mod tests {
                     title: None,
                     key: None,
                     command: cmd(&["ls", "--cwd", "--"]),
+                    json: false,
                 }),
             ),
             (
@@ -1644,6 +1857,7 @@ mod tests {
                     title: None,
                     key: Some("dev".into()),
                     command: cmd(&["npm", "run", "dev"]),
+                    json: false,
                 }),
             ),
             (args(&["open", "--key", "", "--", "ls"]), Err(())),
@@ -1720,6 +1934,26 @@ mod tests {
         }
     }
 
+    /// Outside a pane: a failing open or list asked for JSON prints its error as JSON, even a usage error.
+    #[test]
+    fn json_is_wanted_by_open_and_list_with_the_flag_before_the_command() {
+        let args = |s: &[&str]| s.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+        let cases: &[(&[&str], bool)] = &[
+            (&["list", "--json"], true),
+            (&["list", "--json", "extra"], true),
+            (&["open", "--json"], true),
+            (&["open", "--cwd", "/tmp", "--json", "--", "ls"], true),
+            (&["list"], false),
+            (&["open", "--", "jq", "--json"], false),
+            (&["describe", "--json"], false),
+            (&["--json"], false),
+            (&[], false),
+        ];
+        for (argv, json) in cases {
+            assert_eq!(wants_json(&args(argv)), *json, "{argv:?}");
+        }
+    }
+
     /// Help from a pane: the help lists every command's usage, and each command has its own help.
     #[test]
     fn help_lists_every_command_and_each_has_its_own() {
@@ -1754,10 +1988,34 @@ mod tests {
         assert_eq!(one["commands"][0]["name"], "open");
         let list = &all["commands"][1];
         assert_eq!(list["name"], "list");
-        assert!(list["output"]["json"].is_null());
         // Describe intents: the four intents, also when describing one command.
         assert_eq!(all["intents"].as_array().map(Vec::len), Some(4));
         assert_eq!(one["intents"], all["intents"]);
+        // Describe list: its JSON output's schema names the pane fields.
+        let pane = &list["output"]["json"]["oneOf"][0]["properties"]["panes"]["items"];
+        assert_eq!(
+            pane["required"],
+            serde_json::json!([
+                "id",
+                "self",
+                "window",
+                "cwd",
+                "host",
+                "repo",
+                "title",
+                "label",
+                "running",
+                "attention",
+                "tab",
+                "key",
+                "opened_by_you"
+            ])
+        );
+        for name in ["open", "list"] {
+            let spec = command(name).unwrap();
+            assert!(spec.options.iter().any(|o| o.name == "--json"), "{name}");
+            assert!(spec.output_schema.is_some(), "{name}");
+        }
         assert_eq!(
             describe(Some("frobnicate")).map_err(|e| e.code()),
             Err("usage")

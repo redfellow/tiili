@@ -24,6 +24,12 @@
           "value": "KEY"
         },
         {
+          "kind": "option",
+          "name": "--json",
+          "required": false,
+          "summary": "print one JSON object instead of text, also when it fails"
+        },
+        {
           "kind": "rest",
           "name": "CMD",
           "required": true,
@@ -88,11 +94,60 @@
         "TIILI_PANE"
       ],
       "output": {
-        "json": null,
-        "text": "the new pane's id on one line; with --key, opened ID or reused ID"
+        "json": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "oneOf": [
+            {
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "pane": {
+                  "type": "integer"
+                },
+                "protocol": {
+                  "type": "integer"
+                },
+                "reused": {
+                  "const": true
+                }
+              },
+              "required": [
+                "ok",
+                "protocol",
+                "pane"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "ok": {
+                  "const": false
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ok",
+                "code",
+                "error",
+                "suggestion"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "text": "the new pane's id on one line; with --key, opened ID or reused ID; with --json, one JSON object"
       },
       "summary": "Open a pane in this pane's window running a command",
-      "usage": "tiili open [--cwd DIR] [--title TITLE] [--key KEY] -- CMD [ARGS...]"
+      "usage": "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--json] -- CMD [ARGS...]"
     },
     {
       "args": [
@@ -100,7 +155,7 @@
           "kind": "option",
           "name": "--json",
           "required": false,
-          "summary": "print a JSON array of panes with id, cwd, title, command, tab, key, self and opened_by_you"
+          "summary": "print one JSON object instead of text, also when it fails"
         }
       ],
       "errors": [
@@ -161,8 +216,182 @@
         "TIILI_PANE"
       ],
       "output": {
-        "json": null,
-        "text": "one line per pane: id, folder and title separated by tabs; with --json, one JSON array"
+        "json": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "oneOf": [
+            {
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "panes": {
+                  "items": {
+                    "properties": {
+                      "attention": {
+                        "properties": {
+                          "message": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "message"
+                        ],
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "cwd": {
+                        "type": "string"
+                      },
+                      "host": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "key": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "opened_by_you": {
+                        "type": "boolean"
+                      },
+                      "repo": {
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "root": {
+                            "type": "string"
+                          },
+                          "worktree": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "root",
+                          "name",
+                          "worktree"
+                        ],
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "running": {
+                        "properties": {
+                          "command": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "program": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "command",
+                          "program"
+                        ],
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "self": {
+                        "type": "boolean"
+                      },
+                      "tab": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "title": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "window": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "self",
+                      "window",
+                      "cwd",
+                      "host",
+                      "repo",
+                      "title",
+                      "label",
+                      "running",
+                      "attention",
+                      "tab",
+                      "key",
+                      "opened_by_you"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "protocol": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "ok",
+                "protocol",
+                "panes"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "ok": {
+                  "const": false
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ok",
+                "code",
+                "error",
+                "suggestion"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "text": "one line per pane: id, folder and title separated by tabs; with --json, one JSON object"
       },
       "summary": "List the panes of this pane's window in grid order",
       "usage": "tiili list [--json]"
@@ -672,7 +901,7 @@
     },
     {
       "name": "find-reuse",
-      "notes": "each pane has id, cwd, title, command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
+      "notes": "each of panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
       "recipe": "tiili list --json",
       "when": "you want to find a pane to reuse, read or close"
     }
