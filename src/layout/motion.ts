@@ -19,6 +19,8 @@ export const ENTER_EASING = "cubic-bezier(.34,1.35,.64,1)";
 /** A closing pane leaves quickly; ease-in so it speeds away. */
 export const EXIT_MS = 180;
 export const EXIT_EASING = "cubic-bezier(.4,0,1,1)";
+/** How long a closing pane's terminal stays on screen: until its exit animation has finished. */
+export const EXIT_HOLD_MS = EXIT_MS + 20;
 /** The scale a new pane grows in from and a closing pane shrinks to. */
 const SHRUNK = 0.94;
 /** A new or closing pane lifts off the grid on a soft shadow, so it reads against the dark mortar. */

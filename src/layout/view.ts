@@ -97,7 +97,7 @@ export class TileView {
       const element = elements.get(id);
       const rect = before.get(id);
       if (!element || !rect) continue;
-      // Kept at its last rect, beneath the other panes, until it has faded out.
+      // Kept at its last rect, above the other panes, until it has faded out.
       Object.assign(element.style, {
         position: "absolute",
         left: `${rect.left - rootRect.left}px`,

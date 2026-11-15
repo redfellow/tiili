@@ -27,6 +27,7 @@ import {
   type LayoutState,
   type PaneId,
 } from "./layout/model";
+import { EXIT_HOLD_MS, prefersReducedMotion } from "./layout/motion";
 import { TileView } from "./layout/view";
 import { openHeynote, type HeynoteFrame } from "./heynotePane";
 import {
@@ -518,7 +519,7 @@ export class Panes {
     }
     const terminal = await pane.ready;
     // The terminal stays on screen while its pane fades out.
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) await new Promise((r) => setTimeout(r, 200));
+    if (!prefersReducedMotion()) await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
     await terminal?.dispose();
   }
 
