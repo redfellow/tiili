@@ -20,6 +20,7 @@ import {
   paneAction,
   settingsShortcut,
   tabAction,
+  zenAction,
   zoomAction,
   type FindAction,
   type LayoutAction,
@@ -73,6 +74,12 @@ const TAB_MENU_ACTIONS: Partial<Record<TabMenuId, TabAction>> = {
 /** The attribute naming a tab strip entry's tab index, where a pane's grab strip can be dropped. */
 const TAB_INDEX = "data-tab-index";
 
+/** The Zen icon on a pane's title row: a pane between two side brackets. */
+const ZEN_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="6" height="10" ' +
+  'rx="0.5"/><path d="M2.5 5v6M13.5 5v6"/></svg>';
+
 /** A pane `tiili open` asked for: the program it runs and the title its chip shows. */
 interface Requested extends PaneLaunch {
   title?: string;
@@ -119,6 +126,7 @@ export class Panes {
     private readonly platform: Platform,
     private readonly settings: () => Settings,
     private readonly openSettings: () => void,
+    private readonly saveSettings: (next: Settings) => Promise<void>,
   ) {
     this.tabHooks = {
       rendered: () => {
@@ -127,6 +135,11 @@ export class Panes {
       },
       dropOutside: (tab, from, under) => this.dropOnTab(tab, from, under),
       dragOutside: (under) => this.markTabDropTarget(under),
+      marked: (session) => this.marks.has(session),
+      savedZenColumns: () => this.settings().zen.width,
+      zenResized: (columns) => {
+        this.saveZenColumns(columns).catch((error: unknown) => this.report(error));
+      },
     };
     this.tabs = [new Tab(root, settings().tiling.layout, this.tabHooks)];
     this.styleRoot(settings());
@@ -141,8 +154,9 @@ export class Panes {
 
   /**
    * Sets up the panes in `root`, with the menus and shortcuts that act on them. Every pane is styled by
-   * `settings()`; the settings shortcut and the right-click menu's Settings… item call `openSettings`. Shells,
-   * clipboard, menus and the window come from `backend`.
+   * `settings()`; the settings shortcut and the right-click menu's Settings… item call `openSettings`, and a Zen
+   * edge drag saves the new Zen width through `saveSettings`. Shells, clipboard, menus and the window come from
+   * `backend`.
    */
   static async create(
     backend: Backend,
@@ -150,8 +164,9 @@ export class Panes {
     platform: Platform,
     settings: () => Settings,
     openSettings: () => void,
+    saveSettings: (next: Settings) => Promise<void>,
   ): Promise<Panes> {
-    const panes = new Panes(backend, root, platform, settings, openSettings);
+    const panes = new Panes(backend, root, platform, settings, openSettings, saveSettings);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
     if (backend.attention) {
@@ -202,10 +217,11 @@ export class Panes {
       });
     }
     if (panes.viaMenu()) {
-      // ⌘T, ⌘W and ⌃⌘N are Shell menu items on macOS, so the webview may never see those keys.
+      // ⌘T, ⌘W, ⌃⌘N and ⇧⌘↩ are Shell menu items on macOS, so the webview may never see those keys.
       await backend.onAppEvent("pane", (payload) => {
         const tab = TAB_MENU_ACTIONS[payload as TabMenuId];
-        if (tab) panes.actTab(tab);
+        if (payload === "zen") panes.toggleZen();
+        else if (tab) panes.actTab(tab);
         else panes.act({ type: payload as "new" | "close" | "moveToNewWindow" });
       });
       // The Shell menu's New Window (⌘N), sent to the focused window only.
@@ -244,11 +260,13 @@ export class Panes {
     return this.tabs.find((tab) => tab.panes.includes(pane));
   }
 
-  /** Moves the focused pane or resets the grid to even sizes. */
+  /** Moves the focused pane or resets the grid to even sizes; in Zen the grid shows again first. */
   actLayout(action: LayoutAction): void {
     const pane = this.current();
     if (!pane) return;
     const tab = this.tab;
+    // In Zen the grid shows again first.
+    tab.setZen(undefined);
     tab.relayout(action === "reset" ? reset(tab.layout) : move(tab.layout, pane.id, action.move));
   }
 
@@ -529,6 +547,9 @@ export class Panes {
     if (!moves || !pane) return;
     if (target === undefined && this.allPanes().length === 1) return;
     const terminal = pane.terminal;
+    // The pane arrives as a normal one, and this window shows its grid again.
+    const owner = this.tabOf(pane);
+    if (owner?.zen === pane.id) owner.setZen(undefined);
     if (pane.note) {
       pane.note.flush();
       await moves.move(target, { kind: "heynote" });
@@ -647,8 +668,8 @@ export class Panes {
    * in every other tiili window, so the pane opens in the window that asked for it.
    */
   async openHeynote(tab: Tab = this.tab): Promise<void> {
-    const { element, chip, host } = this.paneElement();
-    const pane: Pane = { id: this.nextId++, element, chip, zoom: 0, ready: Promise.resolve(undefined) };
+    const { element, chip, zenButton, host } = this.paneElement();
+    const pane: Pane = { id: this.nextId++, element, chip, zenButton, zoom: 0, ready: Promise.resolve(undefined) };
     this.listen(pane);
     showPaneChip(element, chip, "Heynote");
     pane.note = openHeynote(
@@ -661,7 +682,8 @@ export class Panes {
     pane.note.frame.addEventListener("load", () => {
       if (this.current() === pane) pane.note?.focus();
     });
-    tab.add(pane);
+    // In Zen a pane the user opens is shown alone.
+    tab.add(pane, true);
     this.markFocused(tab, tab.panes.length - 1);
   }
 
@@ -680,21 +702,38 @@ export class Panes {
     if (tab) this.markFocused(tab, tab.panes.indexOf(pane));
   }
 
-  /** A pane's element: its title row with the chip, the host its content goes in and the grab strip. */
-  private paneElement(): { element: HTMLElement; chip: HTMLElement; host: HTMLElement } {
+  /**
+   * A pane's element: its title row with the chip and the Zen icon, the host its content goes in and the grab strip.
+   * The icon and a double-click on the title row toggle Zen; the pane's own mousedown has focused it by then.
+   */
+  private paneElement(): { element: HTMLElement; chip: HTMLElement; zenButton: HTMLElement; host: HTMLElement } {
     const element = document.createElement("div");
     element.className = "pane";
     const title = document.createElement("div");
     title.className = "pane-title";
     const chip = createPaneChip();
-    title.append(chip);
+    const zenButton = document.createElement("button");
+    zenButton.type = "button";
+    zenButton.className = "pane-zen-toggle";
+    zenButton.title = `Zen mode ${this.platform === "macos" ? "⇧⌘↩" : "Ctrl+Shift+Enter"}`;
+    zenButton.setAttribute("aria-label", "Zen mode");
+    // Not a keyboard target: the terminal keeps the keyboard, and clicks leave its focus alone.
+    zenButton.tabIndex = -1;
+    zenButton.innerHTML = ZEN_ICON;
+    zenButton.addEventListener("mousedown", (event) => event.preventDefault());
+    zenButton.addEventListener("click", () => this.toggleZen());
+    title.append(chip, zenButton);
+    title.addEventListener("dblclick", (event) => {
+      if (event.target instanceof Element && event.target.closest(".pane-zen-toggle")) return;
+      if (!this.tab.dragged()) this.toggleZen();
+    });
     // Dragging the top edge onto another pane swaps the two; dragging inside the terminal still selects.
     const grab = document.createElement("div");
     grab.className = "pane-grab";
     const host = document.createElement("div");
     host.className = "pane-terminal";
     element.append(title, host, grab);
-    return { element, chip, host };
+    return { element, chip, zenButton, host };
   }
 
   /**
@@ -737,7 +776,7 @@ export class Panes {
     adopt?: AdoptedSession & { zoom: number },
     requested?: Requested,
   ): Promise<Pane> {
-    const { element, chip, host } = this.paneElement();
+    const { element, chip, zenButton, host } = this.paneElement();
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
@@ -745,6 +784,7 @@ export class Panes {
       id: this.nextId++,
       element,
       chip,
+      zenButton,
       zoom: adopt?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
       gate: new AttentionGate(),
@@ -754,8 +794,9 @@ export class Panes {
     if (pane.title !== undefined) showPaneChip(element, chip, pane.title);
     const focused = this.current();
     const hadKeyboard = focused !== undefined && focused.element.contains(document.activeElement);
-    // Laid out first, so the terminal opens at its pane's size.
-    tab.add(pane);
+    // Laid out first, so the terminal opens at its pane's size. In Zen a pane the user opens is shown alone; one
+    // `tiili open` asked for joins the hidden grid.
+    tab.add(pane, !requested);
     if (!requested) this.markFocused(tab, tab.panes.length - 1);
     // Re-rendering the grid can take the keyboard from the focused pane's terminal.
     else if (focused && hadKeyboard) give(focused);
@@ -776,8 +817,9 @@ export class Panes {
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       opened.find.interceptKeys((event) => this.shortcut(event));
       pane.terminal = opened;
-      // Its tab may have been hidden while the shell started: it keeps this size until the tab is shown.
-      if (this.tabOf(pane)?.shown === false) opened.holdSize();
+      // Its tab may have been hidden, or Zen may show another pane, while the shell started: it keeps this size
+      // until it is shown.
+      if (this.tabOf(pane)?.holds(pane)) opened.holdSize();
       resolve(opened);
     } catch (error) {
       resolve(undefined);
@@ -814,6 +856,8 @@ export class Panes {
     const tab = this.tab;
     const pane = tab.panes[index];
     if (!pane) return;
+    // In Zen the pane that takes the focus is shown alone.
+    tab.showAlone(pane);
     this.markFocused(tab, index);
     give(pane);
   }
@@ -839,6 +883,8 @@ export class Panes {
         await applyFont(terminal.term, settings, pane.zoom);
       }),
     );
+    // A new font or Zen width changes the Zen pane's width.
+    for (const tab of this.tabs) tab.sizeZen();
   }
 
   /** A `pane-cwd` report: updates the pane running that session, or keeps it until the pane hears its id. */
@@ -921,6 +967,7 @@ export class Panes {
       if (this.tabs.length > 1) this.dropTab(tab);
       else this.showTitle();
     } else if (wasFocused && next) {
+      tab.showAlone(next);
       this.markFocused(tab, tab.focused);
       if (tab.shown) give(next);
     }
@@ -959,6 +1006,7 @@ export class Panes {
       const mark = pane.session === undefined ? undefined : this.marks.get(pane.session);
       showPaneAttention(pane.element, pane.chip, mark);
     }
+    for (const tab of this.tabs) tab.showZen();
     this.updateStrip();
   }
 
@@ -990,6 +1038,24 @@ export class Panes {
     if (index !== this.shown) this.showTab(index);
     this.focus(tab.panes.indexOf(pane));
     this.clearMark(session);
+  }
+
+  /**
+   * Toggles Zen for the shown tab's focused pane: it shows alone in the centre, or the grid shows again. With one pane
+   * Zen does not apply. The pane keeps the keyboard.
+   */
+  toggleZen(): void {
+    const pane = this.current();
+    if (!pane) return;
+    this.tab.toggleZen();
+    give(pane);
+  }
+
+  /** Saves `columns` as the Zen width when it changed, which every window then uses. */
+  private async saveZenColumns(columns: number): Promise<void> {
+    const settings = this.settings();
+    if (columns === settings.zen.width) return;
+    await this.saveSettings({ ...settings, zen: { ...settings.zen, width: columns } });
   }
 
   /**
@@ -1025,12 +1091,15 @@ export class Panes {
     const next = action === "reset" ? base : zoomedSize(current, action === "in" ? 1 : -1);
     if (action !== "reset" && next === current) return;
     pane.zoom = next - base;
-    applyFont(terminal.term, settings, pane.zoom).catch((error: unknown) => this.report(error));
+    applyFont(terminal.term, settings, pane.zoom)
+      // A larger or smaller font widens or narrows the Zen pane, once the new cells are laid out.
+      .then(() => requestAnimationFrame(() => this.tabOf(pane)?.sizeZen()))
+      .catch((error: unknown) => this.report(error));
   }
 
   /**
-   * Carries out a layout, tab, next-pane, pane, settings, zoom or find shortcut on keydown. Returns true when `event` is
-   * one of those keys, which then must not reach the pane's shell, its find bar's field or Heynote. Zoom and find
+   * Carries out a layout, tab, next-pane, settings, Zen, pane, zoom or find shortcut on keydown. Returns true when
+   * `event` is one of those keys, which then must not reach the pane's shell, its find bar's field or Heynote. Zoom and find
    * keys act only in terminal panes; in a Heynote pane they reach Heynote, whose own search the find keys open.
    */
   private shortcut(event: KeyboardEvent): boolean {
@@ -1065,6 +1134,14 @@ export class Panes {
       if (!this.viaMenu() && event.type === "keydown") {
         event.preventDefault();
         this.openSettings();
+      }
+      return true;
+    }
+    if (zenAction(event, this.platform)) {
+      // In the macOS app ⇧⌘↩ comes from the Shell menu; here the key is only kept from the shell.
+      if (!this.viaMenu() && event.type === "keydown") {
+        event.preventDefault();
+        this.toggleZen();
       }
       return true;
     }

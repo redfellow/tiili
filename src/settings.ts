@@ -58,6 +58,14 @@ export interface BehaviourSettings {
   scrollback: number;
 }
 
+export interface ZenSettings {
+  /** Columns of the Zen pane's font, 80–400; capped at 90% of the window's pane area when shown. */
+  width: number;
+}
+
+/** Allowed range of the Zen width in columns. */
+export const ZEN_WIDTH_RANGE = { min: 80, max: 400, step: 1 } as const;
+
 export interface InactiveSettings {
   /** Opacity of a pane's content (title chip and text) while it has no focus, 0.3–1. */
   opacity: number;
@@ -113,6 +121,8 @@ export interface Settings {
   /** Text that shrinks in small panes. */
   responsive: ResponsiveSettings;
   behaviour: BehaviourSettings;
+  /** The centred one-pane view; applies in every window. */
+  zen: ZenSettings;
   inactive: InactiveSettings;
   appIcon: AppIcon;
   /** Applies to open panes and new ones. */
@@ -151,6 +161,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
   behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000 },
+  zen: { width: 140 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
@@ -202,6 +213,7 @@ export function normalize(value: unknown): Settings {
   const responsive = isRecord(raw.responsive) ? raw.responsive : {};
   const behaviour = isRecord(raw.behaviour) ? raw.behaviour : {};
   const inactive = isRecord(raw.inactive) ? raw.inactive : {};
+  const zen = isRecord(raw.zen) ? raw.zen : {};
   const updates = isRecord(raw.updates) ? raw.updates : {};
   const attention = isRecord(raw.attention) ? raw.attention : {};
   return {
@@ -241,6 +253,7 @@ export function normalize(value: unknown): Settings {
           : DEFAULT_SETTINGS.behaviour.startupSplash,
       scrollback: number(behaviour.scrollback, DEFAULT_SETTINGS.behaviour.scrollback, SCROLLBACK_RANGE),
     },
+    zen: { width: number(zen.width, DEFAULT_SETTINGS.zen.width, ZEN_WIDTH_RANGE) },
     inactive: {
       opacity: number(inactive.opacity, DEFAULT_SETTINGS.inactive.opacity, INACTIVE_OPACITY),
       desaturate:

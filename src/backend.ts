@@ -119,7 +119,7 @@ export interface SettingsWindows {
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
-  pane: "new" | "close" | "moveToNewWindow" | TabMenuId;
+  pane: "new" | "close" | "moveToNewWindow" | "zen" | TabMenuId;
   "new-window": undefined;
   "move-to-window": string;
   "pane-arrive": { token: string };

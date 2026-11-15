@@ -160,6 +160,16 @@ export function attentionShortcut(event: KeyChord, platform: Platform): "next" |
 }
 
 /**
+ * Whether a key press toggles Zen mode: ⇧⌘Enter on macOS, Ctrl+Shift+Enter on Windows and Linux. Null when it
+ * belongs to the shell.
+ */
+export function zenAction(event: KeyChord, platform: Platform): "zen" | null {
+  if (event.key !== "Enter" || !event.shiftKey || event.altKey) return null;
+  if (platform === "macos") return event.metaKey && !event.ctrlKey ? "zen" : null;
+  return event.ctrlKey && !event.metaKey ? "zen" : null;
+}
+
+/**
  * Which find action a key press asks for, or null when the key belongs to the shell.
  * macOS: ⌘F find, ⌘G next, ⇧⌘G previous. Windows and Linux: Ctrl+Shift+F find, F3 next, Shift+F3 previous; plain
  * Ctrl+F stays with the shell.

@@ -39,7 +39,7 @@ pub const PTY_EXIT_EVENT: &str = "pty-exit";
 /// Event sent when an Edit menu item is chosen; its payload is `copy`, `paste`, `selectAll`, `find`, `findNext` or
 /// `findPrevious`.
 pub const CLIPBOARD_EVENT: &str = "clipboard";
-/// Event sent when a pane menu item is chosen; its payload is `new`, `close` or `moveToNewWindow`.
+/// Event sent when a pane menu item is chosen; its payload is `new`, `close`, `moveToNewWindow` or `zen`.
 pub const PANE_EVENT: &str = "pane";
 /// Event sent when the app menu's Settings… item is chosen.
 pub const OPEN_SETTINGS_EVENT: &str = "open-settings";
@@ -455,6 +455,11 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
                 .accelerator("Ctrl+Shift+Cmd+BracketLeft")
                 .build(app)?,
         )
+        .item(
+            &MenuItemBuilder::with_id("zen", "Zen Mode")
+                .accelerator("Shift+Cmd+Enter")
+                .build(app)?,
+        )
         .build()?;
     let edit_menu = SubmenuBuilder::new(app, "Edit")
         .item(
@@ -620,6 +625,7 @@ pub fn run() {
                         "new"
                             | "close"
                             | "moveToNewWindow"
+                            | "zen"
                             | "tabNew"
                             | "tabNext"
                             | "tabPrevious"
