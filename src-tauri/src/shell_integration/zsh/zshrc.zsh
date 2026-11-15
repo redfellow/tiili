@@ -31,6 +31,30 @@ if [[ -z "$PROMPT" || "$PROMPT" == '%m%# ' || "$PROMPT" == '%n@%m %1~ %# ' ]]; t
   add-zsh-hook precmd _tiili_apply_prompt
 fi
 
+# zsh shows pasted text and its own selection (the region) in reverse video, a block of the text colour. Give them the
+# terminal selection's colour instead, which tiili writes to the integration folder's `highlight` file with each theme
+# and the shell reads before every prompt. A context the user's files highlight themselves stays theirs.
+typeset -ga _tiili_highlight_contexts=()
+[[ -n ${zle_highlight[(r)paste:*]} ]] || _tiili_highlight_contexts+=(paste)
+[[ -n ${zle_highlight[(r)region:*]} ]] || _tiili_highlight_contexts+=(region)
+if (( ${#_tiili_highlight_contexts} )); then
+  typeset -g _tiili_highlight_file="${_tiili_zdotdir:h}/highlight"
+  _tiili_apply_highlight() {
+    local _tiili_status=$?
+    emulate -L zsh
+    local colour context
+    [[ -r $_tiili_highlight_file ]] && colour=$(<$_tiili_highlight_file)
+    if [[ $colour == '#'[[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]] ]]; then
+      for context in $_tiili_highlight_contexts; do
+        zle_highlight=(${zle_highlight:#$context:*} $context:bg=$colour)
+      done
+    fi
+    return $_tiili_status
+  }
+  _tiili_apply_highlight
+  add-zsh-hook precmd _tiili_apply_highlight
+fi
+
 # Report the folder with OSC 7 before every prompt, whichever prompt is shown, so tiili knows this pane is local.
 _tiili_osc7() {
   local _tiili_status=$?

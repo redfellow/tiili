@@ -139,6 +139,11 @@ export interface Backend {
    * own config leaves the default prompt; does nothing where shells only take the prompt they start with.
    */
   setPrompt(prompt: PromptId): Promise<void>;
+  /**
+   * Makes `colour` (`#RRGGBB`) the background local zsh and bash 5.1+ shells give pasted text and their own selection,
+   * from their next prompt on, in place of reverse video; does nothing where shells are not tiili's own.
+   */
+  setHighlight(colour: string): Promise<void>;
   /** Sends typed input to session `id`'s shell. */
   write(id: SessionId, data: string): Promise<void>;
   /** Tells session `id`'s shell its terminal now has `rows` x `cols`. */
