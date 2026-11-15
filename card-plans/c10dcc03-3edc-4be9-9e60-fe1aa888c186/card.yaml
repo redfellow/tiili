@@ -9,8 +9,9 @@ x-harvaaja-repairs-main: true
 route:
   kind: new-change
   rationale: openspec validate --strict fails on the long 'Font family list'
-    requirement in the settings main spec; fix by splitting the Nerd Font icon
-    fallback into its own requirement via a spec delta. No behaviour change.
+    requirement in the settings main spec; fix by trimming its wording under
+    500 characters via a MODIFIED delta, synced into the main spec so the
+    check passes before archive. No behaviour change.
   citations:
     - "openspec/specs/settings/spec.md:78 Requirement: Font family list"
   revision: 80387b24-b839-420d-bd27-4a1e00a877ac
