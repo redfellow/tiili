@@ -35,11 +35,6 @@ export function insertBeside(shown: number): number {
   return shown + 1;
 }
 
-/** The window's sessions tab by tab in strip order, in grid order inside each tab. */
-export function listOrder<T>(tabs: readonly (readonly T[])[]): T[] {
-  return tabs.flat() as T[];
-}
-
 /** The index of the tab holding `session`, or undefined when no tab does. */
 export function tabOf<T>(tabs: readonly (readonly T[])[], session: T): number | undefined {
   const index = tabs.findIndex((sessions) => sessions.includes(session));

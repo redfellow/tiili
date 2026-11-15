@@ -277,6 +277,11 @@ impl PaneOrders {
     }
 }
 
+/// The window's sessions in `tiili list` order: tab by tab in strip order, in grid order inside each tab.
+fn list_order(tabs: &[Vec<SessionId>]) -> Vec<SessionId> {
+    tabs.concat()
+}
+
 /// The tab, counting from 1, `id` is in among `tabs`.
 fn tab_of(tabs: &[Vec<SessionId>], id: SessionId) -> Option<u32> {
     tabs.iter()
@@ -383,7 +388,7 @@ impl Handler for AppHandler {
             self.0.state::<PaneOwners>(),
         );
         let tabs = self.0.state::<PaneOrders>().get(&label);
-        let grid: Vec<SessionId> = tabs.concat();
+        let grid = list_order(&tabs);
         Ok(
             grid_order(self.0.state::<WindowSessions>().sessions(&label), &grid)
                 .into_iter()
@@ -695,6 +700,18 @@ mod tests {
         for (name, steps) in cases {
             eprintln!("{name}");
             run(steps);
+        }
+    }
+
+    /// List across tabs: tab 1's panes come first in grid order, then tab 2's; an empty tab adds nothing.
+    #[test]
+    fn list_across_tabs_lists_tab_by_tab() {
+        let cases: &[(&[Vec<SessionId>], &[SessionId])] = &[
+            (&[vec![1, 2], vec![3]], &[1, 2, 3]),
+            (&[vec![], vec![3, 4]], &[3, 4]),
+        ];
+        for (tabs, expected) in cases {
+            assert_eq!(list_order(tabs), *expected, "{tabs:?}");
         }
     }
 

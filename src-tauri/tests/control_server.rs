@@ -308,7 +308,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
             Err("attention_failed"),
             7,
         ),
-        // Close own pane, Refuse another pane, and a pane that is gone.
+        // Close own pane, Refuse another pane, Close a pane that is gone: no_such_pane.
         (
             request_line(TOKEN, 2, &Op::Close { target: 3 }),
             Ok(Reply::Done),

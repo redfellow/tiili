@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it, vi } from "vitest";
 import { Tab, type Pane, type TabHooks } from "./tab";
-import { badgeCount, insertBeside, listOrder, neighbourIndex, reorder, stepIndex, tabLabel, tabOf } from "./tabs";
+import { badgeCount, insertBeside, neighbourIndex, reorder, stepIndex, tabLabel, tabOf } from "./tabs";
 
 // The grid's DOM view is not under test: a Tab only needs it to exist and to be told to render.
 vi.mock("./layout/view", () => ({ TileView: class { render() {} } }));
@@ -86,15 +86,6 @@ describe("insertBeside", () => {
     ["Tab lifecycle: a new tab opens right after the third", 2, 3],
   ])("%s", (_name, shown, expected) => {
     expect(insertBeside(shown)).toBe(expected);
-  });
-});
-
-describe("listOrder", () => {
-  it.each<[string, number[][], number[]]>([
-    ["List across tabs: A, B in tab 1 and C in tab 2 list as A, B, C", [[1, 2], [3]], [1, 2, 3]],
-    ["List across tabs: an empty tab adds nothing", [[], [3, 4]], [3, 4]],
-  ])("%s", (_name, tabs, expected) => {
-    expect(listOrder(tabs)).toEqual(expected);
   });
 });
 
