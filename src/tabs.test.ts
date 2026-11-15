@@ -1,6 +1,39 @@
 // @harvaaja-test-tier: fast
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Tab, type Pane, type TabHooks } from "./tab";
 import { badgeCount, insertBeside, listOrder, neighbourIndex, reorder, stepIndex, tabLabel, tabOf } from "./tabs";
+
+// The grid's DOM view is not under test: a Tab only needs it to exist and to be told to render.
+vi.mock("./layout/view", () => ({ TileView: class { render() {} } }));
+
+/** A pane with just enough element to take the Zen icon's state. */
+function fakePane(id: number): Pane {
+  const element = { toggleAttribute() {}, setAttribute() {}, hidden: false } as unknown as HTMLElement;
+  return { id, element, chip: element, zenButton: element, ready: Promise.resolve(undefined), zoom: 0 };
+}
+
+describe("Tab.add", () => {
+  const hooks = { rendered() {}, marked: () => false } as unknown as TabHooks;
+  const tab = (zenOn: boolean): Tab => {
+    vi.stubGlobal("document", { createElement: () => ({}) });
+    const t = new Tab({ append() {} } as unknown as HTMLElement, "grid", hooks);
+    t.add(fakePane(1));
+    t.add(fakePane(2));
+    if (zenOn) t.setZen(1);
+    return t;
+  };
+  it.each<[string, boolean, boolean, number | undefined]>([
+    ["Open a pane: with Zen off the grid keeps showing", false, true, undefined],
+    ["Open a pane: with Zen on the new pane is shown alone", true, true, 3],
+    ["Open a pane: not shown alone leaves Zen off", false, false, undefined],
+    ["Open a pane: not shown alone leaves the Zen pane", true, false, 1],
+  ])("%s", (_name, zenOn, showAlone, expected) => {
+    const t = tab(zenOn);
+    t.add(fakePane(3), showAlone);
+    expect(t.zen).toBe(expected);
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("tabLabel", () => {
   it.each<[string, string | undefined, string, string]>([

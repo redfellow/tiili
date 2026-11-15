@@ -174,7 +174,7 @@ export class Tab {
   add(pane: Pane, showAlone = false): void {
     this.panes.push(pane);
     this.layout = addPane(this.layout, pane.id);
-    if (showAlone) this.setZen(pane.id);
+    if (showAlone && this.zen !== undefined) this.setZen(pane.id);
     this.render();
     if (this.holds(pane)) pane.terminal?.holdSize();
   }
