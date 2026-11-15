@@ -149,12 +149,12 @@ describe("normalize", () => {
 });
 
 const familyCases: [string, string, string][] = [
-  ["Unavailable font: a chosen family falls back to Geist Mono", "JetBrains Mono", '"JetBrains Mono", "Geist Mono", "Symbols Nerd Font Mono", monospace'],
-  ["Unavailable font: Geist Mono itself is listed once", "Geist Mono", '"Geist Mono", "Symbols Nerd Font Mono", monospace'],
+  ["Unavailable font: a chosen family falls back to Geist Mono", "JetBrains Mono", '"JetBrains Mono", "Geist Mono", "Tiili Symbols Cell", monospace'],
+  ["Unavailable font: Geist Mono itself is listed once", "Geist Mono", '"Geist Mono", "Tiili Symbols Cell", monospace'],
   [
     "Picked Nerd Font keeps its icons: the chosen font comes before the bundled symbols font",
     "JetBrainsMono Nerd Font Mono",
-    '"JetBrainsMono Nerd Font Mono", "Geist Mono", "Symbols Nerd Font Mono", monospace',
+    '"JetBrainsMono Nerd Font Mono", "Geist Mono", "Tiili Symbols Cell", monospace',
   ],
 ];
 
