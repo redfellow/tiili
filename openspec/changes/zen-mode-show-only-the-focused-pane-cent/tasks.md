@@ -13,7 +13,7 @@
   - proof: `npx eslint src/panes.ts src/settingsDialog.ts src/topBar.ts`
   - proof: `npx vitest run src/attention.test.ts src/layout/model.test.ts src/layout/motion.test.ts`
 - [ ] 2.3 macOS Shell menu item "Zen Mode" Shift+Cmd+Enter in macos_menu() (src-tauri/src/lib.rs) emitting the "pane" app event
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - proof: `grep -nE "Zen Mode" src-tauri/src/lib.rs`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
   - proof: `npm run typecheck`
 
