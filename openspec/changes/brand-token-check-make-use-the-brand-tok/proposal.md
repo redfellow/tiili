@@ -8,7 +8,7 @@
 - `docs/brand/README.md` gets a table saying what each semantic token is for (`--bg`, `--surface`, `--sunken`, `--fg`, `--muted`, `--line`, `--accent*`, `--on-accent`, `--focus`, `--term-*`, `--mark-*`, `--dot`), plus the shadow and text tokens. `site/brand/` is kept as an identical copy.
 - Drift test (vitest): every tiili-made theme in `THEMES` (tiili-light, tiili-dark, Savi, Muratti, Koski, Laasti) equals its block in `tiili.css`. It fixes dark `--ansi-8` to `#56615F`.
 - A lint rule in `npm run lint` (eslint with `@eslint/css` and a local plugin) covers `src/**/*.css`, string literals in `src/**/*.ts` (tests excluded), `site/**/*.css` and the `<style>` blocks of `site/*.html`. It flags hex, `rgb()`/`hsl()` and named colours. An exact token match is autofixed to the token, with semantic tokens preferred over palette ones. A near colour gets a suggestion naming the nearest token by OKLab ΔE. Sizes are flagged only when they exactly equal a token of their property's family.
-- Allowed by the rule: the Solarized, Gruvbox, Nord and Dracula palettes in `themes.ts`, the Heynote grounds (`heynotePane.ts`, `scripts/heynote.mjs`), `@font-face`, and lines marked `tokens-allow: <reason>`.
+- Allowed by the rule: the Solarized, Gruvbox, Nord and Dracula palettes and, by theme id, the tiili-made themes (which the drift test checks) in `themes.ts`, the Heynote grounds (`heynotePane.ts`, `scripts/heynote.mjs`), `@font-face`, and lines marked `tokens-allow: <reason>`.
 - Clean-up so the rule lands green: `styles.css` shadows, radii, margin and 11.5px font sizes; the `LIFTED` shadow in `layout/motion.ts`; the `BRICK` palette copy and `#ffe6d2` highlight in `splash.ts`; `onAccent` `#1B1614` in `themes.ts`; and the colours in `site/index.html`.
 - The brand-tokens spec gains requirements for all of this.
 
@@ -33,5 +33,6 @@
 - Shadow token values are taken from the current `styles.css` shadows, de-duplicated into at most three steps (`--shadow-1..3`). Rejected: inventing a new elevation scale.
 - The `--text-*` values come from the README type table, plus `--text-label: 11.5px` if the table lacks it.
 - A string literal in `.ts` is checked only when its whole value parses as a CSS colour or a CSS declaration value. Rejected: scanning every string, which would flag ids and text.
+- The tiili-made themes are exempted by theme id in `allowThemeIds`, with the drift test standing in for lint. Rejected: a `tokens-allow:` line on every theme colour, which would only repeat the same reason.
 - No change to `checks.yaml`: the rule runs through `npm run lint`.
 - These are left for separate cards: themes that don't set `--sunken`, `--accent-hover` and the like, and `hv brand`'s brand-book path.

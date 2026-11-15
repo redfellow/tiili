@@ -15,7 +15,7 @@ Every tiili-made theme in the app SHALL hold the same token values as its block 
 - **THEN** every value, including `--ansi-8` `#56615F`, is equal
 
 ### Requirement: Lint rejects invented colours and sizes
-`npm run lint` SHALL report every colour literal in the app's and the site's styles and in non-test TypeScript strings, and every size literal that exactly equals a token of its property's family. Its message SHALL name the token to use: it SHALL autofix an exact match and suggest the nearest token for a near colour. Declared third-party palettes, the Heynote grounds, `@font-face` and `tokens-allow:` lines are allowed.
+`npm run lint` SHALL report every colour literal in the app's and the site's styles and in non-test TypeScript strings, and every size literal that exactly equals a token of its property's family. Its message SHALL name the token to use: it SHALL autofix an exact match and suggest the nearest token for a near colour. Declared third-party palettes, the tiili-made themes in `src/themes.ts` (by theme id), the Heynote grounds, `@font-face` and `tokens-allow:` lines are allowed.
 
 #### Scenario: Exact colour
 - **WHEN** a stylesheet in `src/` declares `color: #A4472B`
@@ -28,3 +28,7 @@ Every tiili-made theme in the app SHALL hold the same token values as its block 
 #### Scenario: Allowed literal
 - **WHEN** a line carries a `tokens-allow: <reason>` comment, or a hairline `1px` border
 - **THEN** lint reports nothing
+
+#### Scenario: Tiili-made theme allowed by id
+- **WHEN** a colour literal sits inside a tiili-made theme object in `src/themes.ts` (`tiili-light`, `tiili-dark`, `savi`, `muratti`, `koski` or `laasti`)
+- **THEN** lint reports nothing, and the drift test is what fails if that colour differs from `tiili.css`
