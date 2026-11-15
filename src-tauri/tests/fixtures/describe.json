@@ -1,0 +1,429 @@
+{
+  "commands": [
+    {
+      "args": [
+        {
+          "kind": "option",
+          "name": "--cwd",
+          "required": false,
+          "summary": "folder the command runs in (default: the current folder)",
+          "value": "DIR"
+        },
+        {
+          "kind": "option",
+          "name": "--title",
+          "required": false,
+          "summary": "the pane's title",
+          "value": "TITLE"
+        },
+        {
+          "kind": "rest",
+          "name": "CMD",
+          "required": true,
+          "summary": "the command and its arguments, looked up on the caller's PATH"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "open_failed",
+          "exit": 1,
+          "suggestion": "check that the command is on PATH and the folder exists",
+          "summary": "the app could not open the pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "open",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "the new pane's id on one line"
+      },
+      "summary": "Open a pane in this pane's window running a command",
+      "usage": "tiili open [--cwd DIR] [--title TITLE] -- CMD [ARGS...]"
+    },
+    {
+      "args": [],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "list_failed",
+          "exit": 1,
+          "suggestion": "check that this pane is still open in a tiili window",
+          "summary": "the app could not list the panes"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "list",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "one line per pane: id, folder and title separated by tabs"
+      },
+      "summary": "List the panes of this pane's window in grid order",
+      "usage": "tiili list"
+    },
+    {
+      "args": [],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "install_failed",
+          "exit": 1,
+          "suggestion": "set HOME (USERPROFILE on Windows) to a home folder you can write to and run it again",
+          "summary": "the skill could not be written under the home folder"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2
+      ],
+      "name": "install-claude-skill",
+      "needs": [
+        "HOME"
+      ],
+      "output": {
+        "json": null,
+        "text": "the path the skill was written to"
+      },
+      "summary": "Install the tiili-tiles Claude Code skill into ~/.claude/skills",
+      "usage": "tiili install-claude-skill"
+    },
+    {
+      "args": [
+        {
+          "kind": "positional",
+          "name": "CMD",
+          "required": false,
+          "summary": "describe only this command"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        }
+      ],
+      "exit_codes": [
+        0,
+        2
+      ],
+      "name": "describe",
+      "needs": [],
+      "output": {
+        "json": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "commands": {
+              "items": {
+                "properties": {
+                  "args": {
+                    "items": {
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "option",
+                            "positional",
+                            "rest"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "required": {
+                          "type": "boolean"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "kind",
+                        "required",
+                        "summary"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "errors": {
+                    "items": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "exit": {
+                          "type": "integer"
+                        },
+                        "suggestion": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "exit",
+                        "summary",
+                        "suggestion"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "exit_codes": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "needs": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "output": {
+                    "properties": {
+                      "json": {
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text",
+                      "json"
+                    ],
+                    "type": "object"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "usage": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "summary",
+                  "usage",
+                  "args",
+                  "needs",
+                  "output",
+                  "exit_codes",
+                  "errors"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "env": {
+              "items": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "summary"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "protocol": {
+              "type": "integer"
+            },
+            "schema": {
+              "const": "tiili.describe/1"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "version",
+            "protocol",
+            "env",
+            "commands"
+          ],
+          "type": "object"
+        },
+        "text": "JSON, the same on every run of the same binary"
+      },
+      "summary": "Print this command line's contract as JSON, without contacting the app",
+      "usage": "tiili describe [CMD]"
+    },
+    {
+      "args": [
+        {
+          "kind": "positional",
+          "name": "CMD",
+          "required": false,
+          "summary": "show only this command"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        }
+      ],
+      "exit_codes": [
+        0,
+        2
+      ],
+      "name": "help",
+      "needs": [],
+      "output": {
+        "json": null,
+        "text": "help text"
+      },
+      "summary": "Print the commands, or one command's usage",
+      "usage": "tiili help [CMD]"
+    }
+  ],
+  "env": [
+    {
+      "name": "TIILI_SOCKET",
+      "summary": "the control endpoint of the app that opened this pane; set in every pane"
+    },
+    {
+      "name": "TIILI_TOKEN",
+      "summary": "this run's token; set in every pane"
+    },
+    {
+      "name": "TIILI_PANE",
+      "summary": "this pane's id; set in every pane"
+    },
+    {
+      "name": "PATH",
+      "summary": "sent with open, so the command is looked up on and runs with the caller's PATH"
+    },
+    {
+      "name": "HOME",
+      "summary": "the home folder install-claude-skill writes under (USERPROFILE on Windows when unset)"
+    }
+  ],
+  "protocol": 1,
+  "schema": "tiili.describe/1",
+  "version": "<version>"
+}
