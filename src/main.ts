@@ -10,7 +10,9 @@ import { applyTheme } from "./themes";
 import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
 import { showUpdateDialog } from "./updateDialog";
-import { findUpdate, startupCheck } from "./updates";
+import { findUpdate, startupCheck, takeWhatsNew } from "./updates";
+import { APP_VERSION } from "./version";
+import { showWhatsNewDialog } from "./whatsNewDialog";
 
 /** Event sent when the macOS app menu's Settings… item is chosen. */
 const OPEN_SETTINGS_EVENT = "open-settings";
@@ -191,14 +193,17 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   if (!arrived) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 
-  // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top.
+  // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top. Before
+  // that, the first start after an in-app update shows what's new in the version it installed.
   if (selectBackend(window) === "tauri" && getCurrentWindow().label === "main") {
-    void (splash?.done ?? Promise.resolve()).then(() =>
-      startupCheck({
+    void (splash?.done ?? Promise.resolve()).then(() => {
+      const items = takeWhatsNew(APP_VERSION);
+      if (items?.length) showWhatsNewDialog(APP_VERSION, items, () => panes.focusCurrent());
+      return startupCheck({
         enabled: settings.updates.autoCheck,
         show: (update) => showUpdateDialog(update, () => panes.focusCurrent()),
-      }),
-    );
+      });
+    });
   }
 }
 

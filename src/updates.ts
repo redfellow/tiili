@@ -13,6 +13,8 @@ export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const LAST_CHECK_KEY = "tiili.updates.lastCheck";
 /** localStorage key of the version the user chose to skip. */
 export const SKIPPED_KEY = "tiili.updates.skipped";
+/** localStorage key of the What's new entry Install now saves for the first start of the new version. */
+export const WHATS_NEW_KEY = "tiili.updates.whatsNew";
 
 /** How tiili was installed: a Linux `.deb`, which can't update itself, or a bundle that can. */
 export type InstallKind = "deb" | "bundle";
@@ -23,6 +25,8 @@ export interface FoundUpdate {
   currentVersion: string;
   /** The release notes, as plain text; empty when the release has none. */
   notes: string;
+  /** The bullets under the release notes' What's new heading; empty when there is no such section. */
+  whatsNew: string[];
   kind: InstallKind;
   /** The release's page on GitHub. */
   releaseUrl: string;
@@ -31,6 +35,36 @@ export interface FoundUpdate {
    * `undefined` while the size is unknown.
    */
   install(onProgress: (fraction: number | undefined) => void): Promise<void>;
+}
+
+const WHATS_NEW_HEADING = /^#{1,6}\s*what'?s new/i;
+const BULLET = /^[-*]\s+/;
+
+/**
+ * The items under the release body's What's new heading, with their `- ` or `* ` markers stripped. The section
+ * ends at the next heading, a `<details>` block or the `**Full changelog` line.
+ */
+export function whatsNew(body: string): string[] {
+  const items: string[] = [];
+  let inSection = false;
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!inSection) {
+      inSection = WHATS_NEW_HEADING.test(line);
+      continue;
+    }
+    if (line.startsWith("#") || line.startsWith("<details") || line.startsWith("**Full changelog")) break;
+    if (BULLET.test(line)) items.push(line.replace(BULLET, ""));
+  }
+  return items;
+}
+
+/** The release body as plain text: HTML tags and markdown heading markers removed, and trimmed. */
+export function plainNotes(body: string): string {
+  return body
+    .replace(/<[^>]*>/g, "")
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, "")
+    .trim();
 }
 
 /** Whether an automatic check is due at `now`: checks are on and the last one (if any) is a day old or more. */
@@ -52,7 +86,7 @@ export function releasePageUrl(version: string): string {
 }
 
 /** The storage the check keeps its state in; localStorage in the app. */
-export type UpdateStorage = Pick<Storage, "getItem" | "setItem">;
+export type UpdateStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 function read(storage: UpdateStorage, key: string): string | undefined {
   try {
@@ -70,6 +104,39 @@ function write(storage: UpdateStorage, key: string, value: string): void {
   }
 }
 
+function remove(storage: UpdateStorage, key: string): void {
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Storage is unavailable: there is nothing to clear.
+  }
+}
+
+/** Saves `version`'s What's new `items` for the first start of that version; Install now calls it. */
+export function saveWhatsNew(version: string, items: string[], storage: UpdateStorage = localStorage): void {
+  write(storage, WHATS_NEW_KEY, JSON.stringify({ version, items }));
+}
+
+/**
+ * The saved What's new items when they are for `runningVersion`, else undefined. Either way the saved entry is
+ * cleared, so the items are returned once and an entry for another version (a failed install) is dropped.
+ */
+export function takeWhatsNew(runningVersion: string, storage: UpdateStorage = localStorage): string[] | undefined {
+  const saved = read(storage, WHATS_NEW_KEY);
+  if (saved === undefined) return undefined;
+  remove(storage, WHATS_NEW_KEY);
+  let entry: unknown;
+  try {
+    entry = JSON.parse(saved);
+  } catch {
+    return undefined;
+  }
+  if (typeof entry !== "object" || entry === null) return undefined;
+  const { version, items } = entry as { version?: unknown; items?: unknown };
+  if (version !== runningVersion || !Array.isArray(items)) return undefined;
+  return items.filter((item): item is string => typeof item === "string");
+}
+
 /** Skip this version: automatic checks no longer offer `version`. */
 export function skipVersion(version: string, storage: UpdateStorage = localStorage): void {
   write(storage, SKIPPED_KEY, version);
@@ -80,13 +147,17 @@ export async function findUpdate(): Promise<FoundUpdate | undefined> {
   const update = await check();
   if (!update) return undefined;
   const kind = await invoke<InstallKind>("update_install_kind").catch((): InstallKind => "bundle");
+  const notes = update.body?.trim() ?? "";
+  const items = whatsNew(notes);
   return {
     version: update.version,
     currentVersion: update.currentVersion,
-    notes: update.body?.trim() ?? "",
+    notes,
+    whatsNew: items,
     kind,
     releaseUrl: releasePageUrl(update.version),
     async install(onProgress) {
+      saveWhatsNew(update.version, items);
       let total: number | undefined;
       let done = 0;
       await update.downloadAndInstall((event: DownloadEvent) => {
