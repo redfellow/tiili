@@ -4,10 +4,15 @@ import {
   CHECK_INTERVAL_MS,
   LAST_CHECK_KEY,
   SKIPPED_KEY,
+  WHATS_NEW_KEY,
   isSkipped,
+  plainNotes,
+  saveWhatsNew,
   shouldAutoCheck,
   skipVersion,
   startupCheck,
+  takeWhatsNew,
+  whatsNew,
   type FoundUpdate,
 } from "./updates";
 
@@ -41,13 +46,19 @@ describe("isSkipped", () => {
 
 function memoryStorage(entries: Record<string, string> = {}) {
   const map = new Map(Object.entries(entries));
-  return { getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => void map.set(key, value), map };
+  return {
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => void map.set(key, value),
+    removeItem: (key: string) => void map.delete(key),
+    map,
+  };
 }
 
 const found = (version: string): FoundUpdate => ({
   version,
   currentVersion: "0.2.0",
   notes: "",
+  whatsNew: [],
   kind: "bundle",
   releaseUrl: "",
   install: async () => undefined,
@@ -83,5 +94,75 @@ describe("startupCheck", () => {
     const storage = memoryStorage();
     skipVersion("0.3.0", storage);
     expect(storage.map.get(SKIPPED_KEY)).toBe("0.3.0");
+  });
+});
+
+/** The body of the real v0.3.0 release. */
+const V030_BODY = `## What's new
+
+- The v0.3.0 release is fixed for Windows, where line endings were previously stamped incorrectly.
+- The macOS update bundle is fixed, so the app's updater on macOS works with this release.
+- A retry step was added to the release process.
+- The settings window has been redesigned, with pickers shown as cards.
+- Settings now include a live preview.
+- The footer stays pinned at the bottom of the settings window.
+- Every settings tab fits within a 720×640 window.
+- You can now get app updates from within the app.
+- The tiili app window is now titled "tiili >_" in the alt-tab window switcher.
+
+<details><summary>All changes (10)</summary>
+
+- Fix the v0.3.0 release: CRLF stamp on Windows, macOS updater bundle, retry (#134)
+- In-app updates (#127)
+
+</details>
+
+**Full changelog:** https://github.com/redfellow/tiili/compare/v0.2.0...v0.3.0`;
+
+const NO_SECTION_BODY = `## Fixes
+
+<b>Faster</b> start-up.`;
+
+describe("whatsNew and plainNotes", () => {
+  it.each([
+    ["Body with What's new: the v0.3.0 body", V030_BODY, 9, "The v0.3.0 release is fixed for Windows, where line endings were previously stamped incorrectly.", "The tiili app window is now titled \"tiili >_\" in the alt-tab window switcher."],
+    ["Body without What's new", NO_SECTION_BODY, 0, undefined, undefined],
+    ["empty body", "", 0, undefined, undefined],
+    ["section ended by the changelog line, * bullets", "### Whats New\r\n* one\r\n**Full changelog:** x\r\n- not this", 1, "one", "one"],
+  ])("%s", (_name, body, count, first, last) => {
+    const items = whatsNew(body);
+    expect(items).toHaveLength(count);
+    expect(items[0]).toBe(first);
+    expect(items.at(-1)).toBe(last);
+  });
+
+  it.each([
+    ["Body without What's new: no tags or heading markers", NO_SECTION_BODY, "Fixes\n\nFaster start-up."],
+    ["empty body", "", ""],
+  ])("%s", (_name, body, expected) => {
+    expect(plainNotes(body)).toBe(expected);
+  });
+});
+
+describe("saveWhatsNew and takeWhatsNew", () => {
+  it("Shown once after updating: take returns the items once on the matching version", () => {
+    const storage = memoryStorage();
+    saveWhatsNew("0.4.0", ["one", "two"], storage);
+    expect(takeWhatsNew("0.4.0", storage)).toEqual(["one", "two"]);
+    expect(takeWhatsNew("0.4.0", storage)).toBeUndefined();
+  });
+
+  it.each([
+    ["Version does not match: cleared, nothing returned", JSON.stringify({ version: "0.4.0", items: ["one"] })],
+    ["corrupt JSON: cleared, nothing returned", "{not json"],
+    ["wrong shape: cleared, nothing returned", JSON.stringify(["0.3.0"])],
+  ])("%s", (_name, saved) => {
+    const storage = memoryStorage({ [WHATS_NEW_KEY]: saved });
+    expect(takeWhatsNew("0.3.0", storage)).toBeUndefined();
+    expect(storage.map.has(WHATS_NEW_KEY)).toBe(false);
+  });
+
+  it("Updated outside the app: no saved entry, nothing returned", () => {
+    expect(takeWhatsNew("0.4.0", memoryStorage())).toBeUndefined();
   });
 });

@@ -27,6 +27,7 @@ import {
   type LayoutState,
   type PaneId,
 } from "./layout/model";
+import { EXIT_HOLD_MS, prefersReducedMotion } from "./layout/motion";
 import { TileView } from "./layout/view";
 import { openHeynote, type HeynoteFrame } from "./heynotePane";
 import {
@@ -124,6 +125,10 @@ export class Panes {
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
       // Terminals scale with their moving panes and refit once they are in place, so each shell sees one size change.
       motionStart: () => this.panes.forEach((pane) => pane.terminal?.holdSize()),
+      // Terminals take their final font and grid up front, so the glide scales the text gradually instead of
+      // snapping it to a new size at the end.
+      motionPlay: () =>
+        new Map(this.panes.flatMap((pane) => (pane.terminal ? [[pane.id, pane.terminal.refitNow()] as const] : []))),
       motionEnd: () => this.panes.forEach((pane) => pane.terminal?.releaseSize(true)),
     });
     this.layout = emptyLayout(settings().tiling.layout);
@@ -513,6 +518,8 @@ export class Panes {
       await this.backend.closeWindow();
     }
     const terminal = await pane.ready;
+    // The terminal stays on screen while its pane fades out.
+    if (!prefersReducedMotion()) await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
     await terminal?.dispose();
   }
 

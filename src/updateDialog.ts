@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { skipVersion, type FoundUpdate } from "./updates";
+import { plainNotes, skipVersion, type FoundUpdate } from "./updates";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -16,8 +16,9 @@ function message(error: unknown): string {
 }
 
 /**
- * Shows the update dialog for `update` in this window: the new and current versions, the release notes as plain
- * text, and Install now (with progress, then a restart), Later and Skip this version. A `.deb` install can't update
+ * Shows the update dialog for `update` in this window: the new and current versions, the release's What's new items
+ * as a list (or, when the notes have no such section, the notes as plain text), a See all changes link to the
+ * release page, and Install now (with progress, then a restart), Later and Skip this version. A `.deb` install can't update
  * itself, so it gets Open release page instead of Install now. `onClose` runs once the dialog has closed.
  */
 export function showUpdateDialog(update: FoundUpdate, onClose: () => void = () => undefined): void {
@@ -25,7 +26,12 @@ export function showUpdateDialog(update: FoundUpdate, onClose: () => void = () =
   const title = element("h2", { id: "update-dialog-title" }, deb ? "A new version is available" : "Install update?");
   const summary = element("p", { className: "update-summary" },
     `tiili ${update.version} is available (you have ${update.currentVersion}).`);
-  const notes = element("pre", { className: "update-notes", tabIndex: 0, hidden: !update.notes }, update.notes);
+  const fallback = update.whatsNew.length ? "" : plainNotes(update.notes);
+  const notes = update.whatsNew.length
+    ? element("ul", { className: "update-notes update-items", tabIndex: 0 },
+      ...update.whatsNew.map((item) => element("li", {}, item)))
+    : element("pre", { className: "update-notes", tabIndex: 0, hidden: !fallback }, fallback);
+  const allChanges = element("a", { className: "update-all-changes", href: update.releaseUrl }, "See all changes");
   const progress = element("progress", { className: "update-progress", max: 1, hidden: true });
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
@@ -40,6 +46,7 @@ export function showUpdateDialog(update: FoundUpdate, onClose: () => void = () =
       element("header", { className: "settings-header" }, title),
       summary,
       notes,
+      allChanges,
       progress,
       status,
       element("footer", { className: "settings-footer" },
@@ -69,6 +76,13 @@ export function showUpdateDialog(update: FoundUpdate, onClose: () => void = () =
   dialog.addEventListener("close", () => {
     dialog.remove();
     onClose();
+  });
+  allChanges.addEventListener("click", (event) => {
+    event.preventDefault();
+    status.textContent = "";
+    openUrl(update.releaseUrl).catch((error: unknown) => {
+      status.textContent = `Couldn't open the release page: ${message(error)}`;
+    });
   });
   later.addEventListener("click", close);
   skip.addEventListener("click", () => {
