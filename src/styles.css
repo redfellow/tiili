@@ -758,7 +758,8 @@ html[data-pane-dragging] * {
 }
 
 /* The Zen toggle at the right end of each pane's title row: lit in the accent on the Zen pane, with a dot while a
-   hidden pane needs the user. */
+   hidden pane needs the user. It shows only while the pointer is over its pane, while it carries the dot, or while it
+   has keyboard focus; otherwise it keeps its space so the title chip never shifts. */
 .pane-zen-toggle {
   position: relative;
   display: flex;
@@ -778,6 +779,10 @@ html[data-pane-dragging] * {
 
 .pane-zen-toggle[hidden] {
   display: none;
+}
+
+.pane:not(:hover) .pane-zen-toggle:not([data-marked]):not(:focus-visible) {
+  visibility: hidden;
 }
 
 .pane-zen-toggle:hover {
