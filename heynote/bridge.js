@@ -163,6 +163,8 @@ if (tiiliTheme) {
 } else {
     mediaMatch.addEventListener("change", followTheme)
 }
+// tiili opens the next Heynote page in the ground of the theme chosen here.
+tiiliTheme?.heynoteChose?.(state.theme)
 const systemTheme = () => tiiliTheme ? tiiliTheme.kind() : (mediaMatch.matches ? "dark" : "light")
 
 let currencyData = null
@@ -499,6 +501,7 @@ const Heynote = {
     themeMode: {
         set: (mode) => {
             setState("theme", mode)
+            tiiliTheme?.heynoteChose?.(mode)
             themeCallback(mode)
         },
         get: async () => {

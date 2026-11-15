@@ -446,7 +446,6 @@ body {
   display: none;
 }
 
-/* The Heynote pane's frame fills the pane's content area; Heynote draws its own background. */
 /* Heynote's frame: openHeynote gives it the ground and colour scheme of Heynote's starting mode and keeps it
    hidden until Heynote has painted; the radius clips that ground with the pane's. */
 .pane-heynote {

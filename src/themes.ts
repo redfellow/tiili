@@ -209,9 +209,21 @@ export function themeKind(id: ThemeId, prefersDark: boolean): "light" | "dark" {
   return kind;
 }
 
+/**
+ * The mode Heynote starts in: the theme chosen inside Heynote (`saved`, its state's `theme`) when that is light or
+ * dark, else tiili's kind.
+ */
+export function heynoteStartKind(saved: string | null | undefined, tiili: "light" | "dark"): "light" | "dark" {
+  return saved === "light" || saved === "dark" ? saved : tiili;
+}
+
 /** tiili's light or dark, as the main window hands it to the Heynote page (`window.tiiliTheme`). */
 export interface TiiliTheme {
   kind(): "light" | "dark";
+  /** The mode a Heynote page opened now starts in, from the theme last chosen inside Heynote and tiili's kind. */
+  startKind(): "light" | "dark";
+  /** Records the theme chosen inside Heynote (its state's `theme`, unset or "system" for none). */
+  heynoteChose(theme: string | null | undefined): void;
   /** Calls `callback` with the new kind whenever it changes; returns what stops it. */
   onChange(callback: (kind: "light" | "dark") => void): () => void;
 }
@@ -224,6 +236,7 @@ export function themeKindSource(
   const listeners = new Set<(kind: "light" | "dark") => void>();
   const kind = () => themeKind(theme(), media.matches);
   let last = kind();
+  let heynoteTheme: string | null | undefined;
   const changed = () => {
     const next = kind();
     if (next === last) return;
@@ -241,6 +254,10 @@ export function themeKindSource(
   return {
     kind,
     changed,
+    startKind: () => heynoteStartKind(heynoteTheme, kind()),
+    heynoteChose: (theme) => {
+      heynoteTheme = theme;
+    },
     onChange: (callback) => {
       listeners.add(callback);
       return () => listeners.delete(callback);

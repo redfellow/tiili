@@ -7,6 +7,7 @@
 ## 2. No flash
 - [x] 2.1 In src/heynotePane.ts set the frame's background and `color-scheme` before loading and keep it hidden until load plus one frame; in scripts/heynote.mjs add an inline head style for Heynote's page ground from `parent.tiiliTheme`; update the `.pane-heynote` rule in src/styles.css
   - proof: `npx vitest run src/heynoteSaveOnClose.test.ts src/heynoteStore.test.ts`
+  - proof: `npx vitest run src/themes.test.ts`
   - proof: `npm run typecheck`
 
 ## Manual checks after merge (The user)

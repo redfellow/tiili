@@ -43,19 +43,22 @@ export function openHeynote(
   const frame = document.createElement("iframe");
   frame.className = "pane-heynote";
   frame.title = "Heynote";
-  // The frame opens in the ground of the mode Heynote starts in and stays hidden until Heynote has painted, so the
-  // empty frame's white never shows.
+  // The frame opens in the ground of the mode Heynote starts in and stays hidden until Heynote has painted, with the
+  // pane behind it in that ground meanwhile, so neither the empty frame's white nor the pane's own ground shows.
   const tiiliTheme = (window as Window & { tiiliTheme?: TiiliTheme }).tiiliTheme;
-  const kind = tiiliTheme?.kind() ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const kind =
+    tiiliTheme?.startKind() ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   frame.style.colorScheme = kind;
   frame.style.background = HEYNOTE_GROUND[kind];
   frame.style.visibility = "hidden";
+  host.style.background = HEYNOTE_GROUND[kind];
   frame.src = HEYNOTE_URL;
   const page = () => frame.contentWindow as HeynoteWindow | null;
 
   frame.addEventListener("load", () => {
     requestAnimationFrame(() => {
       frame.style.visibility = "";
+      host.style.background = "";
     });
     const win = page();
     if (!win) return;

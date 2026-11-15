@@ -58,13 +58,13 @@ try {
     startup,
   );
   if (patched === original.index) throw new Error("Heynote's webapp/index.html changed: update scripts/heynote.mjs");
-  // Heynote's page starts in the ground of the mode it opens in, tiili's light or dark (window.parent.tiiliTheme),
-  // before any script runs, so it never paints white first. The colours are Heynote's editor grounds, as in
-  // src/heynotePane.ts.
+  // Heynote's page starts in the ground of the mode it opens in (window.parent.tiiliTheme's startKind: the theme
+  // chosen inside Heynote, else tiili's light or dark) before any script runs, so it never paints a wrong ground
+  // first. The colours are Heynote's editor grounds, as in src/heynotePane.ts.
   const ground =
     "  <script>\n" +
     "      try {\n" +
-    '        const kind = parent !== window && parent.tiiliTheme ? parent.tiiliTheme.kind() : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");\n' +
+    '        const kind = parent !== window && parent.tiiliTheme ? parent.tiiliTheme.startKind() : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");\n' +
     '        document.documentElement.dataset.tiiliGround = kind;\n' +
     "      } catch {}\n" +
     "    </script>\n" +

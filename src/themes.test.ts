@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { THEME_IDS } from "./settings";
-import { contrast, THEME_TOKENS, THEMES, themeKind } from "./themes";
+import { contrast, THEME_TOKENS, THEMES, heynoteStartKind, themeKind } from "./themes";
 
 const fixedThemes = THEMES.filter((theme) => theme.kind !== "system");
 
@@ -39,5 +39,19 @@ describe("themes", () => {
     ["system", true, "dark"] as const,
   ])("Heynote follows tiili's light or dark: %s with the OS dark %s is %s", (id, prefersDark, kind) => {
     expect(themeKind(id, prefersDark)).toBe(kind);
+  });
+
+  it.each([
+    ["light", "dark", "light"],
+    ["dark", "light", "dark"],
+    ["light", "light", "light"],
+    ["dark", "dark", "dark"],
+    ["system", "light", "light"],
+    ["system", "dark", "dark"],
+    [undefined, "light", "light"],
+    [undefined, "dark", "dark"],
+    [null, "dark", "dark"],
+  ] as const)("Heynote opens without a flash: chosen in Heynote %s under tiili %s starts %s", (saved, tiili, kind) => {
+    expect(heynoteStartKind(saved, tiili)).toBe(kind);
   });
 });
