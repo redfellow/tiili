@@ -89,6 +89,11 @@ export class Panes {
   private shown = 0;
   /** Pane ids are unique across the window's tabs, so a pane keeps its id when it moves to another tab. */
   private nextId = 1;
+  /**
+   * Set while a popped-out tab's panes arrive: focusing them then is not the user looking at them, so their marks
+   * move with them ("Mark moves") instead of clearing.
+   */
+  private arriving = false;
   private contextMenu: (event: MouseEvent) => void = () => {};
   private readonly tabHooks: TabHooks;
   /** The top bar's tab strip, once attached. */
@@ -589,8 +594,8 @@ export class Panes {
       );
       throw error;
     }
+    // The panes keep their attention marks: they go with them to the new window ("Mark moves").
     for (const pane of panes) {
-      if (pane.session !== undefined) this.clearMark(pane.session);
       this.remove(pane);
       pane.terminal?.detach();
     }
@@ -619,15 +624,21 @@ export class Panes {
       this.showTab(this.tabs.indexOf(tab));
     }
     tab.name = payload.name;
-    for (const pane of payload.panes) {
-      if (pane.kind === "heynote") await this.openHeynote(tab);
-      else await this.openPane(tab, undefined, pane);
+    // Each pane is given the keyboard as it opens, and the focused one again at the end: none of it clears a mark.
+    this.arriving = true;
+    try {
+      for (const pane of payload.panes) {
+        if (pane.kind === "heynote") await this.openHeynote(tab);
+        else await this.openPane(tab, undefined, pane);
+      }
+      const { colSizes, rowSizes } = payload.layout;
+      if (colSizes.length === tab.layout.colSizes.length && rowSizes.length === tab.layout.rowSizes.length) {
+        tab.relayout({ ...tab.layout, colSizes, rowSizes });
+      }
+      if (tab.shown) this.focus(Math.min(payload.focused, tab.panes.length - 1));
+    } finally {
+      this.arriving = false;
     }
-    const { colSizes, rowSizes } = payload.layout;
-    if (colSizes.length === tab.layout.colSizes.length && rowSizes.length === tab.layout.rowSizes.length) {
-      tab.relayout({ ...tab.layout, colSizes, rowSizes });
-    }
-    if (tab.shown) this.focus(Math.min(payload.focused, tab.panes.length - 1));
   }
 
   /**
@@ -960,6 +971,7 @@ export class Panes {
 
   /** The user looks at the focused pane: its mark clears. */
   private clearCurrent(): void {
+    if (this.arriving) return;
     const session = this.current()?.session;
     if (session !== undefined) this.clearMark(session);
   }
