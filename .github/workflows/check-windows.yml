@@ -1,0 +1,34 @@
+name: check-windows
+# Compiles the Rust side on Windows for every change, so Windows-only code (the named-pipe control server and the
+# like) fails here instead of in a release. härvääjä's own checks run on macOS only.
+on:
+  push:
+    branches: ["**"]
+    paths: ["src-tauri/**", ".github/workflows/check-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      # tauri::generate_context! embeds the built frontend, so dist must exist before cargo can check the app.
+      - run: npm run build
+      - name: cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked --no-default-features --lib --bins --tests
