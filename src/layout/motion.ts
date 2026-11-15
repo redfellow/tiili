@@ -9,11 +9,23 @@ export interface Rect {
 }
 
 /** How long a pane takes to reach its new place. */
-export const MOTION_MS = 180;
-/** Ease-out: quick to start, gentle to land. */
-export const MOTION_EASING = "cubic-bezier(.2,.8,.2,1)";
+export const MOTION_MS = 280;
+/** Ease-out-quint: quick to start, a long soft landing. */
+export const MOTION_EASING = "cubic-bezier(.22,1,.36,1)";
+/** A new pane takes a little longer than a move so the eye catches it arriving. */
+export const ENTER_MS = 380;
+/** Ease-out with a slight overshoot: the new pane settles into place with a little spring. */
+export const ENTER_EASING = "cubic-bezier(.34,1.35,.64,1)";
+/** A closing pane leaves quickly; ease-in so it speeds away. */
+export const EXIT_MS = 180;
+export const EXIT_EASING = "cubic-bezier(.4,0,1,1)";
+/** How long a closing pane's terminal stays on screen: until its exit animation has finished. */
+export const EXIT_HOLD_MS = EXIT_MS + 20;
 /** The scale a new pane grows in from and a closing pane shrinks to. */
-const SHRUNK = 0.92;
+const SHRUNK = 0.94;
+/** A new or closing pane lifts off the grid on a soft shadow, so it reads against the dark mortar. */
+const LIFTED = "0 10px 32px rgba(0,0,0,.45)";
+const FLAT = "0 0 0 rgba(0,0,0,0)";
 /** Rect changes smaller than this many pixels count as no change. */
 const EPSILON = 0.5;
 
@@ -22,6 +34,8 @@ export type MotionKind = "move" | "enter" | "exit";
 
 export interface PaneMotion {
   kind: MotionKind;
+  duration: number;
+  easing: string;
   frames: Keyframe[];
 }
 
@@ -46,9 +60,11 @@ export function flipFrames(before: Map<PaneId, Rect>, after: Map<PaneId, Rect>):
     if (!from) {
       motions.set(id, {
         kind: "enter",
+        duration: ENTER_MS,
+        easing: ENTER_EASING,
         frames: [
-          { transformOrigin: "50% 50%", transform: `scale(${SHRUNK})`, opacity: 0 },
-          { transformOrigin: "50% 50%", transform: "none", opacity: 1 },
+          { transformOrigin: "50% 50%", transform: `translateY(10px) scale(${SHRUNK})`, opacity: 0, boxShadow: LIFTED },
+          { transformOrigin: "50% 50%", transform: "none", opacity: 1, boxShadow: FLAT },
         ],
       });
       continue;
@@ -60,6 +76,8 @@ export function flipFrames(before: Map<PaneId, Rect>, after: Map<PaneId, Rect>):
     const sy = from.height / to.height;
     motions.set(id, {
       kind: "move",
+      duration: MOTION_MS,
+      easing: MOTION_EASING,
       frames: [
         { transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
         { transformOrigin: "0 0", transform: "none" },
@@ -70,9 +88,11 @@ export function flipFrames(before: Map<PaneId, Rect>, after: Map<PaneId, Rect>):
     if (after.has(id)) continue;
     motions.set(id, {
       kind: "exit",
+      duration: EXIT_MS,
+      easing: EXIT_EASING,
       frames: [
-        { transformOrigin: "50% 50%", transform: "none", opacity: 1 },
-        { transformOrigin: "50% 50%", transform: `scale(${SHRUNK})`, opacity: 0 },
+        { transformOrigin: "50% 50%", transform: "none", opacity: 1, boxShadow: FLAT },
+        { transformOrigin: "50% 50%", transform: `translateY(6px) scale(${SHRUNK})`, opacity: 0, boxShadow: LIFTED },
       ],
     });
   }

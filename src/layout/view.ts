@@ -1,5 +1,5 @@
 import { resizeTrack, type Axis, type LayoutState, type PaneId } from "./model";
-import { flipFrames, MOTION_EASING, MOTION_MS, prefersReducedMotion, type Rect } from "./motion";
+import { flipFrames, prefersReducedMotion, type Rect } from "./motion";
 
 /** What the view asks of the panes it lays out. */
 export interface TileHooks {
@@ -15,6 +15,8 @@ export interface TileHooks {
   swap(from: PaneId, to: PaneId): void;
   /** Panes start moving to a new layout: terminals hold their size until `motionEnd`. */
   motionStart(): void;
+  /** The panes are laid out in their new places, about to glide there: terminals take their final font and grid. */
+  motionPlay(): Map<PaneId, number>;
   /** The panes have reached their new places: terminals refit once to their final size. */
   motionEnd(): void;
 }
@@ -79,19 +81,23 @@ export class TileView {
       this.hooks.motionStart();
     }
     this.layOut(state);
+    const fontRatios = this.hooks.motionPlay();
     const generation = ++this.generation;
     const rootRect = this.root.getBoundingClientRect();
-    const options = { duration: MOTION_MS, easing: MOTION_EASING };
     for (const [id, motion] of flipFrames(before, this.measure())) {
       if (motion.kind !== "exit") {
         const element = this.root.querySelector<HTMLElement>(`.pane[data-pane-id="${id}"]`);
-        if (element) this.running.push(element.animate(motion.frames, options));
+        if (element) {
+          const options = { duration: motion.duration, easing: motion.easing };
+          this.running.push(element.animate(motion.frames, options));
+          if (motion.kind === "move") this.running.push(...this.steadyContent(element, id, before, fontRatios, options));
+        }
         continue;
       }
       const element = elements.get(id);
       const rect = before.get(id);
       if (!element || !rect) continue;
-      // Kept at its last rect, beneath the other panes, until it has faded out.
+      // Kept at its last rect, above the other panes, until it has faded out.
       Object.assign(element.style, {
         position: "absolute",
         left: `${rect.left - rootRect.left}px`,
@@ -100,9 +106,11 @@ export class TileView {
         height: `${rect.height}px`,
         pointerEvents: "none",
       });
-      this.root.prepend(element);
+      // Above the panes that grow into its place, so the fade-out is seen.
+      element.style.zIndex = "1";
+      this.root.append(element);
       this.leaving.push(element);
-      const animation = element.animate(motion.frames, { ...options, fill: "forwards" });
+      const animation = element.animate(motion.frames, { duration: motion.duration, easing: motion.easing, fill: "forwards" });
       animation.finished.then(() => this.unpin(element)).catch(() => undefined);
       this.running.push(animation);
     }
@@ -111,6 +119,42 @@ export class TileView {
         if (generation === this.generation) this.endMotion();
       })
       .catch(() => undefined);
+  }
+
+  /**
+   * Keeps a gliding pane's content from being stretched by the pane's own scale: the terminal and title scale
+   * evenly instead, the terminal from its old font size to its new one, so the text grows or shrinks gradually.
+   */
+  private steadyContent(
+    element: HTMLElement,
+    id: PaneId,
+    before: Map<PaneId, Rect>,
+    fontRatios: Map<PaneId, number>,
+    options: KeyframeAnimationOptions,
+  ): Animation[] {
+    const from = before.get(id);
+    const to = element.getBoundingClientRect();
+    if (!from || to.width <= 0 || to.height <= 0) return [];
+    const sx = from.width / to.width;
+    const sy = from.height / to.height;
+    const animations: Animation[] = [];
+    for (const [selector, uniform] of [
+      [".pane-terminal", fontRatios.get(id) ?? 1],
+      [".pane-title", 1],
+    ] as const) {
+      const child = element.querySelector<HTMLElement>(`:scope > ${selector}`);
+      if (!child) continue;
+      animations.push(
+        child.animate(
+          [
+            { transformOrigin: "0 0", transform: `scale(${uniform / sx}, ${uniform / sy})` },
+            { transformOrigin: "0 0", transform: "none" },
+          ],
+          options,
+        ),
+      );
+    }
+    return animations;
   }
 
   /** The pane elements laid out in the grid, without the ones fading out. */
@@ -140,7 +184,7 @@ export class TileView {
   private unpin(element: HTMLElement): void {
     this.leaving = this.leaving.filter((e) => e !== element);
     element.remove();
-    for (const property of ["position", "left", "top", "width", "height", "pointer-events"]) {
+    for (const property of ["position", "left", "top", "width", "height", "pointer-events", "z-index"]) {
       element.style.removeProperty(property);
     }
   }
