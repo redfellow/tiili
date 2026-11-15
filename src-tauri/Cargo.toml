@@ -1,6 +1,6 @@
 [package]
 name = "tiili"
-version = "0.2.0"
+version = "0.0.0-dev"
 description = "A terminal for working in many repositories at once"
 edition = "2021"
 license = "GPL-3.0-or-later"

@@ -77,10 +77,11 @@ export function pickTarget(arg, latest, latestPublished) {
   return { version: bumpVersion(latest, arg), resume: false };
 }
 
-// Rewrites the first "version" key of a JSON file when it holds a literal x.y.z version, keeping the formatting.
+// Rewrites the first "version" key of a JSON file when it holds a literal x.y.z version (or the repository's
+// 0.0.0-dev), keeping the formatting.
 // A reference such as tauri.conf.json's "../package.json" is left untouched.
 export function setJsonVersion(text, version) {
-  return text.replace(/("version"\s*:\s*")(\d+\.\d+\.\d+)(")/, `$1${version}$3`);
+  return text.replace(/("version"\s*:\s*")(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(")/, `$1${version}$3`);
 }
 
 // Rewrites only the `version` line of Cargo.toml's [package] table; dependency `version =` entries stay.
