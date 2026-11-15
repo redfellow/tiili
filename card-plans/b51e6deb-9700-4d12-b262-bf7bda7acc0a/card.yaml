@@ -5,3 +5,13 @@ x-harvaaja-card: b51e6deb-9700-4d12-b262-bf7bda7acc0a
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds a bundled icon fallback font to the terminal font list: a new
+    observable contract on the settings Font family list requirement; no active
+    changes exist."
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement: Font family list"
+    - src/settings.ts fontFamilyList
+    - src/terminal.ts loadFont
+  revision: 3c51fd9b-b621-4eee-b187-3e18053be403
