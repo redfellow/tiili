@@ -4,11 +4,16 @@
 // It runs `npm ci` first when node_modules does not match package-lock.json, so it also works right after a pull or
 // a promotion that added or changed dependencies (härvääjä runs it after each Release).
 //
+// The app gets a version from git, since releases stamp theirs only in CI and package.json's is a stale fallback: the
+// tag's version on a tagged commit, and a dev version past the last tag otherwise (see buildVersion). It is written
+// into package.json, Cargo.toml and Cargo.lock for the build and the files are put back afterwards.
+//
 // The steps are pure helpers, exported for scripts/install-app.test.ts; `main` runs them in order.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { bumpVersion, setCargoLockVersion, setCargoVersion, setJsonVersion } from "./release.mjs";
 
 export const APP_NAME = "tiili.app";
 export const APP_IDENTIFIER = "app.tiili";
@@ -30,6 +35,19 @@ export function buildArgs() {
     "--",
     "--no-default-features",
   ];
+}
+
+/**
+ * The version to build, from `git describe --tags --long --match "v[0-9]*"` output (undefined when there is no tag):
+ * `v0.3.0-0-gd2c41ae` (on the tag) gives `0.3.0`; `v0.3.0-145-gd2c41ae` gives `0.3.1-dev.145+d2c41ae`, which sorts
+ * after 0.3.0 and before any next release, so the in-app updater neither offers 0.3.0 again nor misses the next one.
+ * Without a tag it is `fallback`, package.json's version.
+ */
+export function buildVersion(describe, fallback) {
+  const match = /^v(\d+\.\d+\.\d+)-(\d+)-g([0-9a-f]+)$/.exec(describe?.trim() ?? "");
+  if (!match) return fallback;
+  const [, version, ahead, sha] = match;
+  return ahead === "0" ? version : `${bumpVersion(version, "patch")}-dev.${ahead}+${sha}`;
 }
 
 /** Where `tauri build --bundles app` leaves the app, for a repository root. */
@@ -90,6 +108,31 @@ function quitTiili() {
   }
 }
 
+/**
+ * Runs `build` with `version` written into the files the build reads it from, and puts their old contents back
+ * afterwards, also when the build fails or is stopped with Ctrl-C.
+ */
+export function withVersion(root, version, build) {
+  const files = [
+    ["package.json", setJsonVersion],
+    ["src-tauri/Cargo.toml", setCargoVersion],
+    ["src-tauri/Cargo.lock", setCargoLockVersion],
+  ].map(([file, stamp]) => {
+    const path = resolve(root, file);
+    return { path, text: readFileSync(path, "utf8"), stamp };
+  });
+  // Ctrl-C stops the build (same process group); ignoring it here lets the failed build reach the restore below.
+  const ignore = () => {};
+  process.on("SIGINT", ignore);
+  try {
+    for (const { path, text, stamp } of files) writeFileSync(path, stamp(text, version));
+    build();
+  } finally {
+    for (const { path, text } of files) writeFileSync(path, text);
+    process.off("SIGINT", ignore);
+  }
+}
+
 function main() {
   if (process.platform !== "darwin") {
     console.error(`npm run install-app: this command runs only on macOS, not "${process.platform}".`);
@@ -102,7 +145,11 @@ function main() {
     console.log("Dependencies changed: running npm ci...");
     run("npm", ["ci", "--no-audit", "--no-fund"], { cwd: root });
   }
-  run("npx", buildArgs(), { cwd: root });
+  const fallback = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version;
+  const describe = spawnSync("git", ["describe", "--tags", "--long", "--match", "v[0-9]*"], { cwd: root, encoding: "utf8" });
+  const version = buildVersion(describe.status === 0 ? describe.stdout : undefined, fallback);
+  console.log(`Building tiili ${version}...`);
+  withVersion(root, version, () => run("npx", buildArgs(), { cwd: root }));
 
   const built = builtAppPath(root);
   if (!existsSync(built)) throw new Error(`The build did not produce ${built}.`);
