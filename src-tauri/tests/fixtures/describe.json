@@ -20,7 +20,7 @@
           "kind": "option",
           "name": "--key",
           "required": false,
-          "summary": "reuse this pane's live pane opened with KEY instead of opening another",
+          "summary": "reuse the live pane this pane opened with KEY instead of opening another",
           "value": "KEY"
         },
         {
@@ -901,7 +901,7 @@
     },
     {
       "name": "find-reuse",
-      "notes": "each of panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
+      "notes": "each pane in panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
       "recipe": "tiili list --json",
       "when": "you want to find a pane to reuse, read or close"
     }

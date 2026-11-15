@@ -866,7 +866,7 @@ pub const COMMANDS: &[CommandSpec] = &[
             OptSpec {
                 name: "--key",
                 value: Some("KEY"),
-                summary: "reuse this pane's live pane opened with KEY instead of opening another",
+                summary: "reuse the live pane this pane opened with KEY instead of opening another",
             },
             JSON_OPTION,
         ],

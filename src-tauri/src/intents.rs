@@ -41,7 +41,7 @@ pub const INTENTS: &[Intent] = &[
         name: "find-reuse",
         when: "you want to find a pane to reuse, read or close",
         recipe: "tiili list --json",
-        notes: "each of panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
+        notes: "each pane in panes has id, cwd, title, running.command, tab, key, self and opened_by_you; tiili close works only on panes with opened_by_you true",
     },
 ];
 
