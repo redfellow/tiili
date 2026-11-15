@@ -6,7 +6,7 @@ import { Panes } from "./panes";
 import { normalize, type Settings } from "./settings";
 import { createSettingsDialog, mountSettingsPage, type SettingsDialog } from "./settingsDialog";
 import { same } from "./settingsSession";
-import { applyTheme } from "./themes";
+import { applyTheme, themeKindSource, type TiiliTheme } from "./themes";
 import { documentTokens, followSystemTheme, highlightColour, terminalTheme } from "./theme";
 import type { ITheme } from "@xterm/xterm";
 import { localDay, playSplash, splashDue } from "./splash";
@@ -107,6 +107,14 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   // A missing or broken settings file loads as null, which normalizes to the defaults.
   let settings: Settings = normalize(await backend.loadSettings().catch(() => null));
   applyTheme(settings.theme);
+  // Heynote panes take tiili's light or dark from here (heynote/bridge.js) and follow its changes.
+  const themeKinds = themeKindSource(() => settings.theme, window.matchMedia("(prefers-color-scheme: dark)"));
+  (window as Window & { tiiliTheme?: TiiliTheme }).tiiliTheme = themeKinds;
+  // The theme chosen inside Heynote, so a Heynote pane opens in Heynote's own mode; its pages report later choices.
+  backend.notes
+    .load()
+    .then((library) => themeKinds.heynoteChose(library.state?.theme))
+    .catch((error: unknown) => console.error(error));
   // The icon is cosmetic: a failure must not keep the terminal from starting.
   backend.setAppIcon(settings.appIcon).catch(() => undefined);
 
@@ -164,6 +172,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     if (themeChanged) {
       applyTheme(next.theme);
       highlightShells(terminalTheme(documentTokens()));
+      themeKinds.changed();
     }
     if (iconChanged) await backend.setAppIcon(next.appIcon);
     await panes.applySettings(next, themeChanged);
