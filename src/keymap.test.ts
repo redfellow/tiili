@@ -14,6 +14,7 @@ import {
   type PaneAction,
   type Platform,
   type ZoomAction,
+  zenAction,
   zoomAction,
 } from "./keymap";
 
@@ -246,6 +247,36 @@ describe("findAction", () => {
       expect(settingsShortcut(event, platform)).toBeNull();
       expect(zoomAction(event, platform)).toBeNull();
       expect(attentionShortcut(event, platform)).toBeNull();
+    }
+  });
+});
+
+const zenCases: [string, Platform, KeyChord, "zen" | null][] = [
+  ["Zen toggle: ⇧⌘Enter on macOS", "macos", chord("Enter", { metaKey: true, shiftKey: true }), "zen"],
+  ["Shortcut toggles: Ctrl+Shift+Enter on Linux", "linux", chord("Enter", { ctrlKey: true, shiftKey: true }), "zen"],
+  ["Zen toggle: Ctrl+Shift+Enter on Windows", "windows", chord("Enter", { ctrlKey: true, shiftKey: true }), "zen"],
+  ["macOS: Ctrl+Shift+Enter reaches the shell", "macos", chord("Enter", { ctrlKey: true, shiftKey: true }), null],
+  ["macOS: ⌘Enter reaches the shell", "macos", chord("Enter", { metaKey: true }), null],
+  ["Linux: Ctrl+Enter reaches the shell", "linux", chord("Enter", { ctrlKey: true }), null],
+  ["Linux: Shift+Enter reaches the shell", "linux", chord("Enter", { shiftKey: true }), null],
+  ["Windows: Win+Shift+Enter is not the shortcut", "windows", chord("Enter", { metaKey: true, shiftKey: true }), null],
+  ["Linux: Ctrl+Alt+Shift+Enter is not the shortcut", "linux", chord("Enter", { ctrlKey: true, altKey: true, shiftKey: true }), null],
+  ["A plain Enter reaches the shell", "macos", chord("Enter"), null],
+];
+
+describe("zenAction", () => {
+  it.each(zenCases)("%s", (_name, platform, event, expected) => {
+    expect(zenAction(event, platform)).toBe(expected);
+  });
+
+  it("Zen keys are not pane, layout, zoom, find or clipboard keys", () => {
+    for (const [, platform, event, expected] of zenCases) {
+      if (expected === null) continue;
+      expect(clipboardAction(event, platform)).toBeNull();
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(zoomAction(event, platform)).toBeNull();
+      expect(findAction(event, platform)).toBeNull();
     }
   });
 });

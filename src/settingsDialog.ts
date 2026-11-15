@@ -4,7 +4,7 @@ import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } 
 import {
   APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY,
   DEFAULT_SETTINGS, FONT_RANGES, fontFamilyList, INACTIVE_OPACITY, normalize, NOTIFY_MODES, type NotifyMode,
-  type PromptId, SCROLLBACK_RANGE, type Settings,
+  type PromptId, SCROLLBACK_RANGE, type Settings, ZEN_WIDTH_RANGE,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
@@ -586,6 +586,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const scrollback = numberInput("scrollback", SCROLLBACK_RANGE);
   const restoreScrollback = element("input", { type: "checkbox", name: "restoreScrollback" });
   scrollback.setAttribute("aria-label", "Scrollback lines");
+  const zenWidth = numberInput("zenWidth", ZEN_WIDTH_RANGE);
+  zenWidth.setAttribute("aria-label", "Zen width in columns");
   const updatesAuto = element("input", { type: "checkbox", name: "updatesAutoCheck" });
   const appIcon = segmented("Dock icon", APP_ICONS.map((value) => ({ value, label: APP_ICON_LABELS[value] })), changed);
   const { place, asks } = APP_ICON_PLACES[options.platform];
@@ -714,7 +716,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       row("Reopen", check(restoreScrollback, "Restore scrollback and commands"),
         infoButton("Reopen",
           "tiili always reopens its windows, panes and folders. With this on, each pane also gets back its " +
-          "scrollback and a line naming the command that was running. Off, neither is kept on disk."))),
+          "scrollback and a line naming the command that was running. Off, neither is kept on disk.")),
+      row("Zen width", zenWidth, element("span", { className: "settings-row-sub" }, "columns"),
+        infoButton("Zen width",
+          `Zen mode (${options.platform === "macos" ? "⇧⌘↩" : "Ctrl+Shift+Enter"}) shows the focused pane alone, ` +
+          "centred at this width and at most 90% of the window. Dragging its side edges sets it too."))),
     section("Attention",
       "A pane whose program rings the bell or sends a notification gets a brick on its title until you look at it. " +
       `${options.platform === "macos" ? "⌘J" : "Ctrl+Shift+J"} goes to the oldest one.`,
@@ -815,6 +821,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     startupSplash.checked = settings.behaviour.startupSplash;
     scrollback.value = String(settings.behaviour.scrollback);
     restoreScrollback.checked = settings.behaviour.restoreScrollback;
+    zenWidth.value = String(settings.zen.width);
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
     notify.set(settings.attention.notify);
@@ -848,6 +855,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       scrollback: scrollback.valueAsNumber,
       restoreScrollback: restoreScrollback.checked,
     },
+    zen: { width: zenWidth.valueAsNumber },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
     appIcon: appIcon.value(),
     prompt: prompt.value(),

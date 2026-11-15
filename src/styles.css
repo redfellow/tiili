@@ -446,13 +446,15 @@ body {
   display: none;
 }
 
-/* The Heynote pane's frame fills the pane's content area; Heynote draws its own background. */
+/* Heynote's frame: openHeynote gives it the ground and colour scheme of Heynote's starting mode and keeps it
+   hidden until Heynote has painted; the radius clips that ground with the pane's. */
 .pane-heynote {
   display: block;
   width: 100%;
   height: 100%;
   border: 0;
   border-radius: var(--radius-control);
+  overflow: hidden;
 }
 
 /* Title row: the chip naming the pane's repository, or its folder outside one. */
@@ -595,6 +597,97 @@ html[data-pane-dragging] * {
 }
 
 .pane-divider[data-dragging] {
+  background: var(--accent);
+}
+
+/* Zen mode: one pane alone, centred at the Zen width and full height, on the window background. The other panes
+   stay laid out in the grid underneath, hidden, so their terminals keep running at their grid size. */
+#panes[data-zen] {
+  background: var(--term-bg);
+}
+
+.pane[data-zen-hidden] {
+  visibility: hidden;
+}
+
+/* Keeps the Zen pane's grid slot, so the hidden panes keep their places. */
+.pane-placeholder {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pane-zen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  max-width: 100%;
+}
+
+.pane-zen-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-zen-edge-left {
+  left: -3px;
+}
+
+.pane-zen-edge-right {
+  right: -3px;
+}
+
+.pane-zen-edge:hover,
+.pane-zen-edge[data-dragging] {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* The Zen toggle at the right end of each pane's title row: lit in the accent on the Zen pane, with a dot while a
+   hidden pane needs the user. */
+.pane-zen-toggle {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pane-zen-toggle[hidden] {
+  display: none;
+}
+
+.pane-zen-toggle:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.pane-zen-toggle[data-on] {
+  color: var(--accent);
+}
+
+.pane-zen-toggle[data-marked]::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: var(--accent);
 }
 
