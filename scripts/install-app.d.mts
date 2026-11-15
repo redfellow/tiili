@@ -6,3 +6,5 @@ export function builtAppPath(root: string): string;
 export function isPinned(persistentApps: string): boolean;
 export function dockEntryXml(): string;
 export function dependenciesStale(lock: string, installedLock: string | undefined): boolean;
+export function buildVersion(describe: string | undefined, fallback: string): string;
+export function withVersion(root: string, version: string, build: () => void): void;
