@@ -6,3 +6,14 @@ x-harvaaja-card: f248a352-2512-4070-a0ae-5b8b7e629bd9
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new observable CLI contract (--json flags and pane record
+    schema) to pane-control; no active same-intent change (intent vocabulary
+    card depends on this one, separate intent).
+  citations:
+    - "openspec/specs/pane-control/spec.md: List the window's panes"
+    - "openspec/specs/pane-control/spec.md: Self-describing command line"
+    - src-tauri/src/control.rs list_lines, PaneInfo, COMMANDS
+    - src-tauri/src/control_app.rs AppHandler::list
+  revision: 4fcacee4-ff01-46da-97b6-863c90e64c6b
