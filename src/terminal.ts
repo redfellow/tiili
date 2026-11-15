@@ -61,12 +61,20 @@ function written(term: Terminal, data: string | Uint8Array = ""): Promise<void> 
 /** Counts `applyFont` calls per terminal, so a call whose font loaded late doesn't undo a newer one. */
 const fontGenerations = new WeakMap<Terminal, number>();
 
-/** Waits until the font's regular and bold faces are loaded, since xterm measures the font when it changes. */
+/** A Nerd Font icon (U+F0219), drawn by the bundled symbols font. */
+const ICON_SAMPLE = "\u{F0219}";
+
+/**
+ * Waits until the font's regular and bold faces and the symbols face are loaded, since xterm measures the font when
+ * it changes.
+ */
 async function loadFont(font: FontSettings): Promise<void> {
   const family = fontFamilyList(font.family);
   await Promise.all([
     document.fonts.load(`${font.weight} ${font.size}px ${family}`),
     document.fonts.load(`${font.weightBold} ${font.size}px ${family}`),
+    // A face loads only for text in its unicode-range, so a private-use sample loads the symbols font now.
+    document.fonts.load(`${font.weight} ${font.size}px ${family}`, ICON_SAMPLE),
   ]).catch(() => undefined);
 }
 
