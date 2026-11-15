@@ -142,6 +142,15 @@ describe("whatsNew and plainNotes", () => {
   ])("%s", (_name, body, expected) => {
     expect(plainNotes(body)).toBe(expected);
   });
+
+  it.each([
+    ["Tag left behind by one pass: nested tag in a tag name", "<scr<b>ipt>alert(1)</script>"],
+    ["Tag left behind by one pass: doubled opening bracket", "<<b>b>"],
+    ["Stray opening bracket", "a < b"],
+    ["Stray closing bracket", "a > b <"],
+  ])("%s: output has no angle brackets", (_name, body) => {
+    expect(plainNotes(body)).not.toMatch(/[<>]/);
+  });
 });
 
 describe("saveWhatsNew and takeWhatsNew", () => {

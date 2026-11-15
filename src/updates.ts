@@ -59,10 +59,19 @@ export function whatsNew(body: string): string[] {
   return items;
 }
 
-/** The release body as plain text: HTML tags and markdown heading markers removed, and trimmed. */
+/**
+ * The release body as plain text: HTML tags and markdown heading markers removed, and trimmed. The result is shown as
+ * text, never as HTML. Tag removal repeats until the text stops changing (one pass can leave a new tag behind, as in
+ * `<scr<b>ipt>`), then any leftover `<` or `>` is dropped.
+ */
 export function plainNotes(body: string): string {
-  return body
-    .replace(/<[^>]*>/g, "")
+  let text = body;
+  for (let previous = ""; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, "");
+  }
+  return text
+    .replace(/[<>]/g, "")
     .replace(/^[ \t]*#{1,6}[ \t]*/gm, "")
     .trim();
 }
