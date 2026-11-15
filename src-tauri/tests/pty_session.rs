@@ -9,18 +9,40 @@ use tiili_lib::shell_integration::{command_for, write_highlight, write_prompt};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+/// The output with the shell's command marks (`ESC ] 1337;TiiliCmd=... BEL` or `... ESC \`) dropped, so a pattern
+/// like `"\nhi"` matches what the command printed. Other marks, such as the folder's OSC 7, are kept.
+fn without_command_marks(seen: &[u8]) -> String {
+    const MARK: &str = "\x1b]1337;TiiliCmd=";
+    let mut rest = String::from_utf8_lossy(seen).into_owned();
+    let mut visible = String::with_capacity(rest.len());
+    while let Some(start) = rest.find(MARK) {
+        visible.push_str(&rest[..start]);
+        let body = &rest[start + MARK.len()..];
+        // An unfinished mark is dropped to the end; it completes with later output.
+        let end = match (body.find('\x07'), body.find("\x1b\\")) {
+            (Some(bel), Some(st)) if st < bel => st + 2,
+            (Some(bel), _) => bel + 1,
+            (None, Some(st)) => st + 2,
+            (None, None) => body.len(),
+        };
+        rest = body[end..].to_string();
+    }
+    visible.push_str(&rest);
+    visible
+}
+
 /// Collects output until `pattern` appears or the timeout passes.
 fn wait_for(output: &mpsc::Receiver<Vec<u8>>, seen: &mut Vec<u8>, pattern: &str) -> bool {
     let deadline = Instant::now() + TIMEOUT;
     while Instant::now() < deadline {
-        if String::from_utf8_lossy(seen).contains(pattern) {
+        if without_command_marks(seen).contains(pattern) {
             return true;
         }
         if let Ok(chunk) = output.recv_timeout(Duration::from_millis(100)) {
             seen.extend(chunk);
         }
     }
-    String::from_utf8_lossy(seen).contains(pattern)
+    without_command_marks(seen).contains(pattern)
 }
 
 #[test]
