@@ -140,7 +140,7 @@ export interface Settings {
 export const DEFAULT_FONT_FAMILY = "Geist Mono";
 
 /** The bundled Nerd Font icons, drawn for icon codepoints the chosen font and Geist Mono lack. */
-export const SYMBOLS_FONT_FAMILY = "Symbols Nerd Font Mono";
+export const SYMBOLS_FONT_FAMILY = "Tiili Symbols Cell";
 
 /**
  * The CSS font-family list for a chosen font: the font, then Geist Mono when it isn't installed, then the bundled

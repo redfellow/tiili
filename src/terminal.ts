@@ -10,7 +10,7 @@ import { currentPlatform } from "./keymap";
 import { sizeReporter } from "./resize";
 import { responsiveFont, zoomedSize } from "./responsive";
 import { SEARCH_LIMIT, searchDecorations } from "./search";
-import { fontFamilyList, type FontSettings, type Settings } from "./settings";
+import { fontFamilyList, SYMBOLS_FONT_FAMILY, type FontSettings, type Settings } from "./settings";
 import { attachLinks, type PaneLinks } from "./terminalLinks";
 import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 
@@ -86,8 +86,10 @@ async function loadFont(font: FontSettings): Promise<void> {
   await Promise.all([
     document.fonts.load(`${font.weight} ${font.size}px ${family}`),
     document.fonts.load(`${font.weightBold} ${font.size}px ${family}`),
-    // A face loads only for text in its unicode-range, so a private-use sample loads the symbols font now.
-    document.fonts.load(`${font.weight} ${font.size}px ${family}`, ICON_SAMPLE),
+    // A face loads only for text in its unicode-range, so a private-use sample loads the symbols font now. It is named
+    // alone: WebKit stops at Geist Mono (no unicode-range, so it "covers" the sample) and never loads the symbols face,
+    // and xterm would then cache the icon's fallback width.
+    document.fonts.load(`${font.weight} ${font.size}px "${SYMBOLS_FONT_FAMILY}"`, ICON_SAMPLE),
   ]).catch(() => undefined);
 }
 
