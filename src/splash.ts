@@ -8,8 +8,16 @@
 
 import { VERSION_LABEL } from "./version";
 
-/** Brand bricks (docs/brand/tiili.css). */
-const BRICK = { tiili: "#A4472B", klinkkeri: "#6B2A1E", savi: "#C9764F", laasti: "#E8DECD", graniitti: "#8D877D", koski: "#111617" };
+/**
+ * What the splash paints with when a token can't be read (no stylesheet yet): Koski's grounds and the brand
+ * bricks of docs/brand/tiili.css.
+ */
+const FALLBACK: Record<string, string> = {
+  // tokens-allow: fallbacks for a missing stylesheet, copied from tiili.css's Koski theme
+  "--bg": "#0f1516", "--fg": "#c9cfcd", "--muted": "#8a9492", "--term-bg": "#182023", "--accent": "#c9764f",
+  // tokens-allow: fallbacks for a missing stylesheet, copied from tiili.css's core palette and dark mark
+  "--tiili-tiili": "#A4472B", "--tiili-klinkkeri": "#6B2A1E", "--tiili-savi": "#C9764F", "--tiili-laasti": "#E8DECD", "--tiili-graniitti": "#8D877D", "--mark-prompt": "#111617",
+};
 
 /** The wordmark of docs/brand/logo/lockup-dark.svg, split into its letters: t i i l i. */
 const WORD_D = "M155.46 94.72L147.14 94.72Q141.82 94.72 139.33 92.26Q136.83 89.79 136.83 84.42L136.83 67.58L131.33 67.58L131.33 60.42L136.83 60.42L136.83 52.35L146.43 52.35L146.43 60.42L155.46 60.42L155.46 67.58L146.43 67.58L146.43 83.26Q146.43 85.76 147.49 86.66Q148.54 87.55 150.66 87.55L155.46 87.55M168.77 94.72L159.17 94.72L159.17 60.42L168.77 60.42M184.51 94.72L174.91 94.72L174.91 60.42L184.51 60.42M205.31 94.72L199.62 94.72Q195.39 94.72 193.02 92.64Q190.66 90.56 190.66 85.76L190.66 49.28L200.26 49.28L200.26 84.74Q200.26 86.27 200.96 86.91Q201.66 87.55 203.01 87.55L205.31 87.55M218.05 94.72L208.45 94.72L208.45 60.42L218.05 60.42";
@@ -100,20 +108,30 @@ function rng(seed: number) {
 const DIR = [0.944, 0.33];
 const proj = (x: number, y: number) => x * DIR[0] + y * DIR[1];
 
-interface Palette { bg: string; fg: string; muted: string; termBg: string; accent: string; light: boolean }
+/** The brand bricks: the core palette, and the mark's `>_` colour (white on light grounds, near-black on dark). */
+interface Bricks { tiili: string; klinkkeri: string; savi: string; laasti: string; graniitti: string; prompt: string }
+interface Palette { bg: string; fg: string; muted: string; termBg: string; accent: string; light: boolean; brick: Bricks }
 
 /** The splash's colours from the applied theme's tokens; Koski's where a token can't be read. */
 function readPalette(root: HTMLElement): Palette {
   const css = getComputedStyle(root);
-  const token = (name: string, fallback: string) => toHex(css.getPropertyValue(name), fallback);
-  const bg = token("--bg", "#0f1516");
+  const token = (name: string) => toHex(css.getPropertyValue(name), FALLBACK[name]);
+  const bg = token("--bg");
   return {
     bg,
-    fg: token("--fg", "#c9cfcd"),
-    muted: token("--muted", "#8a9492"),
-    termBg: token("--term-bg", "#182023"),
-    accent: token("--accent", "#c9764f"),
+    fg: token("--fg"),
+    muted: token("--muted"),
+    termBg: token("--term-bg"),
+    accent: token("--accent"),
     light: isLight(bg),
+    brick: {
+      tiili: token("--tiili-tiili"),
+      klinkkeri: token("--tiili-klinkkeri"),
+      savi: token("--tiili-savi"),
+      laasti: token("--tiili-laasti"),
+      graniitti: token("--tiili-graniitti"),
+      prompt: token("--mark-prompt"),
+    },
   };
 }
 
@@ -204,8 +222,8 @@ export function playSplash(options: SplashOptions): Splash {
         const rand = rng((row + 1000) * 7919 + (c + 1000) * 104729);
         const d = Math.hypot((x + bw / 2 - cx) / W, ((y + bh / 2 - cy) / H) * 1.25);
         dMax = Math.max(dMax, d);
-        const base = rand() < 0.22 ? BRICK.klinkkeri : BRICK.tiili;
-        let color = mix(base, BRICK.savi, rand() * (p.light ? 0.28 : 0.16));
+        const base = rand() < 0.22 ? p.brick.klinkkeri : p.brick.tiili;
+        let color = mix(base, p.brick.savi, rand() * (p.light ? 0.28 : 0.16));
         if (!p.light) color = mix(color, p.bg, 0.12 + rand() * 0.16);
         bricks.push({ x, y, d, focus: row === 0 && c === 0, color, jitter: rand() - 0.5, dir: row % 2 ? 1 : -1, delay: 0, alpha: 1 });
       }
@@ -276,9 +294,9 @@ export function playSplash(options: SplashOptions): Splash {
     }
     return out;
   };
-  const highlight = p.light ? "#ffffff" : "#ffe6d2";
-  const focusBrick = p.light ? BRICK.klinkkeri : BRICK.savi;
-  const focusGlyph = p.light ? "#ffffff" : BRICK.koski;
+  const highlight = p.light ? p.brick.prompt : p.brick.laasti;
+  const focusBrick = p.light ? p.brick.klinkkeri : p.brick.savi;
+  const focusGlyph = p.brick.prompt;
 
   const brickPose = (b: Brick, t: number): Pose | null => {
     if (!L) return null;
@@ -353,7 +371,7 @@ export function playSplash(options: SplashOptions): Splash {
     const curOut = clamp((t - 0.88) / 0.1);
     const curVisible = t >= TL.cursorIn && curOut < 1 && (t > 0.34 || Math.floor((t - TL.cursorIn) / 0.09) % 2 === 0);
     if (curVisible) {
-      c.fillStyle = p.light ? BRICK.tiili : BRICK.savi;
+      c.fillStyle = p.light ? p.brick.tiili : p.brick.savi;
       const h = curH * (1 - easeInCubic(curOut));
       c.beginPath(); c.roundRect(curX - curW / 2, baseY - h, curW, h, 0.9 * s); c.fill();
     }
@@ -364,7 +382,7 @@ export function playSplash(options: SplashOptions): Splash {
         if (t < TL.scramble(i)) return;
         const r = rng(Math.floor(t / 0.045) * 31 + i * 977)();
         const under = curVisible && Math.abs(slotX(i) - curX) < curW * 0.5;
-        c.fillStyle = under ? p.bg : r < 0.25 ? (p.light ? BRICK.tiili : BRICK.savi) : p.muted;
+        c.fillStyle = under ? p.bg : r < 0.25 ? (p.light ? p.brick.tiili : p.brick.savi) : p.muted;
         c.fillText(GLITCH[Math.floor(r * GLITCH.length)], slotX(i), baseY);
         return;
       }
@@ -397,7 +415,7 @@ export function playSplash(options: SplashOptions): Splash {
       const pose: Pose = { dy: 0, sx: 1, sy: 1, a: 1 };
       if (e < TL.dotFall) { const q = e / TL.dotFall; pose.dy = -(1 - q * q) * 26 * s; pose.a = clamp(e / 0.05); }
       else if (e < TL.dotFall + 0.12) { const sq = Math.sin((Math.PI * (e - TL.dotFall)) / 0.12); pose.sy = 1 - 0.22 * sq; pose.sx = 1 + 0.12 * sq; }
-      drawBrick(c, ox + d.x * s, oy + d.y * s, d.w * s, d.h * s, p.light ? BRICK.tiili : BRICK.savi, pose, sceneAlpha);
+      drawBrick(c, ox + d.x * s, oy + d.y * s, d.w * s, d.h * s, p.light ? p.brick.tiili : p.brick.savi, pose, sceneAlpha);
     });
     c.globalAlpha = 1;
   };
@@ -449,7 +467,7 @@ export function playSplash(options: SplashOptions): Splash {
     ctx.setTransform(dpr * z, 0, 0, dpr * z, camX * dpr, camY * dpr);
     const sceneAlpha = 1 - easeInCubic(zu);
     drawWall(ctx, l, t, sweeps, sceneAlpha);
-    const dustColor = p.light ? BRICK.graniitti : BRICK.laasti;
+    const dustColor = p.light ? p.brick.graniitti : p.brick.laasti;
     for (const q of dust) {
       ctx.fillStyle = rgba(dustColor, (1 - q.life / q.max) * 0.55 * sceneAlpha);
       ctx.fillRect(q.x - q.size / 2, q.y - q.size / 2, q.size, q.size);
