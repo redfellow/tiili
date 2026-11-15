@@ -5,3 +5,12 @@ x-harvaaja-card: 7d163e20-5ac6-40ab-84a4-86a6ac102094
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Spec text of five pane-tiling requirements is rewritten (MODIFIED
+    blocks plus scenarios); edits to main specs go through an OpenSpec change.
+    No active changes exist to polish.
+  citations:
+    - openspec/specs/pane-tiling/spec.md
+    - openspec/changes (only archive/)
+  revision: f4a527bd-cd21-4e66-b8d3-42f9bab7ccf7
