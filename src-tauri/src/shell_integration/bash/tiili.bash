@@ -39,11 +39,45 @@ if [ -z "${PS1-}" ] || [ "$PS1" = '\s-\v\$ ' ] || [ "$PS1" = '\h:\W \u\$ ' ]; th
 fi
 unset TIILI_PROMPT
 
+# bash 5.1 and later show pasted text and the active region in reverse video, a block of the text colour. Give them the
+# terminal selection's colour instead, which tiili writes to the integration folder's `highlight` file with each theme
+# and the shell reads before every prompt; unless the user's inputrc set a region colour of its own.
+_tiili_highlight_file="${BASH_SOURCE[0]%/*}/../highlight"
+_tiili_highlight_applied=
+_tiili_highlights=
+if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+  _tiili_highlights=1
+  # Unset, readline lists the colour empty or as the terminal's standout (reverse video): anything else is the user's.
+  while read -r _tiili_line; do
+    case $_tiili_line in
+      'set active-region-start-color '*)
+        [ "${_tiili_line#set active-region-start-color }" = '\e[7m' ] || _tiili_highlights= ;;
+    esac
+  done < <(bind -v 2>/dev/null)
+  unset _tiili_line
+fi
+# Sets the colour when it changed, so an unchanged file never rebinds readline.
+_tiili_apply_highlight() {
+  local colour=
+  if [ -r "$_tiili_highlight_file" ]; then read -r colour < "$_tiili_highlight_file"; fi
+  [ "$colour" = "$_tiili_highlight_applied" ] && return
+  case $colour in
+    '#'[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]) ;;
+    *) return ;;
+  esac
+  _tiili_highlight_applied=$colour
+  bind "set active-region-start-color \"\\e[48;2;$((16#${colour:1:2}));$((16#${colour:3:2}));$((16#${colour:5:2}))m\""
+  bind 'set active-region-end-color "\e[49m"'
+}
+if [ -n "$_tiili_highlights" ]; then _tiili_apply_highlight; fi
+
 # Report the folder with OSC 7 before every prompt, whichever prompt is shown, so tiili knows this pane is local, and
-# follow the prompt choice where this shell does. It runs first and keeps $? for the user's own prompt commands.
+# follow the prompt choice and the paste colour where this shell does. It runs first and keeps $? for the user's own
+# prompt commands.
 _tiili_osc7() {
   local _tiili_status=$? LC_ALL=C enc= c i
   if [ -n "$_tiili_follows" ]; then _tiili_apply_prompt; fi
+  if [ -n "$_tiili_highlights" ]; then _tiili_apply_highlight; fi
   for (( i = 0; i < ${#PWD}; i++ )); do
     c=${PWD:i:1}
     case $c in

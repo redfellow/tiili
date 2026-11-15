@@ -33,6 +33,12 @@ export function terminalTheme(token: TokenReader): ITheme {
   return theme;
 }
 
+/** The colour the shells give pasted text: the terminal selection's, as `#RRGGBB`, or undefined when it isn't hex. */
+export function highlightColour(theme: ITheme): string | undefined {
+  const colour = theme.selectionBackground;
+  return colour !== undefined && /^#[0-9a-f]{6}$/i.test(colour) ? colour : undefined;
+}
+
 /** Reads tokens from the document's computed style. */
 export function documentTokens(): TokenReader {
   const style = getComputedStyle(document.documentElement);
