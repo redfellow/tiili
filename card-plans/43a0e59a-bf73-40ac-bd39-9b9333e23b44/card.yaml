@@ -6,3 +6,12 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: new-change
+  rationale: The main spec's "Pane motion" requirement is over 500 characters and
+    fails strict validation. Splitting it into two requirements needs a delta
+    (MODIFIED plus ADDED). Behaviour stays the same, and there is no active
+    change to polish.
+  citations:
+    - "openspec/specs/pane-tiling/spec.md:208 Requirement: Pane motion"
+  revision: ec79089b-5b55-4f3a-ab81-a964dc26923a
