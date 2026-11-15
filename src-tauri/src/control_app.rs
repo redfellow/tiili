@@ -12,11 +12,15 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
-use crate::control::{grid_order, place_name, PaneInfo};
+use crate::attention::{Attention, MarkInfo};
+use crate::command::Running;
+use crate::control::{
+    grid_order, place_name, AttentionRecord, PaneInfo, RepoRecord, RunningRecord,
+};
 use crate::control_server::{ControlServer, Handler};
 use crate::pty::{ControlEnv, SessionId, SessionRegistry};
 use crate::windows::WindowSessions;
-use crate::SessionReports;
+use crate::{PaneCwdEvent, SessionReports};
 
 /// Event sent to the caller's window to open a pane for `tiili open`; its payload is a [`PaneOpenRequest`], and the
 /// window answers with `pane_open_done`.
@@ -65,18 +69,26 @@ impl PendingOpens {
     }
 }
 
-/// The titles `tiili open --title` gave panes, which `tiili list` shows instead of their chip names.
-#[derive(Default)]
-pub struct PaneTitles(Mutex<HashMap<SessionId, String>>);
+/// What `tiili open` asked a pane for: the title `--title` gave it, which `tiili list` shows instead of its chip
+/// name, and the command it runs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PaneOpen {
+    pub title: Option<String>,
+    pub argv: Vec<String>,
+}
 
-impl PaneTitles {
-    fn set(&self, id: SessionId, title: String) {
+/// The panes `tiili open` opened, by session.
+#[derive(Default)]
+pub struct PaneOpens(Mutex<HashMap<SessionId, PaneOpen>>);
+
+impl PaneOpens {
+    fn set(&self, id: SessionId, open: PaneOpen) {
         if let Ok(mut map) = self.0.lock() {
-            map.insert(id, title);
+            map.insert(id, open);
         }
     }
 
-    fn get(&self, id: SessionId) -> Option<String> {
+    fn get(&self, id: SessionId) -> Option<PaneOpen> {
         self.0.lock().ok().and_then(|map| map.get(&id).cloned())
     }
 
@@ -163,7 +175,7 @@ impl Handler for AppHandler {
             caller,
             cwd,
             title: title.clone(),
-            command,
+            command: command.clone(),
             path,
         };
         if let Err(e) = self
@@ -177,10 +189,16 @@ impl Handler for AppHandler {
             pending.finish(request_id, Err(String::new()));
             Err("the window did not open the pane in time".to_string())
         });
-        if let (Ok(id), Some(title)) = (&result, title) {
-            // A pane that has already ended keeps no title.
+        if let Ok(id) = &result {
+            // A pane that has already ended is not remembered.
             if self.0.state::<WindowSessions>().owner(*id).is_some() {
-                self.0.state::<PaneTitles>().set(*id, title);
+                self.0.state::<PaneOpens>().set(
+                    *id,
+                    PaneOpen {
+                        title,
+                        argv: command,
+                    },
+                );
             }
         }
         result
@@ -188,32 +206,110 @@ impl Handler for AppHandler {
 
     fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String> {
         let label = self.window_of(caller)?;
-        let (reports, titles) = (
+        let (reports, opens, registry) = (
             self.0.state::<SessionReports>(),
-            self.0.state::<PaneTitles>(),
+            self.0.state::<PaneOpens>(),
+            self.0.state::<SessionRegistry>(),
         );
+        let marks = self.0.state::<Attention>().marks();
         let grid = self.0.state::<PaneOrders>().get(&label);
         Ok(
             grid_order(self.0.state::<WindowSessions>().sessions(&label), &grid)
                 .into_iter()
                 .map(|id| {
                     let (at, _) = reports.latest(id);
-                    let cwd = at.as_ref().map(|a| a.cwd.clone()).unwrap_or_default();
-                    let title = titles.get(id).unwrap_or_else(|| match &at {
-                        Some(at) => place_name(
-                            &at.cwd,
-                            at.repo
-                                .as_ref()
-                                .map(|r| (r.name.as_str(), r.worktree.as_deref())),
-                            at.host.as_deref(),
-                        ),
-                        None => String::new(),
-                    });
-                    PaneInfo { id, cwd, title }
+                    pane_record(PaneFacts {
+                        id,
+                        caller,
+                        window: &label,
+                        at: at.as_ref(),
+                        open: opens.get(id).as_ref(),
+                        running: registry.running(id).unwrap_or_default(),
+                        mark: marks.iter().find(|m| m.session == id),
+                    })
                 })
                 .collect(),
         )
     }
+}
+
+/// What the app knows about one pane of a `tiili list`.
+struct PaneFacts<'a> {
+    id: SessionId,
+    /// The pane the request came from.
+    caller: SessionId,
+    window: &'a str,
+    /// The pane's latest folder report, until the first arrives `None`.
+    at: Option<&'a PaneCwdEvent>,
+    open: Option<&'a PaneOpen>,
+    running: Running,
+    mark: Option<&'a MarkInfo>,
+}
+
+/// One pane as `tiili list` reports it. A pane `tiili open` started runs its command line, quoted, while its shell
+/// (when it has one) reports none; at the prompt nothing runs.
+fn pane_record(facts: PaneFacts) -> PaneInfo {
+    let PaneFacts {
+        id,
+        caller,
+        window,
+        at,
+        open,
+        running,
+        mark,
+    } = facts;
+    let command = running.command.or_else(|| {
+        open.filter(|o| !o.argv.is_empty())
+            .map(|o| shell_join(&o.argv))
+    });
+    let running = (command.is_some() || running.program.is_some()).then_some(RunningRecord {
+        command,
+        program: running.program,
+    });
+    PaneInfo {
+        id,
+        is_self: id == caller,
+        window: window.to_string(),
+        cwd: at.map(|a| a.cwd.clone()).unwrap_or_default(),
+        host: at.and_then(|a| a.host.clone()),
+        repo: at.and_then(|a| a.repo.as_ref()).map(|r| RepoRecord {
+            root: r.root.clone(),
+            name: r.name.clone(),
+            worktree: r.worktree.clone(),
+        }),
+        title: open.and_then(|o| o.title.clone()),
+        label: at
+            .map(|a| {
+                place_name(
+                    &a.cwd,
+                    a.repo
+                        .as_ref()
+                        .map(|r| (r.name.as_str(), r.worktree.as_deref())),
+                    a.host.as_deref(),
+                )
+            })
+            .unwrap_or_default(),
+        running,
+        attention: mark.map(|m| AttentionRecord {
+            message: m.message.clone(),
+        }),
+    }
+}
+
+/// `argv` as one shell command line: each word as it is when the shell would read it back unchanged, else in single
+/// quotes.
+fn shell_join(argv: &[String]) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c);
+    argv.iter()
+        .map(|word| {
+            if !word.is_empty() && word.chars().all(plain) {
+                word.clone()
+            } else {
+                format!("'{}'", word.replace('\'', "'\\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// What `<bin>/tiili.cmd` holds on Windows: it runs `exe` with the arguments it was given.
@@ -290,4 +386,193 @@ pub fn stop(app: &AppHandle) {
         .try_state::<ControlState>()
         .and_then(|state| state.0.lock().ok().and_then(|mut s| s.take()));
     drop(server);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RepoInfo;
+
+    fn at(cwd: &str, repo: Option<(&str, Option<&str>)>, host: Option<&str>) -> PaneCwdEvent {
+        PaneCwdEvent {
+            pane_id: 0,
+            cwd: cwd.into(),
+            repo: repo.map(|(name, worktree)| RepoInfo {
+                root: cwd.into(),
+                name: name.into(),
+                worktree: worktree.map(Into::into),
+            }),
+            host: host.map(Into::into),
+            tint: None,
+        }
+    }
+
+    fn opened(title: Option<&str>, argv: &[&str]) -> PaneOpen {
+        PaneOpen {
+            title: title.map(Into::into),
+            argv: argv.iter().map(|a| a.to_string()).collect(),
+        }
+    }
+
+    fn running(command: Option<&str>, program: Option<&str>) -> Running {
+        Running {
+            command: command.map(Into::into),
+            program: program.map(Into::into),
+        }
+    }
+
+    fn ran(command: Option<&str>, program: Option<&str>) -> Option<RunningRecord> {
+        Some(RunningRecord {
+            command: command.map(Into::into),
+            program: program.map(Into::into),
+        })
+    }
+
+    /// Own pane and a dev server, Pane at a prompt: each pane's record from what the app knows about it.
+    #[test]
+    fn pane_records_follow_reports_opens_running_and_marks() {
+        let app = at("/w/app", Some(("app", None)), None);
+        let fix = at("/w/app-fix", Some(("app", Some("fix"))), Some("box"));
+        let base = PaneInfo {
+            id: 3,
+            is_self: true,
+            window: "main".into(),
+            cwd: "/w/app".into(),
+            repo: Some(RepoRecord {
+                root: "/w/app".into(),
+                name: "app".into(),
+                worktree: None,
+            }),
+            label: "app".into(),
+            ..PaneInfo::default()
+        };
+        let marked = MarkInfo {
+            session: 3,
+            message: Some("Build done".into()),
+        };
+        let bare_mark = MarkInfo {
+            session: 3,
+            message: None,
+        };
+        // Name, the caller, the report, the open, what runs, the mark, and the record expected.
+        type Case<'a> = (
+            &'a str,
+            SessionId,
+            Option<&'a PaneCwdEvent>,
+            Option<PaneOpen>,
+            Running,
+            Option<&'a MarkInfo>,
+            PaneInfo,
+        );
+        let cases: Vec<Case> = vec![
+            (
+                "at the prompt",
+                3,
+                Some(&app),
+                None,
+                running(None, None),
+                None,
+                base.clone(),
+            ),
+            (
+                "shell command, another pane's",
+                1,
+                Some(&app),
+                None,
+                running(Some("npm run dev"), Some("node")),
+                None,
+                PaneInfo {
+                    is_self: false,
+                    running: ran(Some("npm run dev"), Some("node")),
+                    ..base.clone()
+                },
+            ),
+            (
+                "opened argv joined with quoting",
+                3,
+                Some(&app),
+                Some(opened(None, &["sh", "-c", "echo 'hi' $X", "", "a.txt"])),
+                running(None, None),
+                None,
+                PaneInfo {
+                    running: ran(Some(r#"sh -c 'echo '\''hi'\'' $X' '' a.txt"#), None),
+                    ..base.clone()
+                },
+            ),
+            (
+                "title override, the shell's command wins",
+                3,
+                Some(&app),
+                Some(opened(Some("logs"), &["tail", "-f", "x.log"])),
+                running(Some("less x.log"), None),
+                None,
+                PaneInfo {
+                    title: Some("logs".into()),
+                    running: ran(Some("less x.log"), None),
+                    ..base.clone()
+                },
+            ),
+            (
+                "attention mark with a message",
+                3,
+                Some(&app),
+                None,
+                running(None, None),
+                Some(&marked),
+                PaneInfo {
+                    attention: Some(AttentionRecord {
+                        message: Some("Build done".into()),
+                    }),
+                    ..base.clone()
+                },
+            ),
+            (
+                "attention mark without a message, remote worktree",
+                3,
+                Some(&fix),
+                None,
+                running(None, None),
+                Some(&bare_mark),
+                PaneInfo {
+                    cwd: "/w/app-fix".into(),
+                    host: Some("box".into()),
+                    repo: Some(RepoRecord {
+                        root: "/w/app-fix".into(),
+                        name: "app".into(),
+                        worktree: Some("fix".into()),
+                    }),
+                    label: "box:app › fix".into(),
+                    attention: Some(AttentionRecord { message: None }),
+                    ..base.clone()
+                },
+            ),
+            (
+                "no report yet",
+                3,
+                None,
+                Some(opened(None, &["top"])),
+                running(None, None),
+                None,
+                PaneInfo {
+                    cwd: String::new(),
+                    repo: None,
+                    label: String::new(),
+                    running: ran(Some("top"), None),
+                    ..base.clone()
+                },
+            ),
+        ];
+        for (name, caller, at, open, running, mark, expected) in cases {
+            let record = pane_record(PaneFacts {
+                id: 3,
+                caller,
+                window: "main",
+                at,
+                open: open.as_ref(),
+                running,
+                mark,
+            });
+            assert_eq!(record, expected, "{name}");
+        }
+    }
 }

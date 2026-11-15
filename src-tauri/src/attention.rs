@@ -352,6 +352,11 @@ impl Attention {
             .ok()
             .map(|mut registry| f(&mut registry))
     }
+
+    /// Every marked session, oldest first.
+    pub fn marks(&self) -> Vec<MarkInfo> {
+        self.with(|registry| registry.list()).unwrap_or_default()
+    }
 }
 
 /// True when a tiili window (or its settings window) is in front.
