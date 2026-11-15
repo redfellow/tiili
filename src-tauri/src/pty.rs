@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
-use crate::command::{CommandTracker, Foreground};
+use crate::command::{CommandLineScanner, CommandTracker, Foreground, Running};
 use crate::control::{PANE_VAR, SOCKET_VAR, TOKEN_VAR};
 use crate::cwd::{CwdTracker, PaneCwd};
 
@@ -447,7 +447,20 @@ fn unknown(id: SessionId) -> io::Error {
 pub struct SessionRegistry {
     next_id: AtomicU32,
     sessions: Mutex<HashMap<SessionId, PtySession>>,
+    /// The command line each session's shell reported running, by session.
+    lines: Mutex<HashMap<SessionId, Arc<Mutex<CommandLineScanner>>>>,
     control: OnceLock<ControlEnv>,
+}
+
+/// The environment variable naming the file whose text tiili's shell integration adds to the shell's history and
+/// then deletes.
+pub const RESTORE_HISTORY_VAR: &str = "TIILI_RESTORE_HISTORY";
+
+/// Writes `line` to a file only the user can read, for session `id`'s shell to add to its history.
+fn history_file(id: SessionId, line: &str) -> io::Result<PathBuf> {
+    let path = std::env::temp_dir().join(format!("tiili-history-{}-{id}", std::process::id()));
+    crate::session::write_private(&path, line.as_bytes())?;
+    Ok(path)
 }
 
 impl SessionRegistry {
@@ -493,6 +506,27 @@ impl SessionRegistry {
         command: Option<&PaneCommand>,
         rows: u16,
         cols: u16,
+        on_output: SessionOutputFn,
+        on_cwd: Option<SessionCwdFn>,
+        on_command: Option<SessionCommandFn>,
+        on_exit: SessionExitFn,
+    ) -> io::Result<SessionId> {
+        self.spawn_restored(
+            cwd, prompt, command, None, rows, cols, on_output, on_cwd, on_command, on_exit,
+        )
+    }
+
+    /// Like [`spawn_tracked`](Self::spawn_tracked); with `history`, a shell with tiili's zsh, bash or PowerShell
+    /// integration starts with that line as the newest entry of its history, so Up then Enter runs it again.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_restored(
+        &self,
+        cwd: Option<&Path>,
+        prompt: &str,
+        command: Option<&PaneCommand>,
+        history: Option<&str>,
+        rows: u16,
+        cols: u16,
         mut on_output: SessionOutputFn,
         on_cwd: Option<SessionCwdFn>,
         on_command: Option<SessionCommandFn>,
@@ -522,7 +556,12 @@ impl SessionRegistry {
         let output_reader = Arc::clone(&reader);
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
-        let (cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        let (mut cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        if let Some(line) = history.filter(|l| command.is_none() && !l.trim().is_empty()) {
+            cmd.env(RESTORE_HISTORY_VAR, history_file(id, line)?);
+        }
+        let lines = Arc::new(Mutex::new(CommandLineScanner::default()));
+        let output_lines = Arc::clone(&lines);
         let session = PtySession::spawn_integrated(
             cmd,
             redraws,
@@ -534,6 +573,9 @@ impl SessionRegistry {
                 }
                 if let Some(Ok(mut commands)) = output_commands.as_ref().map(|t| t.lock()) {
                     commands.feed_output(data, || output_reader.get().and_then(|r| r.read()));
+                }
+                if let Ok(mut lines) = output_lines.lock() {
+                    lines.feed(data);
                 }
                 on_output(id, data)
             }),
@@ -585,6 +627,7 @@ impl SessionRegistry {
             }));
         }
         poll(ticks, alive)?;
+        self.lines.lock().map_err(to_io)?.insert(id, lines);
         self.sessions.lock().map_err(to_io)?.insert(id, session);
         Ok(id)
     }
@@ -610,10 +653,31 @@ impl SessionRegistry {
 
     /// Removes session `id`, killing its shell if it still runs. Closing an unknown id does nothing.
     pub fn close(&self, id: SessionId) -> io::Result<()> {
+        self.lines.lock().map_err(to_io)?.remove(&id);
         let removed = self.sessions.lock().map_err(to_io)?.remove(&id);
         // Dropped outside the lock: killing the shell must not hold up the other sessions.
         drop(removed);
         Ok(())
+    }
+
+    /// What runs in session `id`: the command line its shell reported, and the foreground program's name when
+    /// that is not the shell itself (macOS and Linux).
+    pub fn running(&self, id: SessionId) -> io::Result<Running> {
+        let command = self
+            .lines
+            .lock()
+            .map_err(to_io)?
+            .get(&id)
+            .and_then(|l| l.lock().ok()?.line().map(str::to_string));
+        self.with(id, |s| {
+            let shell = s.pid().and_then(|p| i32::try_from(p).ok());
+            let program = s
+                .foreground_reader()
+                .read()
+                .filter(|f| Some(f.pgid) != shell)
+                .map(|f| f.name);
+            Ok(Running { command, program })
+        })
     }
 
     /// The working directory of session `id`'s shell, where the platform can read it.

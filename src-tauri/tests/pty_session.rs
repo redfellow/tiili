@@ -562,3 +562,86 @@ fn pasted_text_in_bash_takes_the_highlight_file_colour() {
         assert_paste_drawn(tag, &session, &out_rx, &mut seen, sgr);
     }
 }
+
+/// Up re-runs: a zsh and a bash started with a restored history line run it on Up then Enter and delete its file,
+/// and report a typed command line while it runs, cleared once the prompt is back.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn up_re_runs_zsh_and_bash_seed_history_and_report_the_typed_command() {
+    use std::sync::{Arc, Mutex};
+    use tiili_lib::command::CommandLineScanner;
+    use tiili_lib::pty::RESTORE_HISTORY_VAR;
+
+    const CLASSIC: &str = "\x1b[39m@\x1b[32m";
+    for shell in ["/bin/zsh", "/bin/bash"] {
+        if !std::path::Path::new(shell).exists() {
+            eprintln!("{shell} is missing; skipped");
+            continue;
+        }
+        let tag = format!("restore-{}", tiili_lib::command::program_name(shell));
+        let home = temp_dir(&format!("home-{tag}"));
+        let history = home.join("restore-line");
+        std::fs::write(&history, "echo restored-$((40 + 2))").expect("history file");
+        let mut cmd = command_for(shell, "classic", &temp_dir(&format!("scripts-{tag}")))
+            .expect("zsh and bash have an integration");
+        set_colour_env(&mut cmd);
+        cmd.env("HOME", &home);
+        cmd.env_remove("TIILI_USER_ZDOTDIR");
+        cmd.env("BASH_SILENCE_DEPRECATION_WARNING", "1");
+        cmd.env(RESTORE_HISTORY_VAR, &history);
+        let scanner = Arc::new(Mutex::new(CommandLineScanner::default()));
+        let sink = Arc::clone(&scanner);
+        let (out_tx, out_rx) = mpsc::channel();
+        let session = PtySession::spawn_command(
+            cmd,
+            24,
+            80,
+            Box::new(move |data| {
+                sink.lock().unwrap().feed(data);
+                let _ = out_tx.send(data.to_vec());
+            }),
+            Box::new(|_| {}),
+        )
+        .expect("shell starts");
+        let mut seen = Vec::new();
+        assert!(
+            wait_for(&out_rx, &mut seen, CLASSIC),
+            "{shell} showed no prompt: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+
+        session.write(b"\x1b[A\r").expect("Up then Enter");
+        assert!(
+            wait_for(&out_rx, &mut seen, "\nrestored-42"),
+            "{shell} did not run the restored line on Up: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+        assert!(!history.exists(), "{shell} left the history file behind");
+
+        let line = |scanner: &Mutex<CommandLineScanner>| {
+            scanner.lock().unwrap().line().map(str::to_string)
+        };
+        let mut poll = |want: Option<&str>| {
+            let deadline = Instant::now() + TIMEOUT;
+            while Instant::now() < deadline && line(&scanner).as_deref() != want {
+                while let Ok(chunk) = out_rx.try_recv() {
+                    seen.extend(chunk);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            line(&scanner)
+        };
+        session.write(b"sleep 2\r").expect("type the command");
+        assert_eq!(
+            poll(Some("sleep 2")).as_deref(),
+            Some("sleep 2"),
+            "{shell} never reported sleep 2"
+        );
+        assert_eq!(
+            poll(None),
+            None,
+            "{shell} kept reporting a command at the prompt"
+        );
+    }
+}

@@ -76,6 +76,7 @@ if [ -n "$_tiili_highlights" ]; then _tiili_apply_highlight; fi
 # prompt commands.
 _tiili_osc7() {
   local _tiili_status=$? LC_ALL=C enc= c i
+  _tiili_seed_history
   if [ -n "$_tiili_follows" ]; then _tiili_apply_prompt; fi
   if [ -n "$_tiili_highlights" ]; then _tiili_apply_highlight; fi
   for (( i = 0; i < ${#PWD}; i++ )); do
@@ -93,3 +94,63 @@ case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in
   'declare -a'*) PROMPT_COMMAND=(_tiili_osc7 "${PROMPT_COMMAND[@]}") ;;
   *) PROMPT_COMMAND="_tiili_osc7${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
 esac
+
+# A pane reopened after tiili ended: the command that was running becomes the newest history entry, so Up then Enter
+# runs it again. Done at the first prompt, once bash has read the user's history.
+_tiili_restore_history=${TIILI_RESTORE_HISTORY-}
+unset TIILI_RESTORE_HISTORY
+_tiili_seed_history() {
+  [ -n "$_tiili_restore_history" ] || return 0
+  if [ -r "$_tiili_restore_history" ]; then history -s -- "$(< "$_tiili_restore_history")"; fi
+  command rm -f -- "$_tiili_restore_history"
+  _tiili_restore_history=
+}
+
+# Tell tiili the command line about to run, in base64 (OSC 1337 TiiliCmd), so a pane reopened after tiili ends can
+# show what was running; the next OSC 7 tells it the prompt is back. A DEBUG trap runs before every command, so only
+# the first one after a prompt counts, as with bash-preexec; a DEBUG trap of the user's own is left alone.
+_tiili_base64() {
+  local LC_ALL=C
+  local s=$1 t=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/ out= c i k v n
+  n=${#s}
+  for (( i = 0; i < n; i += 3 )); do
+    v=0
+    for (( k = 0; k < 3; k++ )); do
+      v=$(( v << 8 ))
+      if (( i + k < n )); then
+        printf -v c '%d' "'${s:i+k:1}"
+        v=$(( v + (c & 255) ))
+      fi
+    done
+    out+=${t:$(( v >> 18 & 63 )):1}${t:$(( v >> 12 & 63 )):1}
+    if (( i + 1 < n )); then out+=${t:$(( v >> 6 & 63 )):1}; else out+='='; fi
+    if (( i + 2 < n )); then out+=${t:$(( v & 63 )):1}; else out+='='; fi
+  done
+  _tiili_reply=$out
+}
+_tiili_at_prompt=
+_tiili_preexec() {
+  [ -n "$_tiili_at_prompt" ] || return 0
+  # An empty line runs no command, so the next thing after the prompt is the prompt command itself.
+  if [ "$BASH_COMMAND" = _tiili_osc7 ]; then _tiili_at_prompt=; return 0; fi
+  [ -z "${COMP_LINE-}" ] || return 0
+  [ "$BASH_COMMAND" != _tiili_ready ] || return 0
+  _tiili_at_prompt=
+  local line _tiili_reply
+  line=$(HISTTIMEFORMAT= builtin history 1)
+  [[ $line =~ ^\ *[0-9]+\*?\ +(.*)$ ]] && line=${BASH_REMATCH[1]}
+  _tiili_base64 "$line"
+  printf '\e]1337;TiiliCmd=%s\a' "$_tiili_reply"
+}
+_tiili_ready() {
+  local _tiili_status=$?
+  _tiili_at_prompt=1
+  return $_tiili_status
+}
+if [ -z "$(trap -p DEBUG)" ]; then
+  case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in
+    'declare -a'*) PROMPT_COMMAND+=(_tiili_ready) ;;
+    *) PROMPT_COMMAND="$PROMPT_COMMAND; _tiili_ready" ;;
+  esac
+  trap _tiili_preexec DEBUG
+fi

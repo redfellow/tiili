@@ -73,6 +73,53 @@ _tiili_osc7() {
 }
 add-zsh-hook precmd _tiili_osc7
 
+# Tell tiili the command line about to run, in base64 (OSC 1337 TiiliCmd), so a pane reopened after tiili ends can
+# show what was running; the next OSC 7 tells it the prompt is back.
+_tiili_base64() {
+  emulate -L zsh
+  setopt localoptions nomultibyte
+  local LC_ALL=C s=$1 t=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/ ch out=
+  local -i i k v n=${#1}
+  for (( i = 1; i <= n; i += 3 )); do
+    v=0
+    for (( k = 0; k < 3; k++ )); do
+      (( v <<= 8 ))
+      if (( i + k <= n )); then
+        ch=${s[i+k]}
+        (( v += #ch & 255 ))
+      fi
+    done
+    out+=${t[(v >> 18 & 63) + 1]}${t[(v >> 12 & 63) + 1]}
+    if (( i + 1 <= n )); then out+=${t[(v >> 6 & 63) + 1]}; else out+='='; fi
+    if (( i + 2 <= n )); then out+=${t[(v & 63) + 1]}; else out+='='; fi
+  done
+  REPLY=$out
+}
+_tiili_preexec() {
+  local _tiili_status=$? REPLY
+  _tiili_base64 "$1"
+  printf '\e]1337;TiiliCmd=%s\a' "$REPLY"
+  return $_tiili_status
+}
+add-zsh-hook preexec _tiili_preexec
+
+# A pane reopened after tiili ended: the command that was running becomes the newest history entry, so Up then Enter
+# runs it again. Done at the first prompt, once the user's history has been read.
+if [[ -n $TIILI_RESTORE_HISTORY ]]; then
+  typeset -g _tiili_restore_history=$TIILI_RESTORE_HISTORY
+  _tiili_seed_history() {
+    local _tiili_status=$?
+    emulate -L zsh
+    add-zsh-hook -d precmd _tiili_seed_history
+    [[ -r $_tiili_restore_history ]] && print -s -r -- "$(<$_tiili_restore_history)"
+    command rm -f -- "$_tiili_restore_history"
+    unset _tiili_restore_history
+    return $_tiili_status
+  }
+  add-zsh-hook precmd _tiili_seed_history
+fi
+unset TIILI_RESTORE_HISTORY
+
 # Without a login shell this is the last startup file: hand ZDOTDIR back to the user.
 if [[ ! -o login ]]; then
   ZDOTDIR="$TIILI_USER_ZDOTDIR"

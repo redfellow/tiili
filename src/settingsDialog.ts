@@ -53,6 +53,11 @@ export interface SettingsDialogOptions {
    * there is one; resolves whether there was. Without it (the dev server) there is no Check now button.
    */
   checkForUpdates?: () => Promise<boolean>;
+  /**
+   * Deletes the saved scrollback and command lines; called once settings that turn "Restore scrollback and
+   * commands" off are saved.
+   */
+  clearRestored?: () => Promise<void>;
 }
 
 export interface SettingsDialog {
@@ -579,6 +584,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const hoverHighlight = element("input", { type: "checkbox", name: "hoverHighlight" });
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const scrollback = numberInput("scrollback", SCROLLBACK_RANGE);
+  const restoreScrollback = element("input", { type: "checkbox", name: "restoreScrollback" });
   scrollback.setAttribute("aria-label", "Scrollback lines");
   const updatesAuto = element("input", { type: "checkbox", name: "updatesAutoCheck" });
   const appIcon = segmented("Dock icon", APP_ICONS.map((value) => ({ value, label: APP_ICON_LABELS[value] })), changed);
@@ -704,7 +710,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           `to ${MIN_RESPONSIVE_SIZE} px and a line height of ${MIN_RESPONSIVE_LINE_HEIGHT}. Higher strength shrinks ` +
           "faster.")),
       row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse")),
-      row("Scrollback lines", scrollback)),
+      row("Scrollback lines", scrollback),
+      row("Reopen", check(restoreScrollback, "Restore scrollback and commands"),
+        infoButton("Reopen",
+          "tiili always reopens its windows, panes and folders. With this on, each pane also gets back its " +
+          "scrollback and a line naming the command that was running. Off, neither is kept on disk."))),
     section("Attention",
       "A pane whose program rings the bell or sends a notification gets a brick on its title until you look at it. " +
       `${options.platform === "macos" ? "⌘J" : "Ctrl+Shift+J"} goes to the oldest one.`,
@@ -804,6 +814,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     hoverHighlight.checked = settings.behaviour.hoverHighlight;
     startupSplash.checked = settings.behaviour.startupSplash;
     scrollback.value = String(settings.behaviour.scrollback);
+    restoreScrollback.checked = settings.behaviour.restoreScrollback;
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
     notify.set(settings.attention.notify);
@@ -835,6 +846,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       hoverHighlight: hoverHighlight.checked,
       startupSplash: startupSplash.checked,
       scrollback: scrollback.valueAsNumber,
+      restoreScrollback: restoreScrollback.checked,
     },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
     appIcon: appIcon.value(),
@@ -902,9 +914,11 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     changed();
     lock(true);
     const written = session.draft;
+    const turnedOff = session.saved.behaviour.restoreScrollback && !written.behaviour.restoreScrollback;
     try {
       await options.save(written);
       session.commit(written);
+      if (turnedOff) await options.clearRestored?.().catch(() => {});
       status.textContent = "";
       close();
     } catch (error) {

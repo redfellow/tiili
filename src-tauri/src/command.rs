@@ -19,6 +19,45 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
 
+/// Calls `each` with the body of every complete OSC in `carry` followed by `data`, in order, and keeps in `carry`
+/// what may still become one: an OSC of at most `max` bytes waiting for its terminator, or a trailing `ESC`.
+fn scan_osc(carry: &mut Vec<u8>, data: &[u8], max: usize, mut each: impl FnMut(&[u8])) {
+    if carry.is_empty() && !data.contains(&0x1b) {
+        return;
+    }
+    let mut buf = std::mem::take(carry);
+    buf.extend_from_slice(data);
+    let mut pos = 0;
+    while let Some(start) = find(&buf[pos..], OSC).map(|i| pos + i) {
+        let body = start + OSC.len();
+        // Ends at BEL or ESC \\; any other escape abandons it.
+        let Some(end) = buf[body..].iter().position(|&b| b == 0x07 || b == 0x1b) else {
+            if buf.len() - start <= max {
+                *carry = buf[start..].to_vec();
+            }
+            return;
+        };
+        let end = body + end;
+        let terminator = match (buf[end], buf.get(end + 1)) {
+            (0x07, _) => 1,
+            (_, Some(b'\\')) => 2,
+            (_, None) => {
+                *carry = buf[start..].to_vec();
+                return;
+            }
+            (_, Some(_)) => 0,
+        };
+        if terminator > 0 {
+            each(&buf[body..end]);
+        }
+        pos = end + terminator;
+    }
+    // Keep a trailing ESC that could start an introducer split off by the chunk boundary.
+    if buf[pos..].ends_with(b"\x1b") {
+        *carry = vec![0x1b];
+    }
+}
+
 /// The title an OSC's body sets, for `0;title` and `2;title`; `None` for every other OSC.
 fn title_of(body: &[u8]) -> Option<String> {
     let rest = body
@@ -30,45 +69,62 @@ fn title_of(body: &[u8]) -> Option<String> {
 impl TitleScanner {
     /// Scans the next chunk of output and returns the last complete title in it.
     pub fn feed(&mut self, data: &[u8]) -> Option<String> {
-        if self.carry.is_empty() && !data.contains(&0x1b) {
-            return None;
-        }
-        let mut buf = std::mem::take(&mut self.carry);
-        buf.extend_from_slice(data);
         let mut found = None;
-        let mut pos = 0;
-        while let Some(start) = find(&buf[pos..], OSC).map(|i| pos + i) {
-            let body = start + OSC.len();
-            // Ends at BEL or ESC \\; any other escape abandons it.
-            let Some(end) = buf[body..].iter().position(|&b| b == 0x07 || b == 0x1b) else {
-                if buf.len() - start <= MAX_OSC {
-                    self.carry = buf[start..].to_vec();
-                }
-                return found;
-            };
-            let end = body + end;
-            let terminator = match (buf[end], buf.get(end + 1)) {
-                (0x07, _) => 1,
-                (_, Some(b'\\')) => 2,
-                (_, None) => {
-                    self.carry = buf[start..].to_vec();
-                    return found;
-                }
-                (_, Some(_)) => 0,
-            };
-            if terminator > 0 {
-                if let Some(title) = title_of(&buf[body..end]) {
-                    found = Some(title);
-                }
+        scan_osc(&mut self.carry, data, MAX_OSC, |body| {
+            if let Some(title) = title_of(body) {
+                found = Some(title);
             }
-            pos = end + terminator;
-        }
-        // Keep a trailing ESC that could start an introducer split off by the chunk boundary.
-        if buf[pos..].ends_with(b"\x1b") {
-            self.carry = vec![0x1b];
-        }
+        });
         found
     }
+}
+
+/// The OSC body tiili's shell integration sends before running a command line: `1337;TiiliCmd=` and the line in
+/// base64. An empty line means no command runs.
+const COMMAND_LINE: &[u8] = b"1337;TiiliCmd=";
+/// The OSC body tiili's zsh and bash integration send before every prompt (OSC 7): no command runs any more.
+const PROMPT_MARK: &[u8] = b"7;";
+/// A command line reported in more than this many bytes is dropped.
+const MAX_COMMAND_LINE: usize = 65536;
+
+/// Follows the command line running in a pane, as tiili's shell integration reports it: set when the shell
+/// starts a command, cleared at the next prompt.
+#[derive(Default)]
+pub struct CommandLineScanner {
+    carry: Vec<u8>,
+    line: Option<String>,
+}
+
+impl CommandLineScanner {
+    /// Scans the next chunk of the shell's output.
+    pub fn feed(&mut self, data: &[u8]) {
+        let line = &mut self.line;
+        scan_osc(&mut self.carry, data, MAX_COMMAND_LINE, |body| {
+            if body.starts_with(PROMPT_MARK) {
+                *line = None;
+            } else if let Some(encoded) = body.strip_prefix(COMMAND_LINE) {
+                let decoded = std::str::from_utf8(encoded)
+                    .ok()
+                    .and_then(crate::cwd::base64_decode)
+                    .map(|bytes| String::from_utf8_lossy(&bytes).trim().to_string());
+                *line = decoded.filter(|l| !l.is_empty());
+            }
+        });
+    }
+
+    /// The command line running now, `None` at the prompt or when the shell does not report it.
+    pub fn line(&self) -> Option<&str> {
+        self.line.as_deref()
+    }
+}
+
+/// What runs in a pane, for the line a restored pane shows: the command line its shell reported and, where
+/// that is unknown, the foreground program's name.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Running {
+    pub command: Option<String>,
+    pub program: Option<String>,
 }
 
 /// The pseudo-terminal's foreground process group and the name of its leader.

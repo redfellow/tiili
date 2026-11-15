@@ -41,6 +41,7 @@ import {
   type PaneCommand,
   type PaneCwd,
 } from "./paneChip";
+import { restorePlan, snapshotWindow, type PaneRestore, type PaneSnapshot, type Restored } from "./session";
 import type { Settings } from "./settings";
 import { zoomedSize } from "./responsive";
 import { applyFont, openTerminal, refreshTheme, type AdoptedSession, type PaneTerminal } from "./terminal";
@@ -53,6 +54,8 @@ const MIN_COLS = 20;
 const MIN_ROWS = 4;
 /** Cell size used for the minimum before any terminal has been laid out. */
 const FALLBACK_CELL = { width: 8, height: 17 };
+/** Changes settle this long before the window tells the app its state for the next launch. */
+const SAVE_SETTLE_MS = 500;
 
 /** One pane: its element in the grid and, once its shell has started, its terminal. */
 interface Pane {
@@ -68,7 +71,7 @@ interface Pane {
   tint?: number;
   /** Set for a Heynote pane, which holds Heynote instead of a terminal. */
   note?: HeynoteFrame;
-  /** Pixels added to the Settings font size by the zoom keys; not saved, so a new pane starts at 0. */
+  /** Pixels added to the Settings font size by the zoom keys; a new pane starts at 0, a reopened one at its saved zoom. */
   zoom: number;
   /** Merges and rate-limits the bells and notifications of a terminal pane's shell. */
   gate?: AttentionGate;
@@ -105,6 +108,10 @@ export class Panes {
   private reportedOrder = "";
   /** Every marked session app-wide, so a pane that arrives from another window shows its mark. */
   private marks = new Map<number, AttentionMark>();
+  /** The pending state report for the next launch, once changes settle. */
+  private saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The state reports in flight, one after another so an older one never lands after a newer one. */
+  private saving: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly backend: Backend,
@@ -121,6 +128,7 @@ export class Panes {
         this.layout = after;
         const changed = new Set(changedPanes(before, after));
         this.panes.forEach((pane) => pane.terminal?.releaseSize(changed.has(pane.id)));
+        this.scheduleSave();
       },
       swap: (from, to) => this.relayout(swap(this.layout, from, to)),
       // Terminals scale with their moving panes and refit once they are in place, so each shell sees one size change.
@@ -202,6 +210,12 @@ export class Panes {
             (error: unknown) => control.done(request.requestId, { error: String(error) }),
           )
           .catch((error: unknown) => console.error(error));
+      });
+    }
+    if (backend.session) {
+      // The app is ending or this last window is closing: the latest state and scrollback are saved first.
+      await backend.onAppEvent("session-flush", () => {
+        panes.flush().catch((error: unknown) => console.error(error));
       });
     }
     if (panes.viaMenu()) {
@@ -357,7 +371,7 @@ export class Panes {
     }
     this.remove(pane);
     terminal?.detach();
-    if (this.panes.length === 0) await this.backend.closeWindow();
+    if (this.panes.length === 0) await this.closeEmptyWindow();
   }
 
   /**
@@ -432,6 +446,33 @@ export class Panes {
   }
 
   /**
+   * Reopens the window as the last session left it: its panes in their saved order, folders, zoom and titles, the
+   * Heynote pane, the tiling and track sizes, then the focus. A terminal pane shows its saved scrollback (when
+   * Restore scrollback and commands is on) and what ran in it before its new shell starts; nothing runs again.
+   * Resolves to false, opening nothing, when the window had no pane.
+   */
+  async restore(restored: Restored): Promise<boolean> {
+    const plan = restorePlan(restored, this.settings().behaviour.restoreScrollback);
+    if (!plan) return false;
+    if (plan.mode) this.layout = setMode(this.layout, plan.mode);
+    // Each pane is placed before the first terminal opens, so every terminal opens at its pane's final size.
+    const opening = plan.panes.map((pane) =>
+      pane.kind === "heynote" ? this.openHeynote() : this.openPane(pane.cwd, undefined, undefined, pane),
+    );
+    if (plan.sizes) {
+      this.layout = { ...this.layout, ...plan.sizes };
+      this.render();
+    }
+    this.focus(plan.focused);
+    const results = await Promise.allSettled(opening);
+    // A pane whose shell could not start says so in its terminal; the others stay.
+    this.focus(Math.min(plan.focused, this.panes.length - 1));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) this.report(failed.reason);
+    return true;
+  }
+
+  /**
    * Opens the pane `tiili open` asked for after the others, as {@link open} does, but leaves the focus where it is.
    * Resolves to its session; rejects when the program could not start, after removing the pane.
    */
@@ -447,14 +488,14 @@ export class Panes {
 
   /**
    * Opens a terminal pane after the others in `cwd`: focused, unless it is a `requested` one, which also runs that
-   * program instead of a shell.
+   * program instead of a shell. A `restored` pane takes its saved zoom and title and shows its preface first.
    */
   private async openPane(
     cwd: string | undefined,
     adopt?: AdoptedSession & { zoom: number },
     requested?: Requested,
+    restored?: PaneRestore,
   ): Promise<Pane> {
-
     const { element, chip, host } = this.paneElement();
     element.addEventListener("focusin", () => this.markFocused(this.panes.indexOf(pane)));
     element.addEventListener("mousedown", () => this.focus(this.panes.indexOf(pane)));
@@ -465,10 +506,10 @@ export class Panes {
       id: this.nextId++,
       element,
       chip,
-      zoom: adopt?.zoom ?? 0,
+      zoom: adopt?.zoom ?? restored?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
       gate: new AttentionGate(),
-      title: requested?.title,
+      title: requested?.title ?? restored?.title,
     };
     if (pane.title !== undefined) showPaneChip(element, chip, pane.title);
     const focused = this.current();
@@ -493,6 +534,7 @@ export class Panes {
         adopt,
         (signal) => this.onSignal(pane, signal),
         requested,
+        restored,
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       opened.find.interceptKeys((event) => this.shortcut(event));
@@ -514,9 +556,7 @@ export class Panes {
     pane.note?.flush();
     if (pane.session !== undefined) this.clearMark(pane.session);
     this.remove(pane);
-    if (this.panes.length === 0) {
-      await this.backend.closeWindow();
-    }
+    if (this.panes.length === 0) await this.closeEmptyWindow();
     const terminal = await pane.ready;
     // The terminal stays on screen while its pane fades out.
     if (!prefersReducedMotion()) await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
@@ -559,6 +599,7 @@ export class Panes {
     this.places.set(place.paneId, place);
     const pane = this.panes.find((p) => p.session === place.paneId);
     if (pane) this.showPlace(pane, place);
+    this.scheduleSave();
   }
 
   /** A `pane-command` report: relabels the pane running that session once its place is known. */
@@ -568,6 +609,7 @@ export class Panes {
     if (pane && pane === this.current()) this.showTitle();
     const place = this.places.get(report.paneId);
     if (pane && place) this.showPlace(pane, place);
+    this.scheduleSave();
   }
 
   /** Pane `pane` now runs shell session `session`. */
@@ -643,6 +685,7 @@ export class Panes {
     this.panes.forEach((pane, i) => {
       pane.element.toggleAttribute("data-focused", i === index);
     });
+    this.scheduleSave();
     if (document.hasFocus()) this.clearCurrent();
     this.reportName();
     this.showTitle();
@@ -696,6 +739,77 @@ export class Panes {
   private render(): void {
     this.view.render(this.layout);
     this.reportOrder();
+    this.scheduleSave();
+  }
+
+  /** Tells the app this window's state for the next launch once changes have settled. */
+  private scheduleSave(): void {
+    if (!this.backend.session) return;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = undefined;
+      this.saveState().catch(() => undefined);
+    }, SAVE_SETTLE_MS);
+  }
+
+  /** Tells the app this window's state now, after any report still in flight. */
+  private saveState(): Promise<void> {
+    const session = this.backend.session;
+    if (!session) return Promise.resolve();
+    clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
+    const next = this.saving.then(async () => {
+      const panes = await Promise.all(this.panes.map((pane) => this.snapshot(pane)));
+      const focused = this.current()?.id;
+      await session.update(snapshotWindow(this.layout, panes, focused, this.settings().behaviour.restoreScrollback));
+    });
+    this.saving = next.catch(() => undefined);
+    return next;
+  }
+
+  /** Pane `pane` as the next launch reopens it: its kind, folder or host, zoom, title and what runs in it. */
+  private async snapshot(pane: Pane): Promise<PaneSnapshot> {
+    if (pane.note) return { id: pane.id, kind: "heynote", zoom: pane.zoom };
+    const saved: PaneSnapshot = { id: pane.id, kind: "terminal", zoom: pane.zoom };
+    if (pane.title !== undefined) saved.title = pane.title;
+    const session = pane.session;
+    if (session === undefined) return saved;
+    const place = this.places.get(session);
+    const cwd = place?.cwd ?? (await pane.terminal?.cwd().catch(() => undefined));
+    if (cwd) saved.cwd = cwd;
+    if (place?.host) saved.host = place.host;
+    const running = await this.backend.session?.running(session).catch(() => undefined);
+    if (running?.command) saved.command = running.command;
+    if (running?.program) saved.program = running.program;
+    return saved;
+  }
+
+  /**
+   * Answers the app's `session-flush`: tells it the window's latest state and, with Restore scrollback and commands
+   * on, saves each terminal pane's scrollback, then says it is done, which it does even when saving failed.
+   */
+  async flush(): Promise<void> {
+    const session = this.backend.session;
+    if (!session) return;
+    try {
+      await this.saveState().catch(() => undefined);
+      if (this.settings().behaviour.restoreScrollback) {
+        await Promise.all(
+          this.panes.map(async (pane) => {
+            if (!pane.terminal) return;
+            await session.saveScrollback(pane.id, await pane.terminal.scrollback());
+          }),
+        ).catch(() => undefined);
+      }
+    } finally {
+      await session.flushed();
+    }
+  }
+
+  /** Closes the window after its last pane went, telling the app first that it has nothing to reopen. */
+  private async closeEmptyWindow(): Promise<void> {
+    await this.saveState().catch(() => undefined);
+    await this.backend.closeWindow();
   }
 
   /** Tells the app the panes' sessions in grid order when it changed, so `tiili list` follows the grid. */
@@ -729,6 +843,7 @@ export class Panes {
     if (action !== "reset" && next === current) return;
     pane.zoom = next - base;
     applyFont(terminal.term, settings, pane.zoom).catch((error: unknown) => this.report(error));
+    this.scheduleSave();
   }
 
   /**

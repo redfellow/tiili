@@ -1,11 +1,11 @@
-//! The off-screen fallback for the main window's saved state. `tauri-plugin-window-state` drops a saved
-//! position that lies on no connected monitor but still restores the saved size, so tiili checks the saved
-//! rectangle itself and puts the window back to its default size when it is off every screen.
+//! Window rectangles: the check that a saved one is still on a connected screen, so a window off every screen
+//! opens at its default size, and the one-time read of the main window's place from the state file of the
+//! window-state plugin earlier tiili versions used.
 
 use std::path::Path;
 
 /// A rectangle in physical pixels.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
@@ -13,7 +13,7 @@ pub struct Rect {
     pub height: u32,
 }
 
-/// The window rectangle `label` was saved with in the plugin's state file at `path`; `None` when the file,
+/// The window rectangle `label` was saved with in the old plugin's state file at `path`; `None` when the file,
 /// the window or its fields are missing or unreadable, or the window was never sized (all zero).
 pub fn read_saved(path: &Path, label: &str) -> Option<Rect> {
     let text = std::fs::read_to_string(path).ok()?;
@@ -29,8 +29,7 @@ pub fn read_saved(path: &Path, label: &str) -> Option<Rect> {
     (rect.width > 0 && rect.height > 0).then_some(rect)
 }
 
-/// Whether any corner of `saved` lies on one of `monitors`: the rule the plugin uses to decide that the saved
-/// position is still reachable.
+/// Whether any corner of `saved` lies on one of `monitors`, so the saved position is still reachable.
 pub fn is_on_screen(saved: Rect, monitors: &[Rect]) -> bool {
     let right = saved.x.saturating_add_unsigned(saved.width);
     let bottom = saved.y.saturating_add_unsigned(saved.height);
