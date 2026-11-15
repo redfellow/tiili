@@ -50,11 +50,15 @@ When a terminal opens or closes, the layout SHALL keep manual sizes for each axi
 - **THEN** the column widths are kept and the rows are equal
 
 ### Requirement: Pane drag feedback
-Once a pane's grab strip has been dragged more than 3 px, a label with the pane's chip name (or "Terminal") SHALL follow the pointer. The source pane SHALL dim and the pointer SHALL show grabbing everywhere until the drop or cancel, which SHALL remove all of these.
+Once a pane's grab strip has been dragged more than 3 px, a miniature of that pane, at most 200 px wide and copied from its current contents, with an accent border and a shadow, SHALL follow the pointer in place of a text label. The source pane SHALL dim and the pointer SHALL show grabbing everywhere until the drop or cancel, which SHALL remove all of these.
 
 #### Scenario: Drag shows a ghost
 - **WHEN** the user drags a pane's grab strip 10 px
-- **THEN** a label naming the pane follows the pointer and the source pane is dimmed
+- **THEN** a miniature of the pane follows the pointer and the source pane is dimmed
+
+#### Scenario: Drop removes the miniature
+- **WHEN** the user releases or cancels the drag
+- **THEN** the miniature is gone and the source pane is no longer dimmed
 
 ### Requirement: Terminal scrollbar
 Each terminal's scrollbar SHALL be 8 px wide and SHALL NOT show an overview-ruler border. While a search has matches, the scrollbar SHALL show a mark for each match in the match highlight colours.
