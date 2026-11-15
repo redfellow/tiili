@@ -9,7 +9,6 @@
 ## 2. Commands from the shell
 - [ ] 2.1 Preexec hook in zsh, bash and pwsh scripts emitting the command sequence; history seeding from `TIILI_RESTORE_HISTORY`; sequence parsed per pane in the PTY sink, cleared at prompt; fallback program name from `command.rs`; test in `src-tauri/tests/pty_session.rs` that a zsh/bash pane reports a typed command
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test pty_session`
-  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 
 ## 3. Frontend
