@@ -1,0 +1,2 @@
+## Approach
+Keep the design prototype. `TileView.dragPreview` clones the source pane, strips the drag attributes, the textarea, grab strip and find bar, scales the copy to `DRAG_PREVIEW_WIDTH` (200 px) and wraps it in the existing `.pane-drag-ghost` element, which `dragPane` positions at the pointer as before. A clone is cheap, shows the current contents, and needs no new dependency. The only work left is the spec update and checks.

@@ -13,14 +13,11 @@ The window SHALL hold several terminal panes, each connected to its own shell se
 - **THEN** only that pane's shell receives the input and shows `a`
 
 ### Requirement: Automatic grid layout
-Panes SHALL be laid out in a grid whose column count depends on the tiling mode from settings. For n panes:
-- Grid (default): ceil(sqrt(n)) columns.
-- Wide grid: ceil(n / floor(sqrt(n))) columns.
-- Tall grid: floor(sqrt(n)) columns.
-- Side by side: n columns.
-- Stacked: 1 column.
+Panes SHALL be laid out in a grid whose column count for n panes depends on the tiling mode from settings (Grid by default), as the Column count per tiling mode scenario sets out. In every mode rows SHALL be ceil(n / columns), filled left-to-right, top-to-bottom, and an unfilled last row SHALL stretch its panes to share the full width.
 
-In every mode rows SHALL be ceil(n / columns), filled left-to-right, top-to-bottom, and an unfilled last row SHALL stretch its panes to share the full width.
+#### Scenario: Column count per tiling mode
+- **WHEN** n panes are open
+- **THEN** the grid has ceil(sqrt(n)) columns in Grid mode, ceil(n / floor(sqrt(n))) in Wide grid, floor(sqrt(n)) in Tall grid, n in Side by side and 1 in Stacked
 
 #### Scenario: Grid sizes
 - **WHEN** 1, 2, 3, 4, 5 or 9 panes are open in Grid mode
@@ -109,7 +106,15 @@ Opening or closing a pane, or changing the tiling mode, SHALL re-flow the grid l
 - **THEN** the panes re-flow from 3×2 to 1×5
 
 ### Requirement: Pane zoom
-The app SHALL zoom the focused terminal pane's font size with ⌘+ (or ⌘=) and ⌘− on macOS and Ctrl++ (or Ctrl+=) and Ctrl+− on Windows and Linux, one pixel per press within 6–48 px, and SHALL reset it to the Settings font size with ⌘0 / Ctrl+0. Zoom SHALL affect only the focused pane, SHALL NOT be saved or change the Settings font size, and the keys SHALL NOT reach the shell. The pane's PTY SHALL follow its new size.
+The app SHALL zoom the focused terminal pane's font size one pixel per press within 6–48 px, and reset it to the Settings font size with the keys its scenarios name. Zoom SHALL affect only the focused pane, SHALL NOT be saved or change the Settings font size, and the keys SHALL NOT reach the shell. The pane's PTY SHALL follow its new size.
+
+#### Scenario: Zoom keys
+- **WHEN** the user presses ⌘+ or ⌘= / ⌘− / ⌘0 on macOS, or Ctrl++ or Ctrl+= / Ctrl+− / Ctrl+0 on Windows and Linux
+- **THEN** the focused pane zooms in / zooms out / returns to the Settings font size
+
+#### Scenario: Zoom limits
+- **WHEN** a pane is at 48 px and the user zooms in, or at 6 px and the user zooms out
+- **THEN** its font size stays where it is
 
 #### Scenario: Zoom in one pane
 - **WHEN** two panes are open at font size 14 and the user presses ⌘+ (Ctrl++ on Windows and Linux) twice in the first
@@ -124,7 +129,11 @@ The app SHALL zoom the focused terminal pane's font size with ⌘+ (or ⌘=) and
 - **THEN** every pane starts at the Settings font size
 
 ### Requirement: New window
-tiili SHALL open a new window with ⌘N on macOS (also from the Shell menu's New Window item) and Ctrl+Shift+N on Windows and Linux. The new window SHALL be a full tiili window with its own top bar, grid, panes and shortcuts, holding one pane that starts in the focused pane's folder, placed cascaded from the focused window. Every pane requirement applies to each window on its own; "the window" means the pane's own window.
+tiili SHALL open a new window with ⌘N on macOS and Ctrl+Shift+N on Windows and Linux: a full tiili window with its own top bar, grid, panes and shortcuts, holding one pane that starts in the focused pane's folder, cascaded from the focused window. Every pane requirement applies to each window on its own; "the window" means the pane's own window.
+
+#### Scenario: Shell menu opens a window
+- **WHEN** the user chooses New Window from the Shell menu on macOS
+- **THEN** a new tiili window opens just as with ⌘N
 
 #### Scenario: Open a second window
 - **WHEN** the focused pane is in `~/work/tiili` and the user presses ⌘N on macOS
@@ -191,7 +200,11 @@ Moving a window's last pane out SHALL close that window without ending the moved
 - **THEN** nothing happens
 
 ### Requirement: Window title follows the focused pane
-Each tiili window's title, as shown by the system's window switcher and taskbar, SHALL read the focused pane's title followed by ` — tiili >_`, where the pane's title is what its chip names as running in it (the title the program set, else the foreground process name). When the focused pane has no title, the window title SHALL read `tiili >_`. The title SHALL update when focus moves to another pane, when the focused pane's title changes and when the focused pane closes or moves away.
+Each tiili window's title, as shown by the system's window switcher and taskbar, SHALL read the focused pane's title followed by ` — tiili >_`, or `tiili >_` when the focused pane has no title. The title SHALL update when focus moves to another pane, when the focused pane's title changes and when the focused pane closes or moves away.
+
+#### Scenario: Pane title is what its chip names
+- **WHEN** the focused pane's program has set no title and its foreground process is `htop`
+- **THEN** the window title uses the name its chip shows as running, the program's title if set, else the foreground process name, and reads `htop — tiili >_`
 
 #### Scenario: Focused pane runs a program
 - **WHEN** the focused pane's program has set the title `vim README.md`
@@ -205,21 +218,45 @@ Each tiili window's title, as shown by the system's window switcher and taskbar,
 - **WHEN** the user moves focus from a pane running `vim` to one running `htop`
 - **THEN** the window title changes to `htop — tiili >_`
 
+#### Scenario: Focused pane closes or moves away
+- **WHEN** the focused pane closes or moves to another window and focus passes to a pane running `vim`
+- **THEN** the window title changes to `vim — tiili >_`
+
 ### Requirement: Pane motion
-When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL animate from its old place and size to its new one in about 180 ms. A new pane SHALL grow in and a closing pane SHALL shrink and fade out. When the OS asks for reduced motion, the change SHALL apply instantly. Dragging a divider SHALL stay instant. Each pane's PTY SHALL be resized once, to its final size.
+When panes are opened, closed, re-flowed, reset or swapped, each pane SHALL animate from its old place and size to its new one, and a new or closing pane SHALL animate in or out, with the timings its scenarios set. When the OS asks for reduced motion, the change SHALL apply instantly. Dragging a divider SHALL stay instant.
+
+#### Scenario: Panes glide to new places
+- **WHEN** panes are opened, closed, re-flowed, reset or swapped
+- **THEN** each pane glides from its old place and size to its new one with an ease-out motion in about 280 ms
 
 #### Scenario: Opening a pane animates
 - **WHEN** 2 panes are open and the user opens a third
-- **THEN** the new pane grows into its place and the panes that move glide to their new places
+- **THEN** the new pane rises, grows and fades into its place with a slight spring in about 380 ms, and the panes that move glide to their new places
 
 #### Scenario: Closing a pane animates
 - **WHEN** a pane is closed
-- **THEN** it shrinks and fades out while the remaining panes glide to fill the grid
+- **THEN** it shrinks and fades out above the other panes in about 180 ms, its terminal staying visible until then, while the remaining panes glide to fill the grid
 
 #### Scenario: Swap animates
 - **WHEN** two panes swap
 - **THEN** each slides from its old place to the other's
 
+#### Scenario: Gliding text scales evenly
+- **WHEN** a pane shrinks to half its width because another pane opens
+- **THEN** its terminal re-wraps once and its text shrinks gradually over the glide without stretching, and its title keeps its size
+
 #### Scenario: Reduced motion
 - **WHEN** the OS asks for reduced motion and a pane opens, closes or swaps
 - **THEN** the panes take their new places instantly
+- **THEN** the column widths are kept and the rows are equal
+
+#### Scenario: Divider drag stays instant
+- **WHEN** the user drags a divider
+- **THEN** the panes follow it instantly, without the glide
+
+### Requirement: Gliding pane content scaling
+While a pane glides, its terminal and title SHALL scale evenly rather than stretch. The terminal's line wrapping SHALL change once at the start, and its text SHALL then scale smoothly from its old size to its new one, while the title keeps a constant size. Each pane's PTY SHALL be resized once, to its final size.
+
+#### Scenario: Gliding pane keeps its proportions
+- **WHEN** a pane grows to twice its width because another pane closes
+- **THEN** its terminal and title are never drawn stretched or squashed during the glide

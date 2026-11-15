@@ -32,6 +32,11 @@ export interface PaneTerminal {
    */
   holdSize(): void;
   releaseSize(refit: boolean): void;
+  /**
+   * Takes the font and grid that fit the pane's current size now, without telling the shell (`releaseSize` does).
+   * Returns the old font size divided by the new one.
+   */
+  refitNow(): number;
   /** The size of one character cell in CSS pixels, once the terminal has been laid out. */
   cellSize(): { width: number; height: number } | undefined;
   /** The terminal's scrollback and screen as text with escape codes, once everything written to it has landed. */
@@ -323,6 +328,13 @@ export async function openTerminal(
     holdSize: () => {
       held = true;
       reporter.cancel();
+    },
+    refitNow: () => {
+      const old = term.options.fontSize ?? 0;
+      applySize(term, settings(), zoom());
+      fit.fit();
+      const now = term.options.fontSize ?? 0;
+      return old > 0 && now > 0 ? old / now : 1;
     },
     releaseSize: (refit) => {
       held = false;

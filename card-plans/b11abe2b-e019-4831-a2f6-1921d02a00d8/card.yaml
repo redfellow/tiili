@@ -1,0 +1,18 @@
+format: 1
+slug: show-what-s-new-after-an-in-app-update-a
+title: Show "What's new" after an in-app update, and clean up the release notes
+  in the update dialog
+x-harvaaja-card: b11abe2b-e019-4831-a2f6-1921d02a00d8
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new observable app-updates behaviour (What's new panel after
+    update) and changes the dialog's notes display; no active change covers app
+    updates.
+  citations:
+    - "openspec/specs/app-updates/spec.md: Requirement: Install update prompt"
+    - "src/updateDialog.ts: notes shown in <pre>"
+    - "src/updates.ts: findUpdate install()"
+  revision: 3cefc999-9acf-416e-a61b-00eb116c27d9

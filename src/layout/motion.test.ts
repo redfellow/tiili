@@ -26,6 +26,29 @@ describe("flipFrames", () => {
     else expect(end.transform).toBe("none");
   });
 
+  it("Opening a pane animates: each kind carries its own timing, enter longest and exit shortest", () => {
+    const motions = flipFrames(
+      new Map([
+        [1, rect(0, 0, 200, 100)],
+        [2, rect(0, 0, 100, 100)],
+      ]),
+      new Map([
+        [1, rect(0, 0, 100, 100)],
+        [3, rect(100, 0, 100, 100)],
+      ]),
+    );
+    const timing = (kind: MotionKind) => {
+      const motion = [...motions.values()].find((m) => m.kind === kind);
+      expect(motion?.duration).toBeGreaterThan(0);
+      expect(motion?.easing).toBeTruthy();
+      return { duration: motion?.duration ?? 0, easing: motion?.easing };
+    };
+    const [enter, move, exit] = (["enter", "move", "exit"] as const).map(timing);
+    expect(enter.duration).toBeGreaterThan(move.duration);
+    expect(move.duration).toBeGreaterThan(exit.duration);
+    expect(new Set([enter.easing, move.easing, exit.easing]).size).toBe(3);
+  });
+
   it("Swap animates: a moved pane starts from its old rect", () => {
     const motion = flipFrames(new Map([[1, rect(0, 0, 200, 100)]]), new Map([[1, rect(50, 10, 100, 50)]])).get(1);
     expect(motion?.frames[0].transform).toBe("translate(-50px, -10px) scale(2, 2)");
