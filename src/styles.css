@@ -98,10 +98,10 @@
   font-display: block;
 }
 
-/* Nerd Font icon fallback: only the icon codepoints its cmap has, so it never replaces letters or box drawing. */
+/* Nerd Font icon fallback (rescaled to one cell by scripts/fit-symbols.py): only the icon codepoints its cmap has, so it never replaces letters or box drawing. */
 @font-face {
-  font-family: "Symbols Nerd Font Mono";
-  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-family: "Tiili Symbols Cell";
+  src: url("./assets/fonts/SymbolsNerdFontMono-Cell.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: block;
