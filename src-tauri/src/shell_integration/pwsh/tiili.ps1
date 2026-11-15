@@ -71,16 +71,26 @@ if ($env:TIILI_RESTORE_HISTORY) {
 }
 Remove-Item Env:TIILI_RESTORE_HISTORY -ErrorAction SilentlyContinue
 # Tell tiili the command line about to run, in base64 (OSC 1337 TiiliCmd), so a pane reopened after tiili ends can
-# show what was running. PSReadLine hands every accepted line to this handler; the user's own handler still decides
-# whether it goes into the history.
+# show what was running. PSReadLine hands every accepted line to this handler; the user's own handler, or PSReadLine's
+# default one, still decides whether it goes into the history, and only a line it keeps in the history file is
+# reported: one kept in memory only (the default handler's answer for a line with a password, token or secret) or
+# skipped is not.
 if (Get-Module PSReadLine) {
   $global:TiiliHistoryHandler = (Get-PSReadLineOption).AddToHistoryHandler
   Set-PSReadLineOption -AddToHistoryHandler {
     param([string]$line)
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line))
+    $handler = $global:TiiliHistoryHandler
+    $result = $true
+    if ($handler -is [scriptblock]) {
+      $result = & $handler $line | Select-Object -Last 1
+    } elseif ($null -ne $handler) {
+      $result = $handler.Invoke($line)
+    }
+    $kept = if ($result -is [bool]) { $result } else { "$result" -eq 'MemoryAndFile' }
+    $encoded = ''
+    if ($kept) { $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line)) }
     [Console]::Write("$([char]27)]1337;TiiliCmd=$encoded$([char]7)")
-    if ($global:TiiliHistoryHandler) { return & $global:TiiliHistoryHandler $line }
-    return $true
+    return $result
   }
 }
 Remove-Variable tiiliPrompt, tiiliCurrent, tiiliBuiltIn, tiiliLine -ErrorAction SilentlyContinue

@@ -95,9 +95,36 @@ _tiili_base64() {
   done
   REPLY=$out
 }
+# Only a line that goes into the history is reported: one the user's history hooks reject, or that starts with a
+# space under hist_ignore_space, is kept off the disk, so tiili reports no command for it. The user's zshaddhistory
+# function and hooks are run from tiili's own one, which so learns their answer and hands it on to zsh unchanged.
+typeset -g _tiili_hist_kept=
+typeset -ga _tiili_addhistory_hooks
+_tiili_addhistory_hooks=("${(@)zshaddhistory_functions}")
+if (( ${+functions[zshaddhistory]} )); then
+  functions[_tiili_user_zshaddhistory]=$functions[zshaddhistory]
+  unfunction zshaddhistory
+  _tiili_addhistory_hooks=(_tiili_user_zshaddhistory "${(@)_tiili_addhistory_hooks}")
+fi
+zshaddhistory_functions=(_tiili_addhistory)
+_tiili_addhistory() {
+  local _tiili_hook
+  local -i _tiili_ret=0 _tiili_r
+  for _tiili_hook in "${(@)_tiili_addhistory_hooks}"; do
+    (( ${+functions[$_tiili_hook]} )) || continue
+    "$_tiili_hook" "$@"
+    _tiili_r=$?
+    (( _tiili_ret )) || _tiili_ret=$_tiili_r
+  done
+  _tiili_hist_kept=
+  # 2 keeps the line in memory only, off the history file, so it is not reported either.
+  if (( ! _tiili_ret )) && [[ ! ( -o hist_ignore_space && $1 == ' '* ) ]]; then _tiili_hist_kept=1; fi
+  return $_tiili_ret
+}
 _tiili_preexec() {
-  local _tiili_status=$? REPLY
-  _tiili_base64 "$1"
+  local _tiili_status=$? REPLY=
+  if [[ -n $_tiili_hist_kept ]]; then _tiili_base64 "$1"; fi
+  _tiili_hist_kept=
   printf '\e]1337;TiiliCmd=%s\a' "$REPLY"
   return $_tiili_status
 }

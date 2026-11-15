@@ -564,8 +564,8 @@ fn pasted_text_in_bash_takes_the_highlight_file_colour() {
 }
 
 /// Up re-runs: a zsh and a bash started with a restored history line run it on Up then Enter and delete its file,
-/// and report a typed command line while it runs, cleared once the prompt is back; bash with a user PROMPT_COMMAND
-/// ending in `; ` too.
+/// and report a typed command line while it runs, cleared once the prompt is back, but not one kept out of their
+/// history by a leading space; bash with a user PROMPT_COMMAND ending in `; ` too.
 #[cfg(unix)]
 #[test]
 #[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
@@ -649,6 +649,37 @@ fn up_re_runs_zsh_and_bash_seed_history_and_report_the_typed_command() {
             poll(None),
             None,
             "{shell} kept reporting a command at the prompt"
+        );
+
+        // A line the shell keeps out of its history (a leading space under the ignore-space option) is not
+        // reported while it runs.
+        let ignore_space = if shell.ends_with("zsh") {
+            "setopt hist_ignore_space\r"
+        } else {
+            "HISTCONTROL=ignorespace\r"
+        };
+        session
+            .write(ignore_space.as_bytes())
+            .expect("set the option");
+        assert_eq!(poll(None), None, "{shell} did not come back to the prompt");
+        session
+            .write(b" sleep 1; echo hidden-$((40 + 3))\r")
+            .expect("type the hidden command");
+        let deadline = Instant::now() + TIMEOUT;
+        while Instant::now() < deadline && !String::from_utf8_lossy(&seen).contains("hidden-43") {
+            assert_eq!(
+                line(&scanner),
+                None,
+                "{shell} reported a line kept out of its history"
+            );
+            while let Ok(chunk) = out_rx.try_recv() {
+                seen.extend(chunk);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            String::from_utf8_lossy(&seen).contains("hidden-43"),
+            "{shell} did not run the hidden command"
         );
     }
 }

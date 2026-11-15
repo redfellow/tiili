@@ -136,14 +136,20 @@ _tiili_preexec() {
   [ -z "${COMP_LINE-}" ] || return 0
   [ "$BASH_COMMAND" != _tiili_ready ] || return 0
   _tiili_at_prompt=
-  local line _tiili_reply
+  local line _tiili_reply=
   line=$(HISTTIMEFORMAT= builtin history 1)
-  [[ $line =~ ^\ *[0-9]+\*?\ +(.*)$ ]] && line=${BASH_REMATCH[1]}
-  _tiili_base64 "$line"
+  # The newest entry is the same as at the prompt when this line stayed out of the history (HISTCONTROL,
+  # HISTIGNORE, history off): it is not reported, neither is that older entry.
+  if [ "$line" != "$_tiili_last_history" ]; then
+    [[ $line =~ ^\ *[0-9]+\*?\ +(.*)$ ]] && line=${BASH_REMATCH[1]}
+    _tiili_base64 "$line"
+  fi
   printf '\e]1337;TiiliCmd=%s\a' "$_tiili_reply"
 }
+_tiili_last_history=
 _tiili_ready() {
   local _tiili_status=$?
+  _tiili_last_history=$(HISTTIMEFORMAT= builtin history 1)
   _tiili_at_prompt=1
   return $_tiili_status
 }
