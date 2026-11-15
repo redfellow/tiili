@@ -20,6 +20,8 @@ export interface PaneLaunch {
  */
 export interface PaneOpenRequest {
   requestId: number;
+  /** The session `tiili open` ran in, whose tab the new pane joins. */
+  caller: SessionId;
   cwd: string | null;
   title: string | null;
   command: string[];
@@ -44,9 +46,27 @@ export type MenuItem =
  * A pane on its way to another window: a terminal with its running session, its serialized scrollback and its
  * zoom offset, or the Heynote pane (whose notes are already saved).
  */
-export type MovePayload =
+export type MovePayload = PaneMovePayload | TabMovePayload;
+
+/** One pane that moves: a terminal pane's session with its scrollback and zoom offset, or the Heynote pane. */
+export type PaneMovePayload =
   | { kind: "terminal"; session: SessionId; scrollback: string; zoom: number }
   | { kind: "heynote" };
+
+/**
+ * A whole tab that moves (Pop Out): its lasting name, its grid's track sizes, its focused pane's index and its panes
+ * in grid order, all under one token.
+ */
+export interface TabMovePayload {
+  kind: "tab";
+  name?: string;
+  layout: { colSizes: number[]; rowSizes: number[] };
+  focused: number;
+  panes: PaneMovePayload[];
+}
+
+/** The Shell menu's tab items, which the "pane" event names: New Tab, Next and Previous Tab, Move Pane to Next or Previous Tab. */
+export type TabMenuId = "tabNew" | "tabNext" | "tabPrevious" | "tabMoveNext" | "tabMovePrevious";
 
 /** Moving panes between windows, where the backend has more than one window. */
 export interface PaneMoves {
@@ -99,7 +119,7 @@ export interface SettingsWindows {
  */
 export interface AppEvents {
   clipboard: "copy" | "paste" | "selectAll" | "find" | "findNext" | "findPrevious";
-  pane: "new" | "close" | "moveToNewWindow";
+  pane: "new" | "close" | "moveToNewWindow" | TabMenuId;
   "new-window": undefined;
   "move-to-window": string;
   "pane-arrive": { token: string };

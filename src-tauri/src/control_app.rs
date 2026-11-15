@@ -30,6 +30,8 @@ const OPEN_WAIT: Duration = Duration::from_secs(10);
 #[serde(rename_all = "camelCase")]
 struct PaneOpenRequest {
     request_id: u64,
+    /// The pane `tiili open` ran in: the new pane joins its tab.
+    caller: SessionId,
     cwd: Option<String>,
     title: Option<String>,
     command: Vec<String>,
@@ -158,6 +160,7 @@ impl Handler for AppHandler {
         let (request_id, answer) = pending.add();
         let request = PaneOpenRequest {
             request_id,
+            caller,
             cwd,
             title: title.clone(),
             command,

@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { menuEntries, type WindowEntry } from "./windowMenu";
+import { menuEntries, tabMenuEntries, type WindowEntry } from "./windowMenu";
 
 const win = (label: string, name: string): WindowEntry => ({ label, name });
 
@@ -22,5 +22,17 @@ describe("menuEntries", () => {
     expect(entries.map((entry) => entry.label)).toEqual(
       windows.filter((w) => !w.label.startsWith("settings-")).map((w) => w.label),
     );
+  });
+});
+
+describe("tabMenuEntries", () => {
+  const cases: [string, string[], number, [number, string][]][] = [
+    ["Move to New Tab: a single tab lists no other tabs", ["tiili"], 0, []],
+    ["Move a pane to another tab: the pane's own tab is left out", ["tiili", "härvääjä", "Heynote"], 1, [[0, "tiili"], [2, "Heynote"]]],
+    ["Move a pane to another tab: tabs of one label are numbered in strip order", ["tiili", "tiili", "tiili"], 0, [[1, "tiili (2)"], [2, "tiili (3)"]]],
+    ["Move a pane to another tab: the left-out tab still counts for numbering", ["tiili", "tiili"], 1, [[0, "tiili"]]],
+  ];
+  it.each(cases)("%s", (_name, labels, current, expected) => {
+    expect(tabMenuEntries(labels, current).map(({ index, text }) => [index, text])).toEqual(expected);
   });
 });

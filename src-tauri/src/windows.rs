@@ -199,7 +199,9 @@ pub fn numbered_names(entries: &[WindowEntry]) -> Vec<String> {
         .collect()
 }
 
-/// What moves to another window: a terminal pane's session with its scrollback and zoom offset, or a Heynote pane.
+/// What moves to another window: a terminal pane's session with its scrollback and zoom offset, a Heynote pane, or
+/// a whole tab (Pop Out) with its name, its grid's track sizes (kept as the frontend sent them), its focused pane and
+/// its panes in grid order.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum MovePayload {
@@ -209,14 +211,23 @@ pub enum MovePayload {
         zoom: f64,
     },
     Heynote,
+    Tab {
+        name: Option<String>,
+        layout: serde_json::Value,
+        focused: usize,
+        panes: Vec<MovePayload>,
+    },
 }
 
 impl MovePayload {
-    /// The session that moves with the pane, if it is a terminal pane.
-    pub fn session(&self) -> Option<SessionId> {
+    /// The sessions that move with it: a terminal pane's, or those of a tab's terminal panes in grid order.
+    pub fn sessions(&self) -> Vec<SessionId> {
         match self {
-            MovePayload::Terminal { session, .. } => Some(*session),
-            MovePayload::Heynote => None,
+            MovePayload::Terminal { session, .. } => vec![*session],
+            MovePayload::Heynote => Vec::new(),
+            MovePayload::Tab { panes, .. } => {
+                panes.iter().flat_map(MovePayload::sessions).collect()
+            }
         }
     }
 }
@@ -363,8 +374,8 @@ struct PaneArrive {
     token: String,
 }
 
-/// Moves the calling window's pane described by `payload` to window `target`, or to a new window when `target` is
-/// absent. Its session (if any) belongs to the target window from now on, so the calling window may close after
+/// Moves the calling window's pane or tab described by `payload` to window `target`, or to a new window when
+/// `target` is absent. Its sessions belong to the target window from now on, so the calling window may close after
 /// this returns without ending it. The target window takes the move with `pane_move_take`, comes to the front and
 /// focuses the pane.
 #[tauri::command]
@@ -377,18 +388,18 @@ pub async fn pane_move(
     target: Option<String>,
     payload: MovePayload,
 ) -> Result<(), String> {
-    let session = payload.session();
+    let moved = payload.sessions();
     match target {
         None => {
             let label = labels.next();
             let token = moves.put(payload);
-            if let Some(id) = session {
+            for &id in &moved {
                 sessions.reassign(id, &label);
             }
             let url = start_url(None, Some(&token));
             if let Err(error) = open_window(&app, &window, label, url) {
                 moves.take(&token);
-                if let Some(id) = session {
+                for &id in &moved {
                     sessions.reassign(id, window.label());
                 }
                 return Err(error);
@@ -399,7 +410,7 @@ pub async fn pane_move(
                 return Err(format!("Could not move the pane: no window {label}"));
             };
             let token = moves.put(payload);
-            if let Some(id) = session {
+            for &id in &moved {
                 sessions.reassign(id, &label);
             }
             let _ = to.unminimize();
@@ -413,7 +424,7 @@ pub async fn pane_move(
                 },
             ) {
                 moves.take(&token);
-                if let Some(id) = session {
+                for &id in &moved {
                     sessions.reassign(id, window.label());
                 }
                 return Err(format!("Could not move the pane: {error}"));
@@ -566,6 +577,22 @@ mod tests {
                 },
             ),
             (r#"{"kind":"heynote"}"#, MovePayload::Heynote),
+            (
+                r#"{"kind":"tab","name":"build","layout":{"colSizes":[1,1],"rowSizes":[1]},"focused":1,"panes":[{"kind":"terminal","session":3,"scrollback":"","zoom":0},{"kind":"heynote"}]}"#,
+                MovePayload::Tab {
+                    name: Some("build".into()),
+                    layout: serde_json::json!({"colSizes": [1, 1], "rowSizes": [1]}),
+                    focused: 1,
+                    panes: vec![
+                        MovePayload::Terminal {
+                            session: 3,
+                            scrollback: String::new(),
+                            zoom: 0.0,
+                        },
+                        MovePayload::Heynote,
+                    ],
+                },
+            ),
         ];
         for (json, expected) in cases {
             assert_eq!(
@@ -573,6 +600,32 @@ mod tests {
                 expected,
                 "{json}"
             );
+        }
+    }
+
+    #[test]
+    fn pop_out_a_tab_all_its_sessions_move() {
+        let terminal = |session| MovePayload::Terminal {
+            session,
+            scrollback: String::new(),
+            zoom: 0.0,
+        };
+        let cases = [
+            ("a terminal pane", terminal(4), vec![4]),
+            ("a Heynote pane", MovePayload::Heynote, vec![]),
+            (
+                "a tab of three panes",
+                MovePayload::Tab {
+                    name: None,
+                    layout: serde_json::Value::Null,
+                    focused: 0,
+                    panes: vec![terminal(1), MovePayload::Heynote, terminal(2)],
+                },
+                vec![1, 2],
+            ),
+        ];
+        for (name, payload, expected) in cases {
+            assert_eq!(payload.sessions(), expected, "{name}");
         }
     }
 

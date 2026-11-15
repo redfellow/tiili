@@ -17,6 +17,11 @@ export type PaneAction =
   | { type: "moveToNewWindow" };
 /** A zoom shortcut: the focused pane's text one step larger, smaller, or back to the Settings size. */
 export type ZoomAction = "in" | "out" | "reset";
+/**
+ * A tab shortcut: open a new tab beside the shown one, show the next or previous tab (wrapping), or move the focused
+ * pane to the next or previous tab.
+ */
+export type TabAction = "new" | "next" | "previous" | "moveNext" | "movePrevious";
 /** A find shortcut: open the focused pane's find bar, or go to the next or previous match. */
 export type FindAction = "find" | "next" | "previous";
 
@@ -172,6 +177,34 @@ export function findAction(event: KeyChord, platform: Platform): FindAction | nu
   if (event.ctrlKey) return event.shiftKey && (key === "f" || event.code === "KeyF") ? "find" : null;
   if (event.key === "F3") return event.shiftKey ? "previous" : "next";
   return null;
+}
+
+/**
+ * Which tab action a key press asks for, or null when the key belongs to the shell.
+ * macOS: ⇧⌘T new, ⇧⌘] / ⇧⌘[ and Ctrl+Tab / Ctrl+Shift+Tab next and previous, ⌃⇧⌘] / ⌃⇧⌘[ move the pane. Windows
+ * and Linux: Ctrl+Alt+Shift+T new, Ctrl+PageDown / Ctrl+PageUp next and previous, Ctrl+Shift+PageDown /
+ * Ctrl+Shift+PageUp move the pane. The brackets are read by `code`, since Shift turns them into braces.
+ */
+export function tabAction(event: KeyChord, platform: Platform): TabAction | null {
+  const key = event.key.toLowerCase();
+  if (platform === "macos") {
+    if (event.altKey) return null;
+    const bracket = event.code === "BracketRight" ? 1 : event.code === "BracketLeft" ? -1 : 0;
+    if (event.metaKey && event.shiftKey) {
+      if (!event.ctrlKey && (key === "t" || event.code === "KeyT")) return "new";
+      if (bracket === 0) return null;
+      if (event.ctrlKey) return bracket > 0 ? "moveNext" : "movePrevious";
+      return bracket > 0 ? "next" : "previous";
+    }
+    if (event.ctrlKey && !event.metaKey && event.key === "Tab") return event.shiftKey ? "previous" : "next";
+    return null;
+  }
+  if (event.metaKey || !event.ctrlKey) return null;
+  if (event.altKey) return event.shiftKey && (key === "t" || event.code === "KeyT") ? "new" : null;
+  const page = event.key === "PageDown" ? 1 : event.key === "PageUp" ? -1 : 0;
+  if (page === 0) return null;
+  if (event.shiftKey) return page > 0 ? "moveNext" : "movePrevious";
+  return page > 0 ? "next" : "previous";
 }
 
 /** The platform the webview runs on. */
