@@ -558,17 +558,20 @@ html[data-pane-dragging] * {
   top: 0;
   left: 0;
   z-index: 1000;
-  max-width: 220px;
-  padding: 0 var(--space-3);
   overflow: hidden;
   border-radius: var(--radius-brick);
-  background: var(--accent);
-  box-shadow: 0 6px 18px color-mix(in srgb, #000 40%, transparent);
-  color: var(--on-accent);
-  font: 500 12px/24px var(--font-sans);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--term-bg);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 50%, transparent);
+  opacity: 0.92;
   pointer-events: none;
+}
+
+.pane-drag-ghost::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: inherit;
 }
 
 /* Dividers are the mortar gaps between tracks; dragging one resizes the tracks on both sides. */
