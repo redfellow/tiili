@@ -17,6 +17,9 @@ pub const PROMPT_OFF: &str = "off";
 pub const PROMPTS: [&str; 3] = ["classic", "minimal", "tiili"];
 /// The file in the integration folder holding the current prompt choice, read by the scripts before every prompt.
 pub const PROMPT_FILE: &str = "prompt";
+/// The file in the integration folder holding the colour (`#RRGGBB`) zsh and bash give pasted text, the terminal
+/// selection's colour in the current theme, read by the scripts before every prompt.
+pub const HIGHLIGHT_FILE: &str = "highlight";
 
 /// `prompt` when the scripts know it, else [`PROMPT_OFF`].
 pub fn known_prompt(prompt: &str) -> &str {
@@ -149,11 +152,38 @@ pub fn install(dir: &Path) -> io::Result<()> {
 
 /// Writes `prompt` (Off when the scripts don't know it) to `dir`'s [`PROMPT_FILE`], creating `dir` if needed.
 pub fn write_prompt(dir: &Path, prompt: &str) -> io::Result<()> {
+    write_choice(dir, PROMPT_FILE, known_prompt(prompt))
+}
+
+/// Whether `colour` is `#RRGGBB`, the only form the scripts take.
+pub fn is_hex_colour(colour: &str) -> bool {
+    colour.len() == 7
+        && colour.starts_with('#')
+        && colour[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Writes `colour` (`#RRGGBB`) to `dir`'s [`HIGHLIGHT_FILE`], creating `dir` if needed; leaves a file that already
+/// holds it alone. Any other text is refused, so the scripts never hand zsh or readline more than a colour.
+pub fn write_highlight(dir: &Path, colour: &str) -> io::Result<()> {
+    if !is_hex_colour(colour) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("not a #RRGGBB colour: {colour:?}"),
+        ));
+    }
+    if fs::read_to_string(dir.join(HIGHLIGHT_FILE)).is_ok_and(|current| current == colour) {
+        return Ok(());
+    }
+    write_choice(dir, HIGHLIGHT_FILE, colour)
+}
+
+/// Writes `text` to `dir`'s `file`, creating `dir` if needed.
+fn write_choice(dir: &Path, file: &str, text: &str) -> io::Result<()> {
     fs::create_dir_all(dir)?;
-    let target = dir.join(PROMPT_FILE);
+    let target = dir.join(file);
     // Written aside and renamed, so a shell reading it at its prompt never sees half a file.
     let aside = target.with_extension(format!("tmp{}", std::process::id()));
-    fs::write(&aside, known_prompt(prompt))?;
+    fs::write(&aside, text)?;
     fs::rename(&aside, &target)
 }
 
@@ -411,6 +441,34 @@ mod tests {
                 "{prompt:?}"
             );
         }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn highlight_file_takes_only_hex_colours() {
+        let dir = std::env::temp_dir().join(format!("tiili-highlight-file-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        write_highlight(&dir, "#3C6680").expect("colour written");
+        assert_eq!(
+            fs::read_to_string(dir.join(HIGHLIGHT_FILE)).unwrap(),
+            "#3C6680"
+        );
+        for bad in [
+            "",
+            "3C6680",
+            "#3C668",
+            "#3C66800",
+            "#GG6680",
+            "#3C6680\n",
+            "red",
+            "#3C6680; rm",
+        ] {
+            assert!(write_highlight(&dir, bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(
+            fs::read_to_string(dir.join(HIGHLIGHT_FILE)).unwrap(),
+            "#3C6680"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it, vi } from "vitest";
 import { searchDecorations } from "./search";
-import { followSystemTheme, terminalTheme } from "./theme";
+import { followSystemTheme, highlightColour, terminalTheme } from "./theme";
 
 const ANSI_NAMES = [
   "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
@@ -36,6 +36,22 @@ describe("terminalTheme", () => {
     expect(selection).toMatch(/^#[0-9A-F]{6}$/);
     expect([activeMatchBackground, matchBackground]).not.toContain(selection);
   });
+});
+
+describe("highlightColour", () => {
+  it("Pasted text in the theme's colour: the shells get the selection's #RRGGBB", () => {
+    const read = (name: string) => ({ "--tiili-taivas": "#6F97B3", "--term-bg": "#182023" })[name] ?? "";
+    const theme = terminalTheme(read);
+    expect(highlightColour(theme)).toBe(theme.selectionBackground);
+    expect(highlightColour(theme)).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it.each(["", "rgba(1, 2, 3, 0.5)", "#123", "#12345678", "value-of--tiili-taivas"])(
+    "Pasted text in the theme's colour: a selection that isn't #RRGGBB (%j) sends the shells nothing",
+    (colour) => {
+      expect(highlightColour({ selectionBackground: colour })).toBeUndefined();
+    },
+  );
 });
 
 describe("followSystemTheme", () => {

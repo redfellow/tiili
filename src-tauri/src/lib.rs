@@ -314,6 +314,13 @@ fn pty_set_prompt(sessions: State<'_, SessionRegistry>, prompt: String) -> Resul
     sessions.set_prompt(&prompt).map_err(text)
 }
 
+/// The terminal theme changed: integrated zsh and bash 5.1+ shells give pasted text `colour`, the selection's colour,
+/// from their next prompt on, instead of reverse video.
+#[tauri::command]
+fn pty_set_highlight(colour: String) -> Result<(), String> {
+    pty::set_highlight(&colour).map_err(text)
+}
+
 /// Window `label` was closed: its shells end and it no longer holds the focus.
 fn window_destroyed(app: &AppHandle, label: &str) {
     app.state::<control_app::PaneOrders>().forget(label);
@@ -604,6 +611,7 @@ pub fn run() {
             pty_close,
             pty_cwd,
             pty_set_prompt,
+            pty_set_highlight,
             settings::settings_load,
             settings::settings_save,
             settings::settings_open,

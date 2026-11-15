@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use tiili_lib::pty::{set_colour_env, PtySession};
-use tiili_lib::shell_integration::{command_for, write_prompt};
+use tiili_lib::shell_integration::{command_for, write_highlight, write_prompt};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -416,4 +416,149 @@ fn open_panes_switch_zsh_replaced_by_exec_is_never_signalled() {
         Some(false),
         "sleep is no longer running"
     );
+}
+
+/// Starts `shell` through the integration with Off, `rc` (file name and text) in a fresh home that sets the prompt
+/// `hl> ` and the `highlight` file holding #3C6680, and waits for the prompt. None when `shell` is missing.
+#[cfg(unix)]
+fn highlighted_shell(
+    shell: &str,
+    tag: &str,
+    rc: &[(&str, &str)],
+) -> Option<(PtySession, mpsc::Receiver<Vec<u8>>, Vec<u8>)> {
+    if !std::path::Path::new(shell).exists() {
+        eprintln!("{shell} is missing; skipped");
+        return None;
+    }
+    let home = temp_dir(&format!("home-highlight-{tag}"));
+    for (name, text) in rc {
+        std::fs::write(home.join(name), text).expect("rc file");
+    }
+    let scripts = temp_dir(&format!("scripts-highlight-{tag}"));
+    write_highlight(&scripts, "#3C6680").expect("highlight file");
+    let mut cmd = command_for(shell, "off", &scripts).expect("zsh and bash have an integration");
+    set_colour_env(&mut cmd);
+    cmd.env("HOME", &home);
+    cmd.env_remove("TIILI_USER_ZDOTDIR");
+    cmd.env_remove("INPUTRC");
+    cmd.env("BASH_SILENCE_DEPRECATION_WARNING", "1");
+    let (out_tx, out_rx) = mpsc::channel();
+    let session = PtySession::spawn_command(
+        cmd,
+        24,
+        80,
+        Box::new(move |data| {
+            let _ = out_tx.send(data.to_vec());
+        }),
+        Box::new(|_| {}),
+    )
+    .expect("shell starts");
+    let mut seen = Vec::new();
+    assert!(
+        wait_for(&out_rx, &mut seen, "hl> "),
+        "{tag}: no prompt: {:?}",
+        String::from_utf8_lossy(&seen)
+    );
+    Some((session, out_rx, seen))
+}
+
+/// Pastes `pasted` into `session` as a bracketed paste and asserts the shell draws it right after `sgr`.
+#[cfg(unix)]
+fn assert_paste_drawn(
+    tag: &str,
+    session: &PtySession,
+    out_rx: &mpsc::Receiver<Vec<u8>>,
+    seen: &mut Vec<u8>,
+    sgr: &str,
+) {
+    session.write(b"\x1b[200~pasted\x1b[201~").expect("paste");
+    let drawn = format!("{sgr}pasted");
+    assert!(
+        wait_for(out_rx, seen, &drawn),
+        "{tag}: the paste was not drawn as {drawn:?}: {:?}",
+        String::from_utf8_lossy(seen)
+    );
+}
+
+/// 0x3C6680 is 60;102;128: the paste on that truecolour background.
+const ON_HIGHLIGHT: &str = "\x1b[48;2;60;102;128m";
+
+/// Pasted text in the theme's colour: an integrated zsh draws a bracketed paste on the background in the integration
+/// folder's `highlight` file, not in reverse video, and keeps a paste highlight the user's .zshrc set itself.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn pasted_text_in_zsh_takes_the_highlight_file_colour() {
+    let cases: &[(&str, &str, &str)] = &[
+        ("zsh-default", "", "\nhl:paste:bg=#3C6680,region:bg=#3C6680"),
+        (
+            "zsh-own",
+            "zle_highlight=(paste:none)\n",
+            "\nhl:paste:none,region:bg=#3C6680",
+        ),
+    ];
+    for &(tag, rc, expected) in cases {
+        let rc = format!("{rc}PROMPT='hl> '\n");
+        let Some((session, out_rx, mut seen)) =
+            highlighted_shell("/bin/zsh", tag, &[(".zshrc", &rc)])
+        else {
+            return;
+        };
+        session
+            .write(b"print -r -- \"hl:${(j:,:)zle_highlight}\"\r")
+            .expect("type the command");
+        assert!(
+            wait_for(&out_rx, &mut seen, expected),
+            "{tag}: zle_highlight was not {expected:?}: {:?}",
+            String::from_utf8_lossy(&seen)
+        );
+        if tag == "zsh-default" {
+            assert_paste_drawn(tag, &session, &out_rx, &mut seen, ON_HIGHLIGHT);
+        }
+    }
+}
+
+/// Pasted text in the theme's colour: an integrated bash 5.1 or later draws a bracketed paste on the `highlight`
+/// file's background, and keeps a region colour the user's inputrc set itself. Runs on the bash 5 that is installed
+/// (Homebrew's, or the system's on Linux); macOS's bash 3.2 highlights nothing.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn pasted_text_in_bash_takes_the_highlight_file_colour() {
+    let Some(bash) = [
+        "/opt/homebrew/bin/bash",
+        "/usr/local/bin/bash",
+        "/bin/bash",
+        "/usr/bin/bash",
+    ]
+    .into_iter()
+    .find(|bash| {
+        std::process::Command::new(bash)
+            .args([
+                "-c",
+                "(( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) ))",
+            ])
+            .status()
+            .is_ok_and(|status| status.success())
+    }) else {
+        eprintln!("no bash 5.1 or later; skipped");
+        return;
+    };
+    // Each case: its tag, the user's .inputrc, and how the paste must be drawn.
+    let cases: &[(&str, Option<&str>, &str)] = &[
+        ("bash-default", None, ON_HIGHLIGHT),
+        (
+            "bash-own",
+            Some("set active-region-start-color \"\\e[4m\"\n"),
+            "\x1b[4m",
+        ),
+    ];
+    for &(tag, inputrc, sgr) in cases {
+        let mut rc = vec![(".bash_profile", "PS1='hl> '\n")];
+        rc.extend(inputrc.map(|text| (".inputrc", text)));
+        let Some((session, out_rx, mut seen)) = highlighted_shell(bash, tag, &rc) else {
+            return;
+        };
+        assert_paste_drawn(tag, &session, &out_rx, &mut seen, sgr);
+    }
 }

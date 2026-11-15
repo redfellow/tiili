@@ -84,6 +84,12 @@ describe("Tauri backend prompt choice", () => {
     await tauriBackend().setPrompt(prompt);
     expect(invoke.mock.calls).toEqual([["pty_set_prompt", { prompt }]]);
   });
+
+  it("Pasted text in the theme's colour: pty_set_highlight gets the colour", async () => {
+    invoke.mockClear();
+    await tauriBackend().setHighlight("#3C6680");
+    expect(invoke.mock.calls).toEqual([["pty_set_highlight", { colour: "#3C6680" }]]);
+  });
 });
 
 describe("Tauri backend links: each goes to its core command, which checks it", () => {
