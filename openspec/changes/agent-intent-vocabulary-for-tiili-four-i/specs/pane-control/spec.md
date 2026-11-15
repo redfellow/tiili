@@ -27,7 +27,7 @@ tiili SHALL record, for each pane opened by `tiili open`, the pane that ran it a
 - **THEN** two panes open
 
 ### Requirement: Close an owned pane
-`tiili close PANE` SHALL close the pane when the caller's pane owns it and exit 0; otherwise it SHALL fail with code `not_opened_by_you` and a suggestion to ask the user, closing nothing.
+`tiili close PANE` SHALL close the pane when the caller's pane owns it and exit 0. When PANE is not an open pane it SHALL fail with code `no_such_pane` (`no open pane N`, hint `run tiili list to see the open panes`); when the pane is open but the caller's pane does not own it, it SHALL fail with code `not_opened_by_you` and a suggestion to ask the user. Either failure closes nothing.
 
 #### Scenario: Close own pane
 - **WHEN** pane 3 opened pane 8 and runs `tiili close 8`
@@ -36,6 +36,10 @@ tiili SHALL record, for each pane opened by `tiili open`, the pane that ran it a
 #### Scenario: Refuse another pane
 - **WHEN** pane 3 runs `tiili close 5` for a pane it did not open
 - **THEN** nothing closes and the error suggests asking the user
+
+#### Scenario: Close a pane that is gone
+- **WHEN** pane 3 opened pane 8, pane 8 has since closed, and pane 3 runs `tiili close 8`
+- **THEN** nothing closes and it fails with code `no_such_pane`, suggesting `tiili list`
 
 ### Requirement: List as JSON
 `tiili list --json` SHALL print a JSON array of the caller window's panes in `tiili list` order, each with `id`, `cwd`, `title`, `command`, `tab`, `key`, `self` and `opened_by_you`.

@@ -33,6 +33,6 @@ Coding agents are tiili's main CLI users, but they cannot ask for the user's att
 - `open --key` output is `opened <id>` or `reused <id>` on one line; without `--key` the output stays the bare id. Rejected: changing plain `open` output.
 - Keys are unique per owner pane, not window-wide. Rejected: a window-wide key namespace, which would let agents collide.
 - Ownership is in memory only and is lost on app restart (restored panes have no owner). Rejected: persisting it in session restore.
-- `close` on a pane that is already gone is error `no_such_pane`.
+- `close` on a pane that is already gone is error `no_such_pane` (now specified in pane-control). Rejected: reporting it as `not_opened_by_you`.
 - The skill's intents section is generated between marker comments in SKILL.md by a Rust test that compares it with the table (and a `--bless` style env var rewrites it).
 - Exit codes are not reported (Reijo); attention clears on focus or `--clear` (Reijo); a dead key reopens quietly (Reijo); owner is the calling pane (Reijo).

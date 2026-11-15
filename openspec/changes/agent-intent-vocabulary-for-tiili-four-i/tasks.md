@@ -22,6 +22,10 @@ Requires the tiili-cli-contract-one-command-table-err change merged (merge `orig
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test control_server`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --lib --test control_server --test control_cli -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
+- [ ] 2.3 Confirm `close` on a pane that is not open fails with `no_such_pane` (`PaneOwners::check_close`, `AppHandler::close`, ERRORS table) as in scenario "Close a pane that is gone"; name that scenario in the existing close case comment of the `control_server` table test.
+  Tests to update: src-tauri/tests/control_server.rs
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test control_server`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib control_app::`
 - [x] 2.2 Frontend: `src/attention.ts` handles `pane-attention-request` through the OSC 9 path (sanitise, rate limit, focus rule) and `clear`; `src/main.ts` handles the close request like closing that pane. Extend `src/attention.test.ts`.
   - proof: `npx vitest run src/attention.test.ts`
   - proof: `npx vitest run src/backend.test.ts`
