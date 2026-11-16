@@ -5,11 +5,14 @@
 //
 // `npm run icons` writes the .icon bundle and, when Xcode 26 or later is installed, compiles it. Without Xcode,
 // compile it with the app-icon workflow (.github/workflows/app-icon.yml) and commit the Assets.car it uploads.
-// Running this file directly compiles the committed .icon bundle into Assets.car.
+// Running this file directly compiles the committed .icon bundle into Assets.car and writes Assets.car.source, the
+// fingerprint of the bundle it compiled. Commit Assets.car.source with every Assets.car: scripts/icons.test.ts
+// fails when it doesn't match AppIcon.icon, so a stale Assets.car can't be merged unnoticed.
 //
 // The pure helpers are exported for scripts/icons.test.ts.
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -161,12 +164,35 @@ export function actoolMajor() {
   return version ? Number(version[1]) : undefined;
 }
 
-/** Compiles the .icon bundle at `iconPath` into the Assets.car at `carPath` with Xcode's actool. */
+/**
+ * SHA-256 (hex) over the relative path and bytes of `icon.json` and every `Assets/*.png` of the .icon bundle at
+ * `iconPath`, in sorted path order.
+ */
+export function iconFingerprint(iconPath) {
+  const files = ["icon.json"];
+  const assets = readdirSync(join(iconPath, "Assets"))
+    .filter((name) => name.endsWith(".png"))
+    .sort();
+  files.push(...assets.map((name) => `Assets/${name}`));
+  const hash = createHash("sha256");
+  for (const file of files.sort()) {
+    hash.update(`${file}\0`);
+    hash.update(readFileSync(join(iconPath, file)));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Compiles the .icon bundle at `iconPath` into the Assets.car at `carPath` with Xcode's actool, and writes the
+ * bundle's fingerprint beside it as `<carPath>.source`.
+ */
 export function compile(iconPath, carPath) {
   const out = mkdtempSync(join(tmpdir(), "tiili-assets-"));
   try {
     execFileSync("xcrun", actoolArgs(iconPath, out), { stdio: "inherit" });
     copyFileSync(join(out, "Assets.car"), carPath);
+    writeFileSync(`${carPath}.source`, `${iconFingerprint(iconPath)}\n`);
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
@@ -180,7 +206,7 @@ function main() {
   }
   const icons = resolve(dirname(fileURLToPath(import.meta.url)), "../src-tauri/icons");
   compile(join(icons, `${ICON_NAME}.icon`), join(icons, "Assets.car"));
-  console.log("Wrote src-tauri/icons/Assets.car.");
+  console.log("Wrote src-tauri/icons/Assets.car and Assets.car.source.");
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
