@@ -6,3 +6,14 @@ x-harvaaja-card: 75360ce9-e07b-46c7-8027-7abac44c1032
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Bug fixes bringing behaviour in line with the existing pane-control
+    contract (usage errors exit 2); the spec never names the Windows shim, so no
+    requirement changes.
+  citations:
+    - openspec/specs/pane-control/spec.md:80
+    - src-tauri/src/control_app.rs:560-583
+    - src-tauri/src/main.rs
+    - src-tauri/src/control_server.rs:192
+  revision: 4dc59cc3-eead-445d-a3ac-75037dd3be09
