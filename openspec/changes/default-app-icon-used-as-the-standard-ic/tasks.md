@@ -12,8 +12,8 @@
 ## 2. Workflow
 
 - [ ] 2.1 (triage) Upload the fingerprint with the compiled asset catalog
-  file: .github/workflows/app-icon.yml
-  content:
+  - file: .github/workflows/app-icon.yml
+  - content:
   ```yaml
   # Compiles the macOS app icon (src-tauri/icons/AppIcon.icon) into Assets.car with Xcode's actool, for when no Mac
   # with Xcode 26 is at hand. Run it by hand after `npm run icons` changed AppIcon.icon, download the Assets.car
