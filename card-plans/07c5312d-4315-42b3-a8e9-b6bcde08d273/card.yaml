@@ -5,3 +5,13 @@ x-harvaaja-card: 07c5312d-4315-42b3-a8e9-b6bcde08d273
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Changes the observable Save and cancel / Closing the settings window
+    cancels contracts: Esc and OS close now ask first when there are unsaved
+    changes. No active changes exist."
+  citations:
+    - "openspec/specs/settings/spec.md#Requirement: Save and cancel"
+    - "openspec/specs/settings/spec.md#Requirement: Closing the settings window
+      cancels"
+  revision: 49ea03a5-3f53-43af-9a21-906defebc37c
