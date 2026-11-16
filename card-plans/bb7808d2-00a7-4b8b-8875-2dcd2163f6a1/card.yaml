@@ -1,0 +1,19 @@
+format: 1
+slug: line-editing-keys-don-t-move-the-cursor
+title: Line-editing keys don't move the cursor in the shell (⌘/⌥ arrows,
+  Home/End, Ctrl arrows)
+x-harvaaja-card: bb7808d2-00a7-4b8b-8875-2dcd2163f6a1
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new observable keyboard behaviour (macOS line-editing
+    translation, shell keybindings) not covered by any spec; no active change
+    shares this intent.
+  citations:
+    - openspec/specs/terminal-session/spec.md (Prompt shell integration)
+    - src/panes.ts onKey
+    - src/keymap.ts
+    - src-tauri/src/shell_integration/zsh/zshrc.zsh
+  revision: d9725c53-7561-4cc4-903b-30e0ac4fda89

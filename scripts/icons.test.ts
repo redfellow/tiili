@@ -1,9 +1,19 @@
 // @harvaaja-test-tier: fast
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DARK_MIX, ICON_NAME, iconJson, LIGHT_BLOOM, splitIcon, srgb, workingSvg } from "./app-icon.mjs";
+import {
+  DARK_MIX,
+  ICON_NAME,
+  iconFingerprint,
+  iconJson,
+  LIGHT_BLOOM,
+  splitIcon,
+  srgb,
+  workingSvg,
+} from "./app-icon.mjs";
 
 const iconsDir = resolve(__dirname, "../src-tauri/icons");
 const logoDir = resolve(__dirname, "../docs/brand/logo");
@@ -44,6 +54,7 @@ const REQUIRED: Record<string, [file: string, size: number | null][]> = {
     [`${ICON_NAME}.icon/Assets/light.png`, 1024],
     [`${ICON_NAME}.icon/Assets/dark.png`, 1024],
     ["Assets.car", null],
+    ["Assets.car.source", null],
   ],
   // The light and dark icons the app swaps in at run time to follow the OS appearance (src-tauri/src/app_icon.rs).
   "Run time": [
@@ -131,6 +142,16 @@ describe("Appearance icon check: the macOS bundle icon has a light and a dark ap
     expect(committed).toEqual(iconJson(light, dark));
   });
 
+  it("Bundle changed without recompiling: Assets.car.source matches the committed AppIcon.icon", () => {
+    const recorded = readFileSync(join(iconsDir, "Assets.car.source"), "utf8").trim();
+    const current = iconFingerprint(join(iconsDir, `${ICON_NAME}.icon`));
+    expect(
+      recorded,
+      "Assets.car is stale: AppIcon.icon changed since it was compiled. Run the app-icon workflow " +
+        "(.github/workflows/app-icon.yml) and commit the Assets.car and Assets.car.source it uploads.",
+    ).toBe(current);
+  });
+
   it("Assets.car is an asset catalog", () => {
     expect(readFileSync(join(iconsDir, "Assets.car")).subarray(0, 8).toString("ascii")).toBe("BOMStore");
   });
@@ -145,6 +166,38 @@ describe("Appearance icon check: the macOS bundle icon has a light and a dark ap
     );
     // Tauri takes CFBundleIconName from the first flat icon image.
     expect(renditions.find((r) => r.AssetType === "Icon Image")?.Name).toBe(ICON_NAME);
+  });
+});
+
+describe("Fingerprint check: iconFingerprint changes with every file the Icon Composer bundle compiles", () => {
+  const files: Record<string, string> = { "icon.json": "{}", "Assets/light.png": "light", "Assets/dark.png": "dark" };
+
+  /** A bundle in a temp folder holding `files` with `change` applied on top; returns its fingerprint. */
+  function fingerprint(change: Record<string, string>): string {
+    const dir = mkdtempSync(join(tmpdir(), "tiili-fingerprint-"));
+    try {
+      for (const [file, content] of Object.entries({ ...files, ...change })) {
+        mkdirSync(join(dir, file, ".."), { recursive: true });
+        writeFileSync(join(dir, file), content);
+      }
+      return iconFingerprint(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const changes: [string, Record<string, string>][] = [
+    ["icon.json edited", { "icon.json": '{"fill":1}' }],
+    ["a layer image edited", { "Assets/dark.png": "dark2" }],
+    ["a layer image added", { "Assets/extra.png": "extra" }],
+  ];
+
+  it.each(changes)("%s", (_name, change) => {
+    expect(fingerprint(change)).not.toBe(fingerprint({}));
+  });
+
+  it("is the same for the same bundle", () => {
+    expect(fingerprint({})).toBe(fingerprint({}));
   });
 });
 

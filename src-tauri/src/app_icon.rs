@@ -229,19 +229,52 @@ fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant, tick: Option<usize>) {
     });
 }
 
+/// The tile's size relative to the canvas in Apple's app icon grid: 824 of 1024 px.
+const DOCK_TILE_RATIO: f64 = 824.0 / 1024.0;
+
+/// Where the tile sits on a square canvas of side `canvas` in Apple's app icon grid: its offset from the canvas edge
+/// on both axes and its side. The rest of the canvas is a transparent margin.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn dock_inset(canvas: f64) -> (f64, f64) {
+    let side = canvas * DOCK_TILE_RATIO;
+    ((canvas - side) / 2.0, side)
+}
+
+/// Sets the Dock icon. The icon is drawn onto a transparent canvas of its own size with the tile inset to the icon
+/// grid, so it is as big as the other apps' icons rather than filling the canvas edge to edge.
 #[cfg(target_os = "macos")]
 fn set_icon<R: Runtime>(_app: &AppHandle<R>, png: &'static [u8]) {
     use objc2::{AllocAnyThread, MainThreadMarker};
-    use objc2_app_kit::{NSApplication, NSImage};
-    use objc2_foundation::NSData;
+    use objc2_app_kit::{NSApplication, NSCompositingOperation, NSImage};
+    use objc2_foundation::{NSData, NSPoint, NSRect, NSSize};
 
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
     let data = NSData::with_bytes(png);
-    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
-        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
+    let Some(source) = NSImage::initWithData(NSImage::alloc(), &data) else {
+        return;
+    };
+    let size = source.size();
+    let (offset_x, side_x) = dock_inset(size.width);
+    let (offset_y, side_y) = dock_inset(size.height);
+    let padded = NSImage::initWithSize(NSImage::alloc(), size);
+    // lockFocus is deprecated, but it draws on a transparent canvas without a drawing block.
+    #[allow(deprecated)]
+    {
+        padded.lockFocus();
+        source.drawInRect_fromRect_operation_fraction(
+            NSRect::new(
+                NSPoint::new(offset_x, offset_y),
+                NSSize::new(side_x, side_y),
+            ),
+            NSRect::ZERO,
+            NSCompositingOperation::SourceOver,
+            1.0,
+        );
+        padded.unlockFocus();
     }
+    unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&padded)) };
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -355,6 +388,16 @@ mod tests {
                 );
                 assert_ne!(variant.frame(i), variant.png(), "{variant:?} frame {i}");
             }
+        }
+    }
+
+    #[test]
+    fn inset_geometry_1024_canvas_gives_824_tile_at_offset_100() {
+        // Inset geometry: a canvas of 1024 px gives an 824 px tile at offset 100 px.
+        // (canvas, offset, side)
+        let cases = [(512.0, 50.0, 412.0), (1024.0, 100.0, 824.0)];
+        for (canvas, offset, side) in cases {
+            assert_eq!(dock_inset(canvas), (offset, side), "canvas {canvas}");
         }
     }
 
