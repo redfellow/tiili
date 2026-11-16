@@ -10,18 +10,33 @@ const appVersion = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/m.exec(cargoToml)
 
 const host = process.env.TAURI_DEV_HOST;
 
+/** Hosts a Vite dev server may bind to while it proxies a shell: this machine only (`undefined`/`false` = Vite's own localhost). */
+export function isLoopbackHost(host: string | boolean | undefined): boolean {
+  return host === undefined || host === false || host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 /**
  * Dev server only: when `npm run dev:browser` set the bridge's port and per-run token, gives the page the
  * token in a meta tag and proxies `/pty` WebSockets to the dev bridge. Builds never see any of it.
+ * It refuses to start when the server is bound beyond this machine: the page carries the token and the proxy opens a
+ * login shell, so anyone on the network could use both.
  */
-function devBridge(): Plugin {
-  const port = process.env.TIILI_BRIDGE_PORT;
-  const token = process.env.TIILI_BRIDGE_TOKEN;
+export function devBridge(env: Record<string, string | undefined> = process.env): Plugin {
+  const port = env.TIILI_BRIDGE_PORT;
+  const token = env.TIILI_BRIDGE_TOKEN;
   return {
     name: "tiili-dev-bridge",
     apply: "serve",
-    config: () =>
-      port && token ? { server: { proxy: { "/pty": { target: `ws://127.0.0.1:${port}`, ws: true } } } } : {},
+    config(user) {
+      if (!port || !token) return {};
+      const bound = user.server?.host;
+      if (!isLoopbackHost(bound)) {
+        throw new Error(
+          `tiili dev bridge: refusing to serve a shell on host ${String(bound)}; use 127.0.0.1 or localhost`,
+        );
+      }
+      return { server: { proxy: { "/pty": { target: `ws://127.0.0.1:${port}`, ws: true } } } };
+    },
     transformIndexHtml: () =>
       port && token ? [{ tag: "meta", attrs: { name: "tiili-bridge-token", content: token }, injectTo: "head" }] : [],
   };
