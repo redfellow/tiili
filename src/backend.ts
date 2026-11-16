@@ -143,14 +143,20 @@ export interface SessionSaving {
   running(id: SessionId): Promise<RunningCommand>;
 }
 
+/** The answer to closing settings with unsaved changes: save and close, discard and close, or keep them open. */
+export type UnsavedChoice = "save" | "discard" | "keep";
+
 /** Settings in a window of their own, where the backend can open OS windows. */
 export interface SettingsWindows {
   /** Opens this window's settings window centred over it, or brings it to the front when it is open already. */
   open(): Promise<void>;
   /** From a settings window: previews `settings` in window `owner`, the tiili window that opened it. */
   preview(owner: string, settings: Settings): Promise<void>;
-  /** From a settings window: runs `handler` before the window closes by its OS close control. */
-  onCloseRequested(handler: () => Promise<void>): Promise<void>;
+  /**
+   * From a settings window: runs `handler` when the OS close control is used; the window closes only when it
+   * resolves true.
+   */
+  onCloseRequested(handler: () => Promise<boolean>): Promise<void>;
 }
 
 /**
@@ -246,6 +252,11 @@ export interface Backend {
   /** The saved settings, or null when there are none. */
   loadSettings(): Promise<unknown>;
   saveSettings(value: unknown): Promise<void>;
+  /**
+   * Asks what to do with unsaved settings changes before settings close: save them, discard them, or keep editing.
+   * Where there is no Save choice (the dev server), the answer is discard or keep.
+   */
+  confirmUnsaved(): Promise<UnsavedChoice>;
   /** Shows the light or dark app icon (Dock on macOS, window and taskbar elsewhere) for the user's choice. */
   setAppIcon(choice: AppIcon): Promise<void>;
   /** Where the Heynote pane keeps its notes. */
