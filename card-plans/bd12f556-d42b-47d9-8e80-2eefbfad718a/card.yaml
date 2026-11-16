@@ -1,0 +1,8 @@
+format: 1
+slug: dev-bridge-vite-proxy-exposes-a-shell-to
+title: "Dev bridge: Vite proxy exposes a shell to the network when the dev
+  server binds a non-loopback host"
+x-harvaaja-card: bd12f556-d42b-47d9-8e80-2eefbfad718a
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
