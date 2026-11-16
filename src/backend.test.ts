@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it, vi } from "vitest";
-import { selectBackend, type Backend, type BackendKind, type PaneMoves } from "./backend";
+import { selectBackend, type Backend, type BackendKind, type PaneMoves, type UnsavedChoice } from "./backend";
 import { tauriBackend } from "./backend-tauri";
 import { DEFAULT_SETTINGS, PROMPT_IDS } from "./settings";
 
@@ -21,6 +21,8 @@ vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 const emitTo = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock("@tauri-apps/api/event", () => ({ emitTo }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
+const message = vi.hoisted(() => vi.fn<(text: string, options?: unknown) => Promise<string>>(async () => "Cancel"));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ message }));
 
 describe("Backend selection: Tauri internals pick the Tauri backend, otherwise the WebSocket one", () => {
   const cases: [string, object, BackendKind][] = [
@@ -213,6 +215,20 @@ describe("Tauri backend settings window", () => {
     emitTo.mockClear();
     await tauriBackend().settingsWindows?.preview("window-2", DEFAULT_SETTINGS);
     expect(emitTo).toHaveBeenCalledWith("window-2", "settings-preview", DEFAULT_SETTINGS);
+  });
+});
+
+describe("Confirm closing with unsaved changes: the message box's answer picks what happens", () => {
+  it.each<[string, string, UnsavedChoice]>([
+    ["Save from the question: Save saves", "Save", "save"],
+    ["Save from the question: Yes standing in for Save saves", "Yes", "save"],
+    ["Discard discards", "Discard", "discard"],
+    ["No standing in for Discard discards", "No", "discard"],
+    ["Keep editing: Cancel keeps the settings open", "Cancel", "keep"],
+    ["Keep editing: a dismissed box keeps the settings open", "", "keep"],
+  ])("%s", async (_name, answer, choice) => {
+    message.mockResolvedValueOnce(answer);
+    await expect(tauriBackend().confirmUnsaved()).resolves.toBe(choice);
   });
 });
 

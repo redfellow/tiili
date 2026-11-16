@@ -1,3 +1,4 @@
+import type { UnsavedChoice } from "./backend";
 import type { Platform } from "./keymap";
 import { gridFor, TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
@@ -8,7 +9,7 @@ import {
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
-import { createSettingsSession, same, turnsOffRestore, whileTyping } from "./settingsSession";
+import { createSettingsSession, dirty, same, turnsOffRestore, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
 import { APP_VERSION, VERSION_LABEL } from "./version";
 
@@ -44,6 +45,11 @@ export interface SettingsDialogOptions {
   apply: (settings: Settings) => Promise<void> | void;
   /** Saves settings; called when the user presses Save, and the settings close once it resolves. */
   save: (settings: Settings) => Promise<void>;
+  /**
+   * Asks what to do with unsaved changes when Esc or the OS close control would close the settings: save, discard
+   * or keep editing.
+   */
+  confirmUnsaved: () => Promise<UnsavedChoice>;
   /** Called after the settings close, e.g. to give the terminal its focus back or to close the settings window. */
   onClose: () => void;
   /** Puts text on the clipboard, for the Remote shells snippet's and the Agents line's Copy buttons. */
@@ -69,8 +75,11 @@ export interface SettingsDialog {
 export interface SettingsPage {
   /** Takes settings saved elsewhere (another window) as the saved and previewed settings. */
   adopt(settings: Settings): void;
-  /** Goes back to the settings from when the page opened, unsaved, without closing; for the OS close control. */
-  discard(): Promise<void>;
+  /**
+   * The OS close control: asks first when something is unsaved; resolves true once back to the opening settings, so
+   * the window may close, and false to keep it open (kept editing, or Save, which closes the window itself).
+   */
+  requestClose(): Promise<boolean>;
 }
 
 /** The settings form, ready to mount in a dialogue or a page. */
@@ -79,10 +88,12 @@ interface SettingsForm {
   /** Fills the form with the saved settings on its first tab, focuses the theme grid and lists installed fonts. */
   reset(): void;
   adopt(settings: Settings): void;
-  /** Cancel and Esc: back to the opening settings, unsaved, then closes. */
+  /** Cancel: back to the opening settings, unsaved, then closes. */
   revert(): Promise<void>;
-  /** Back to the opening settings, unsaved, without closing. */
-  discard(): Promise<void>;
+  /** Esc: like Cancel when nothing is unsaved, else asks first whether to save, discard or keep editing. */
+  requestClose(): Promise<void>;
+  /** The OS close control: {@link SettingsPage.requestClose}. */
+  settle(): Promise<boolean>;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -936,6 +947,35 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     }
   };
 
+  let asking = false;
+  /**
+   * Esc and the OS close control: asks first when something is unsaved. Resolves true once back to the opening
+   * settings, ready to close; false when the settings stay open or Save closed them itself.
+   */
+  const settle = async () => {
+    if (saving || asking) return false;
+    // A scrollback still being typed counts, as it does for Save.
+    changed();
+    if (!dirty(session)) return discard();
+    asking = true;
+    let choice: UnsavedChoice;
+    try {
+      choice = await options.confirmUnsaved();
+    } catch (error) {
+      report(error);
+      return false;
+    } finally {
+      asking = false;
+    }
+    if (choice === "discard") return discard();
+    if (choice === "save") await commit();
+    return false;
+  };
+
+  const requestClose = async () => {
+    if (await settle()) close();
+  };
+
   // Apply while the user types, except a scrollback being typed; once a field is left, apply it all and show the
   // value that was actually applied.
   form.addEventListener("input", () => change(whileTyping(read(), session.draft)));
@@ -990,13 +1030,15 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       if (form.isConnected) show(settings);
     },
     revert,
-    discard: async () => void (await discard()),
+    requestClose,
+    settle,
   };
 }
 
 /**
  * Builds the settings dialogue into `document.body`, drawn inside the window: where the backend cannot open a
- * settings window of its own (the dev server). Esc goes back to the opening settings like Cancel.
+ * settings window of its own (the dev server). Esc goes back to the opening settings like Cancel, asking first when
+ * something is unsaved.
  */
 export function createSettingsDialog(options: SettingsDialogOptions): SettingsDialog {
   const settings = createSettingsForm(options, () => dialog.close());
@@ -1005,7 +1047,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
   document.body.append(dialog);
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
-    void settings.revert();
+    void settings.requestClose();
   });
   dialog.addEventListener("close", () => options.onClose());
   return {
@@ -1020,7 +1062,7 @@ export function createSettingsDialog(options: SettingsDialogOptions): SettingsDi
 
 /**
  * Builds the settings form as the whole of `parent`, the page of a settings window: the window's own title bar
- * moves and closes it. Esc goes back to the opening settings like Cancel.
+ * moves and closes it. Esc goes back to the opening settings like Cancel, asking first when something is unsaved.
  */
 export function mountSettingsPage(parent: HTMLElement, options: SettingsDialogOptions): SettingsPage {
   const settings = createSettingsForm(options, () => options.onClose());
@@ -1030,8 +1072,8 @@ export function mountSettingsPage(parent: HTMLElement, options: SettingsDialogOp
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
     event.preventDefault();
-    void settings.revert();
+    void settings.requestClose();
   });
   settings.reset();
-  return { adopt: (next) => settings.adopt(next), discard: () => settings.discard() };
+  return { adopt: (next) => settings.adopt(next), requestClose: () => settings.settle() };
 }
