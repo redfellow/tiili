@@ -189,7 +189,11 @@ pub fn bind(
         .name("control-accept".into())
         .spawn(move || {
             for stream in listener.incoming() {
-                let Ok(stream) = stream else { continue };
+                let Ok(stream) = stream else {
+                    // Out of descriptors, say: wait rather than spin on the same error.
+                    thread::sleep(Duration::from_millis(100));
+                    continue;
+                };
                 let (token, handler) = (Arc::clone(&token), Arc::clone(&handler));
                 let _ = thread::Builder::new()
                     .name("control-connection".into())

@@ -2,7 +2,8 @@
 //! WebSocket connection through tiili's own PTY code. Listens on 127.0.0.1 only, refuses
 //! connections without this run's token, and kills a connection's shell when it closes. It is
 //! built only with the default `dev-bridge` feature; `npm run bundle` and `npm run install-app`
-//! build without default features, so the installers ship the `tiili` binary alone.
+//! build without default features, so the installers ship only the `tiili` and
+//! `tiili-cli` binaries.
 //!
 //! Environment: `TIILI_BRIDGE_TOKEN` (required, at least 32 hex characters) and
 //! `TIILI_BRIDGE_PORT` (0 or absent picks a free port). Prints `listening on <address>` once ready.

@@ -97,6 +97,52 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     );
 }
 
+/// Usage errors, JSON errors: an argument that is not valid UTF-8 is refused with a usage error, not a crash, by the
+/// app's binary and by the console `tiili-cli` alike; asked for JSON, the error envelope is on stdout as well.
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_argument_is_a_usage_error() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let bad = OsStr::from_bytes(b"bad\xff");
+    let plain = [OsStr::new("attention"), bad];
+    let json = [
+        OsStr::new("open"),
+        OsStr::new("--json"),
+        OsStr::new("--title"),
+        bad,
+        OsStr::new("--"),
+        OsStr::new("ls"),
+    ];
+    for binary in [TIILI, env!("CARGO_BIN_EXE_tiili-cli")] {
+        for args in [&plain[..], &json[..]] {
+            let out = Command::new(binary)
+                .args(args)
+                .env_remove("TIILI_SOCKET")
+                .env_remove("TIILI_TOKEN")
+                .env_remove("TIILI_PANE")
+                .output()
+                .expect("tiili runs");
+            assert_eq!(out.status.code(), Some(2), "{binary} {args:?}");
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert_eq!(
+                stderr.lines().next(),
+                Some("tiili: arguments must be valid UTF-8"),
+                "{binary} {args:?}: {stderr}"
+            );
+            if args.contains(&OsStr::new("--json")) {
+                let envelope: serde_json::Value =
+                    serde_json::from_slice(&out.stdout).expect("JSON on stdout");
+                assert_eq!(envelope["ok"], false, "{envelope}");
+                assert_eq!(envelope["code"], "usage", "{envelope}");
+            } else {
+                assert!(out.stdout.is_empty(), "{binary} {args:?}");
+            }
+        }
+    }
+}
+
 #[cfg(unix)]
 mod listener {
     use std::sync::{Arc, Mutex};
