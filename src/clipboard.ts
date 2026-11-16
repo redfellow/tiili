@@ -4,6 +4,20 @@ import { clipboardAction, FIND_MENU_ITEMS, type ClipboardAction, type KeyChord, 
 import { revealLabel, type HoveredLink } from "./links";
 import type { PaneLinks } from "./terminalLinks";
 
+/**
+ * Clipboard text made safe to paste: the bracketed-paste markers (`ESC[200~`, `ESC[201~`) are removed, so
+ * pasted text can't end the paste early and have the shell run the rest, and so are C0 controls other than
+ * tab, newline and carriage return, DEL and C1 controls.
+ */
+export function sanitizePaste(text: string): string {
+  return text.replace(PASTE_MARKERS, "").replace(UNSAFE_CONTROLS, "");
+}
+
+/* eslint-disable no-control-regex -- these match the control characters a paste must not carry */
+const PASTE_MARKERS = /\x1b\[20[01]~/g;
+const UNSAFE_CONTROLS = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g;
+/* eslint-enable no-control-regex */
+
 /** Carries out a clipboard action on the terminal. Copy with nothing selected does nothing. */
 async function run(backend: Backend, term: Terminal, action: ClipboardAction): Promise<void> {
   if (action === "copy") {
@@ -12,7 +26,8 @@ async function run(backend: Backend, term: Terminal, action: ClipboardAction): P
   } else if (action === "paste") {
     const text = await backend.readClipboard();
     // term.paste wraps the text in bracketed-paste markers when the shell asked for them.
-    if (text) term.paste(text);
+    const safe = text ? sanitizePaste(text) : "";
+    if (safe) term.paste(safe);
   } else {
     term.selectAll();
   }
