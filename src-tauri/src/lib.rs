@@ -257,10 +257,19 @@ fn pty_spawn(
     Ok(id)
 }
 
-/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`.
+/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`. The old terminal never
+/// acknowledges again, so the flow gate counts from zero: what is kept from now is acknowledged by the new window.
 #[tauri::command]
-fn pty_detach(sinks: State<'_, SessionSinks>, id: SessionId) -> Result<(), String> {
-    sinks.detach(id)
+fn pty_detach(
+    sinks: State<'_, SessionSinks>,
+    gates: State<'_, FlowGates>,
+    id: SessionId,
+) -> Result<(), String> {
+    sinks.detach(id)?;
+    if let Some(gate) = gates.get(id) {
+        gate.reset();
+    }
+    Ok(())
 }
 
 /// Session `id`'s pane has arrived in the calling window: the session belongs to it, the output kept since

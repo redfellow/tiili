@@ -145,6 +145,15 @@ impl FlowGate {
         self.cv.notify_all();
     }
 
+    /// The terminal that was to acknowledge the pending bytes has let go of the session and never will: counting
+    /// starts again from zero, and a waiting reader reads on.
+    pub fn reset(&self) {
+        if let Ok(mut unacked) = self.unacked.lock() {
+            *unacked = 0;
+        }
+        self.cv.notify_all();
+    }
+
     /// The session is going away: releases a waiting reader, and [`wait`](Self::wait) never blocks again.
     pub fn close(&self) {
         // Under the lock, so a reader between its check and its wait cannot miss the wake-up.
@@ -290,9 +299,10 @@ mod tests {
     }
 
     #[test]
-    fn flow_gate_waiter_at_the_high_mark_wakes_on_ack_or_close() {
-        let release: [(&str, fn(&FlowGates, &FlowGate)); 3] = [
+    fn flow_gate_waiter_at_the_high_mark_wakes_on_ack_reset_or_close() {
+        let release: [(&str, fn(&FlowGates, &FlowGate)); 4] = [
             ("ack", |_, gate| gate.ack(1)),
+            ("reset on detach", |_, gate| gate.reset()),
             ("close", |_, gate| gate.close()),
             ("removed from the map", |gates, _| gates.remove(1)),
         ];
