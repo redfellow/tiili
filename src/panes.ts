@@ -18,6 +18,7 @@ import {
   FIND_MENU_ITEMS,
   findAction,
   layoutAction,
+  lineEditInput,
   paneAction,
   settingsShortcut,
   tabAction,
@@ -1269,9 +1270,20 @@ export class Panes {
     control.setOrder(tabs).catch(() => undefined);
   }
 
-  /** xterm's key hook: layout, tab, pane, settings, find and clipboard shortcuts are kept from the shell. */
+  /**
+   * xterm's key hook: layout, tab, pane, settings, find and clipboard shortcuts are kept from the shell, and macOS
+   * line-editing keys are sent as the bytes the shell's line editor reads, through the pane's own input path.
+   */
   private onKey(terminal: PaneTerminal, event: KeyboardEvent): boolean {
     if (this.shortcut(event)) return false;
+    const lineEdit = lineEditInput(event, this.platform);
+    if (lineEdit !== null) {
+      if (event.type === "keydown") {
+        event.preventDefault();
+        terminal.term.input(lineEdit);
+      }
+      return false;
+    }
     return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
   }
 

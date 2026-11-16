@@ -278,6 +278,83 @@ fn folder_reported_at_every_prompt_zsh_and_bash_send_osc7() {
     }
 }
 
+/// Home and word keys work in default zsh / User's own binding wins / Default bash gets word moves: with Classic, a
+/// zsh whose config binds none of the keys maps `^[[H` to beginning-of-line and `^[[1;5D` to backward-word, a bash
+/// maps `^[[1;5C` and `^[[1;3C` to forward-word, and one whose config binds `^[[1;5D` itself keeps that binding.
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn line_editing_keys_are_bound_only_where_the_users_config_left_them() {
+    const CLASSIC: &str = "\x1b[39m@\x1b[32m";
+    const ZSH_QUERY: &str =
+        "bindkey -M emacs '^[[H'; bindkey -M emacs '^[[1;5D'; bindkey -M viins '^[[1;5D'";
+    // bash 3.2 (macOS /bin/bash) lists `\e[` sequences as `\M-[`; newer bash as `\e[`. Read both as `\e[`.
+    const BASH_QUERY: &str = r"bind -p | grep -F '1;' | sed 's/M-\[/e[/'";
+    struct Case {
+        shell: &'static str,
+        rc_name: &'static str,
+        /// The user's config, which binds `^[[1;5D` to kill-word.
+        rc: &'static str,
+        query: &'static str,
+        /// The bindings the query shows without the user's config, and with it.
+        default: &'static [&'static str],
+        mine: &'static [&'static str],
+    }
+    let cases = [
+        Case {
+            shell: "/bin/zsh",
+            rc_name: ".zshrc",
+            rc: "bindkey -M emacs '^[[1;5D' kill-word\nbindkey -M viins '^[[1;5D' kill-word\n",
+            query: ZSH_QUERY,
+            default: &["\"^[[H\" beginning-of-line", "\"^[[1;5D\" backward-word"],
+            mine: &["\"^[[H\" beginning-of-line", "\"^[[1;5D\" kill-word"],
+        },
+        Case {
+            shell: "/bin/bash",
+            rc_name: ".bash_profile",
+            rc: "bind '\"\\e[1;5D\": kill-word'\n",
+            query: BASH_QUERY,
+            default: &[
+                "\"\\e[1;5C\": forward-word",
+                "\"\\e[1;3C\": forward-word",
+                "\"\\e[1;5D\": backward-word",
+            ],
+            mine: &["\"\\e[1;5C\": forward-word", "\"\\e[1;5D\": kill-word"],
+        },
+    ];
+    for Case {
+        shell,
+        rc_name,
+        rc,
+        query,
+        default,
+        mine,
+    } in cases
+    {
+        if !std::path::Path::new(shell).exists() {
+            eprintln!("{shell} is missing; skipped");
+            continue;
+        }
+        let (found, seen) = classic_shell(shell, None, CLASSIC, Some((query, default)));
+        assert!(
+            found,
+            "{shell} without bindings of its own lacks tiili's: {seen:?}"
+        );
+
+        let (found, seen) = classic_shell(shell, Some((rc_name, rc)), CLASSIC, Some((query, mine)));
+        assert!(found, "{shell} lost the user's own binding: {seen:?}");
+        let tiili = if shell.ends_with("zsh") {
+            "\"^[[1;5D\" backward-word"
+        } else {
+            "\"\\e[1;5D\": backward-word"
+        };
+        assert!(
+            !without_command_marks(seen.as_bytes()).contains(tiili),
+            "{shell} bound over the user's own binding: {seen:?}"
+        );
+    }
+}
+
 /// Folder reported at every prompt on Windows: with Classic, PowerShell sends OSC 7 naming this machine and the
 /// drive folder with forward slashes before the prompt after `cd C:\Windows`.
 #[cfg(windows)]

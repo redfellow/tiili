@@ -4,6 +4,7 @@ export function srgb(hex: string): string;
 export function iconJson(light: { tile: string }, dark: { tile: string }): Record<string, unknown>;
 export function actoolArgs(iconPath: string, outDir: string): string[];
 export function actoolMajor(): number | undefined;
+export function iconFingerprint(iconPath: string): string;
 export function compile(iconPath: string, carPath: string): void;
 export const KOIVU: string;
 export const KALKKI: string;

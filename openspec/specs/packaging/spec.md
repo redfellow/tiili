@@ -144,3 +144,29 @@ The icon pipeline SHALL render 8 working frames for each of the light and dark i
 #### Scenario: Frame set check
 - **WHEN** the icon check runs
 - **THEN** it passes only if `app-light-working-0.png` to `-7.png` and `app-dark-working-0.png` to `-7.png` exist at 512 px
+
+### Requirement: Running macOS icon matches the Dock grid
+On macOS, every icon tiili sets at run time (light, dark and working frames) SHALL be drawn with the tile inset to Apple's app icon grid: 824/1024 of the canvas, centred, on a transparent margin. That way the running icon is the same size as other apps' icons in the Dock. On other platforms the run-time icon SHALL stay full-bleed.
+
+#### Scenario: Running icon size in the Dock
+- **WHEN** tiili is running on macOS and shows its normal or working icon
+- **THEN** its tile in the Dock is the same size as the neighbouring app icons
+
+#### Scenario: Inset geometry
+- **WHEN** the inset rectangle is computed for a canvas of 1024 px
+- **THEN** it is 824 px square at offset 100 px on both axes
+
+### Requirement: Asset catalog in step with the icon bundle
+Compiling the macOS app icon SHALL record a fingerprint of the Icon Composer bundle it compiled beside `Assets.car`. The icon check SHALL fail when the fingerprint is missing or differs from the committed bundle, so that the icon macOS shows at launch and while tiili is closed is always the current design.
+
+#### Scenario: Bundle changed without recompiling
+- **WHEN** `AppIcon.icon` changes and `Assets.car` is not recompiled
+- **THEN** the icon check fails and names the stale `Assets.car`
+
+#### Scenario: Recompiled asset catalog
+- **WHEN** `Assets.car` is compiled from the committed `AppIcon.icon`
+- **THEN** the icon check passes
+
+#### Scenario: Launching shows the current icon
+- **WHEN** tiili is installed with `npm run install-app` and launched
+- **THEN** the Dock shows the current light or dark icon from the first moment, with no older design before the run-time icon appears

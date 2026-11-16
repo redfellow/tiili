@@ -217,6 +217,19 @@ export function tabAction(event: KeyChord, platform: Platform): TabAction | null
   return page > 0 ? "next" : "previous";
 }
 
+const LINE_EDIT_META: Readonly<Record<string, string>> = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
+const LINE_EDIT_ALT: Readonly<Record<string, string>> = { ArrowLeft: "\x1bb", ArrowRight: "\x1bf", Backspace: "\x17" };
+
+/**
+ * The bytes a line-editing key sends to the shell instead of xterm's own sequence, or null when the key passes
+ * through. macOS only: ⌘← `^A`, ⌘→ `^E`, ⌘⌫ `^U`, ⌥← `ESC b`, ⌥→ `ESC f`, ⌥⌫ `^W`. Exactly one of ⌘ or ⌥ is
+ * held, with no Ctrl or Shift, so ⌃⌘arrows (the layout keys) and Shift selection are untouched.
+ */
+export function lineEditInput(event: KeyChord, platform: Platform): string | null {
+  if (platform !== "macos" || event.ctrlKey || event.shiftKey || event.metaKey === event.altKey) return null;
+  return (event.metaKey ? LINE_EDIT_META : LINE_EDIT_ALT)[event.key] ?? null;
+}
+
 /** The platform the webview runs on. */
 export function currentPlatform(userAgent: string = navigator.userAgent): Platform {
   if (/Mac/.test(userAgent)) return "macos";
