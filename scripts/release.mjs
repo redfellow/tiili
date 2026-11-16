@@ -110,6 +110,16 @@ export function setCargoLockVersion(text, version) {
   return text.replace(entry, `$1${version}$2`);
 }
 
+/**
+ * What to do with the local tag before pushing it: `existing` is the commit a local tag points at (undefined when
+ * there is none) and `commit` origin/main's commit. "create" makes the tag, "push" pushes it as it is and "retag"
+ * moves a stale tag to `commit` first.
+ */
+export function tagPlan(existing, commit) {
+  if (!existing) return "create";
+  return existing === commit ? "push" : "retag";
+}
+
 /** 0:42, 7:26 or 1:02:05 for a number of milliseconds. */
 export function formatDuration(ms) {
   const total = Math.max(0, Math.round(ms / 1000));
@@ -280,8 +290,13 @@ function tagMain(version, latest) {
     if (lines.length > 15) console.log(`    … and ${lines.length - 15} more`);
   }
   // Only a tag is made and pushed; the checkout's branch and HEAD stay as they are.
-  if (!tryOut("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`])) {
-    out("git", ["tag", "-a", tag, commit, "-m", `Release ${tag}`]);
+  // A local tag left from an earlier run may point at an older commit; it is not on origin (checked above), so it is
+  // moved to main's commit before it is pushed.
+  const plan = tagPlan(tryOut("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}^{commit}`]), commit);
+  if (plan === "create") out("git", ["tag", "-a", tag, commit, "-m", `Release ${tag}`]);
+  if (plan === "retag") {
+    console.log(`  moving the local ${tag} to ${commit.slice(0, 7)}`);
+    out("git", ["tag", "-f", "-a", tag, commit, "-m", `Release ${tag}`]);
   }
   out("git", ["push", "--quiet", "origin", `refs/tags/${tag}`]);
   console.log(`  pushed ${tag} at ${commit.slice(0, 7)}`);

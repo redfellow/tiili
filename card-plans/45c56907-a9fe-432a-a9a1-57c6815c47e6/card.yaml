@@ -1,0 +1,20 @@
+format: 1
+slug: release-pipeline-secrets-exposure-stale
+title: "Release pipeline: secrets exposure, stale-tag release, Windows bundle
+  breakage"
+x-harvaaja-card: 45c56907-a9fe-432a-a9a1-57c6815c47e6
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The card asks to rewrite the packaging spec's Release command and
+    Release build on tag requirements to the tag-stamped flow, alongside script
+    and workflow fixes; no active change exists.
+  citations:
+    - openspec/specs/packaging/spec.md:70-90
+    - scripts/release.mjs:1-17
+    - scripts/release.mjs:259-286
+    - .github/workflows/release.yml
+    - scripts/bundle.mjs:56
+  revision: 0c4cc276-b865-4282-b941-d08cc2164f1c

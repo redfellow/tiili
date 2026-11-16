@@ -53,10 +53,11 @@ function main() {
     console.warn("npm run bundle: TAURI_SIGNING_PRIVATE_KEY is not set, so the updater bundles are left out.");
   }
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const result = spawnSync("npx", args, {
+  // Node runs tauri's CLI directly, without npx or a shell: a shell on Windows would strip the quotes of the
+  // --config JSON. args[0] is "tauri", which the CLI's script path replaces.
+  const result = spawnSync(process.execPath, [resolve(root, "node_modules/@tauri-apps/cli/tauri.js"), ...args.slice(1)], {
     cwd: root,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
   if (result.error) {
     console.error(result.error.message);

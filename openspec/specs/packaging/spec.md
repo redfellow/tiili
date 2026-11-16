@@ -68,25 +68,37 @@ The project SHALL provide `npm run install-app`. On macOS it SHALL build `tiili.
 - **THEN** the installed app reports version `0.3.0`
 
 ### Requirement: Release command
-The project SHALL provide `npm run release <patch|minor|major>`. It SHALL refuse to run when the working tree has uncommitted changes or the argument is missing or unknown. Otherwise it SHALL bump the version by that kind in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` to the same value, leave `src-tauri/tauri.conf.json` taking its version from `package.json` (`"../package.json"`), commit them, tag the commit `v<version>` and push the commit and tag.
+The project SHALL provide `npm run release <patch|minor|major|x.y.z>`. It SHALL refuse an unknown argument. It SHALL take the version from the highest `vX.Y.Z` tag on GitHub bumped by the argument, tag origin/main's commit `v<version>` without making a commit, push only the tag, follow the release workflow and publish the draft once the workflow succeeds. An unpublished earlier release SHALL be finished first.
 
 #### Scenario: Minor release
-- **WHEN** the version is `0.1.3` and `npm run release minor` runs on a clean tree
-- **THEN** `package.json`, `package-lock.json` and `src-tauri/Cargo.toml` read `0.2.0`, `src-tauri/tauri.conf.json` still takes its version from `package.json`, and the tag `v0.2.0` is pushed
+- **WHEN** the highest tag on GitHub is `v0.1.3`, it is published, and `npm run release minor` runs
+- **THEN** the tag `v0.2.0` is pushed at origin/main's commit, no commit is made, and the release is published after its workflow succeeds
 
 #### Scenario: Dirty tree
-- **WHEN** `npm run release patch` runs with uncommitted changes
-- **THEN** it exits with an error and changes nothing
+- **WHEN** `npm run release patch` runs with uncommitted changes in the checkout
+- **THEN** it tags origin/main's commit, so the uncommitted changes are neither released nor touched
+
+#### Scenario: Unpublished release resumed
+- **WHEN** `v0.2.0` is tagged but its release is still a draft and `npm run release patch` runs
+- **THEN** it finishes and publishes `v0.2.0` instead of cutting `v0.2.1`
+
+#### Scenario: Stale local tag
+- **WHEN** a local tag `v0.2.0` points at an older commit than origin/main and is not on GitHub
+- **THEN** the tag is moved to origin/main's commit before it is pushed
 
 ### Requirement: Release build on tag
-Pushing a tag `v<version>` SHALL build the installers on macOS, Windows and Linux and attach them all to a draft GitHub Release for that tag. The build SHALL fail when the tag does not match the version in `package.json`. Signing variables SHALL be passed only from secrets that are set, so the release is unsigned when none are.
+Pushing a tag `v<version>` SHALL build the installers on macOS, Windows and Linux with the version stamped from the tag, and attach them to a draft GitHub Release for that tag. A tag that is not `vX.Y.Z` SHALL fail the build. Signing variables SHALL be passed only from secrets that are set, and only after dependencies are installed, so the release is unsigned when none are.
 
 #### Scenario: Tag pushed
 - **WHEN** the tag `v0.2.0` is pushed
-- **THEN** a draft release `v0.2.0` holds the Apple Silicon `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb`
+- **THEN** a draft release `v0.2.0` holds the Apple Silicon `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb`, all reporting version `0.2.0`
 
 #### Scenario: Tag and version disagree
-- **WHEN** the tag `v0.3.0` is pushed but `package.json` says `0.2.0`
+- **WHEN** the tag `v0.3.0` is pushed and the repository's version files hold another version
+- **THEN** the build stamps `0.3.0` from the tag into them before bundling and the installers report `0.3.0`
+
+#### Scenario: Tag is not a version
+- **WHEN** the tag `v0.3` is pushed
 - **THEN** the release build fails before bundling
 
 ### Requirement: Updater artifacts on release
@@ -106,3 +118,29 @@ Without the updater signing key, the release build and local `npm run bundle` SH
 #### Scenario: Local bundle without the key
 - **WHEN** `npm run bundle` runs without `TAURI_SIGNING_PRIVATE_KEY`
 - **THEN** the installers are produced and the build succeeds
+
+### Requirement: Working app icon
+While any pane is working, the running app icon SHALL show the "Hot cursor" working frames of its light or dark variant, swapping frames about every 333 ms. A pane is working while its foreground program is not its shell and it has printed output in the last 3 seconds. When the OS asks for reduced motion the icon SHALL hold frame 0. When no pane is working it SHALL show the normal icon and stop the frame timer.
+
+#### Scenario: Script running
+- **WHEN** a pane runs a script that keeps printing output
+- **THEN** the app icon cycles the 8 working frames of the current variant
+
+#### Scenario: Quiet foreground program
+- **WHEN** a pane's foreground program is vim, or an agent waiting for an answer, and it has printed nothing for 3 seconds
+- **THEN** the pane does not count as working and, with no other pane working, the normal icon shows
+
+#### Scenario: Reduced motion
+- **WHEN** a pane is working and the OS reduce-motion preference is on
+- **THEN** the app icon shows working frame 0 and does not change frames
+
+#### Scenario: Attention while working
+- **WHEN** a pane is working and another pane marks attention while tiili is in the background
+- **THEN** the badge and the bounce or flash appear as before and stay while the frames change
+
+### Requirement: Working icon frames
+The icon pipeline SHALL render 8 working frames for each of the light and dark icons from the brand SVGs, at the size of the run-time icons, using only the koivu and kalkki brand tokens for the cursor and its bloom.
+
+#### Scenario: Frame set check
+- **WHEN** the icon check runs
+- **THEN** it passes only if `app-light-working-0.png` to `-7.png` and `app-dark-working-0.png` to `-7.png` exist at 512 px
