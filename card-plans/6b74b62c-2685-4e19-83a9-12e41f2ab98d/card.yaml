@@ -1,0 +1,14 @@
+format: 1
+slug: macos-quarantine-removal-instruction-xat
+title: macOS quarantine-removal instruction (xattr -dr com.apple.quarantine) in
+  the tiili README
+x-harvaaja-card: 6b74b62c-2685-4e19-83a9-12e41f2ab98d
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: 093e6ec9-4265-4181-abe0-05a1f312e6eb
