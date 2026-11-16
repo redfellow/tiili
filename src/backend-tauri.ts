@@ -68,6 +68,9 @@ export function tauriBackend(): Backend {
     write: (id, data) => invoke("pty_write", { id, data }),
     resize: (id, rows, cols) => invoke("pty_resize", { id, rows, cols }),
     close: (id) => invoke("pty_close", { id }),
+    ack: (id, bytes) => {
+      invoke("pty_ack", { id, bytes }).catch(() => undefined);
+    },
     cwd: async (id) => (await invoke<string | null>("pty_cwd", { id })) ?? undefined,
     onExit: (callback) =>
       listen<{ id: number; code: number }>("pty-exit", (event) => callback(event.payload.id, event.payload.code)),
