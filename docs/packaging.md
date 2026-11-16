@@ -131,7 +131,9 @@ Needs an Apple Developer account and a "Developer ID Application" certificate.
 - App Store Connect API key: `APPLE_API_KEY` (the key ID), `APPLE_API_ISSUER` (the issuer ID) and
   `APPLE_API_KEY_PATH` (the path to the `.p8` private key file).
 
-With these set, `npm run bundle` signs and notarises the `.dmg`.
+With these set, `npm run bundle` signs and notarises the `.dmg`. After Tauri's build, `npm run bundle` converts the `.dmg` to lzma (ULMO), which drops its
+signature, so it signs the `.dmg` again with `APPLE_SIGNING_IDENTITY`. With `APPLE_CERTIFICATE` set, it imports the
+certificate into a temporary keychain for that, because Tauri deletes its own keychain when its build ends.
 
 ### Windows: code signing
 
