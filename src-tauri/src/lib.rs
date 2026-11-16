@@ -23,6 +23,7 @@ pub mod tints;
 pub mod updates;
 pub mod window_state;
 pub mod windows;
+pub mod working;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -174,6 +175,17 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<control_app::PaneOpens>().forget(id);
     app.state::<control_app::PaneOwners>().forget(id);
     attention::forget(app, id);
+    app_icon::forget(app, id);
+}
+
+/// Tells the working app icon whether session `id` is at its shell (see [`working::at_shell`]); before the session
+/// is registered, it is.
+fn report_foreground(app: &AppHandle, id: SessionId) {
+    let at_shell = app
+        .state::<SessionRegistry>()
+        .running(id)
+        .map_or(true, |running| working::at_shell(&running, cfg!(unix)));
+    app_icon::foreground(app, id, at_shell);
 }
 
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
@@ -206,6 +218,7 @@ fn pty_spawn(
     let label = window.label().to_string();
     let (cwd_app, cwd_label) = (app.clone(), label.clone());
     let (command_app, command_label) = (app.clone(), label.clone());
+    let output_app = app.clone();
     let exit_label = label.clone();
     let sink = SessionSinks::create(Box::new(move |data| {
         let _ = on_output.send(data.to_vec());
@@ -225,9 +238,14 @@ fn pty_spawn(
             history.as_deref(),
             rows,
             cols,
-            Box::new(move |_id, data| {
+            Box::new(move |id, data| {
                 // Outside the sink lock, so pty_detach and pty_attach never wait behind a held-back reader.
                 output_gate.wait();
+                // Where the foreground cannot be read (Windows), what runs is known only from the command line the
+                // shell reports, which titles alone would not follow: read it with each output.
+                #[cfg(not(unix))]
+                report_foreground(&output_app, id);
+                app_icon::output(&output_app, id);
                 if let Ok(mut sink) = output_sink.lock() {
                     sink.write(data);
                 }
@@ -240,6 +258,8 @@ fn pty_spawn(
                 let _ = cwd_app.emit_to(to.as_str(), PANE_CWD_EVENT, event);
             })),
             Some(Box::new(move |id, command| {
+                // What runs changed, so who is in front may have: the pane works only away from its shell.
+                report_foreground(&command_app, id);
                 let event = PaneCommandEvent {
                     pane_id: id,
                     command: command.to_string(),
@@ -371,6 +391,7 @@ fn window_destroyed(app: &AppHandle, label: &str) {
         app.state::<control_app::PaneOpens>().forget(id);
         app.state::<control_app::PaneOwners>().forget(id);
         attention::forget(app, id);
+        app_icon::forget(app, id);
         app.state::<FlowGates>().remove(id);
         let _ = registry.close(id);
     }
@@ -575,6 +596,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(SessionRegistry::new())
         .manage(app_icon::IconState::default())
+        .manage(app_icon::WorkingIcon::default())
         .manage(Tints::default())
         .manage(WindowSessions::default())
         .manage(windows::WindowLabels::default())
