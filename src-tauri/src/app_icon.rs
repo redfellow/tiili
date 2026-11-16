@@ -12,8 +12,8 @@
 //! starts on output and, once nothing works, shows the normal icon and ends.
 //!
 //! On macOS, while a pane is marked for attention and no tiili window is in front (see [`crate::attention`]), a
-//! koivu ring breathes around the Dock icon's edge, one step per tick over [`FRAMES`] ticks, on top of whatever
-//! icon shows. The same ticker drives it, and with reduced motion the ring holds at full strength.
+//! koivu ring breathes around the Dock icon's edge on top of whatever icon shows. The same ticker drives it, ticking
+//! every [`RING_TICK`] while the ring shows so the breathing is smooth; with reduced motion the ring holds still.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -126,8 +126,25 @@ pub fn pick(choice: IconChoice, variant: Variant, frame: Option<usize>, bundled:
     }
 }
 
-/// The attention ring's opacity at each breathing step: full, down to a quarter, and back.
-pub const RING_OPACITY: [f64; FRAMES] = [1.0, 0.89, 0.625, 0.36, 0.25, 0.36, 0.625, 0.89];
+/// How often the ticker ticks while the attention ring shows: a quarter of [`FRAME_INTERVAL`], so the working
+/// frames keep their pace by moving on every [`TICKS_PER_FRAME`] ticks.
+pub const RING_TICK: Duration = Duration::from_millis(83);
+pub const TICKS_PER_FRAME: usize = 4;
+
+/// Ticks in one breath of the attention ring, about 3 seconds.
+pub const RING_TICKS: usize = 36;
+
+/// The attention ring's opacity range: it breathes between these, starting at the top.
+const RING_MIN: f64 = 0.4;
+const RING_MAX: f64 = 0.9;
+
+/// The attention ring's opacity at breathing step `step` (taken modulo [`RING_TICKS`]): a cosine from
+/// [`RING_MAX`] down to [`RING_MIN`] and back.
+pub fn ring_opacity(step: usize) -> f64 {
+    let phase = (step % RING_TICKS) as f64 / RING_TICKS as f64 * std::f64::consts::TAU;
+    let mid = (RING_MAX + RING_MIN) / 2.0;
+    mid + (RING_MAX - mid) * phase.cos()
+}
 
 /// Koivu, the attention ring's colour, as sRGB components.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -259,8 +276,14 @@ fn start_ticker<R: Runtime>(app: AppHandle<R>) {
                 loop {
                     if state.active() {
                         apply(&app);
-                        std::thread::sleep(FRAME_INTERVAL);
-                        state.tick.fetch_add(1, Ordering::SeqCst);
+                        // Tick fast only while the ring breathes; the working frames alone need a tick per frame.
+                        let (sleep, step) = if state.wants_attention() {
+                            (RING_TICK, 1)
+                        } else {
+                            (FRAME_INTERVAL, TICKS_PER_FRAME)
+                        };
+                        std::thread::sleep(sleep);
+                        state.tick.fetch_add(step, Ordering::SeqCst);
                         continue;
                     }
                     state.ticking.store(false, Ordering::SeqCst);
@@ -318,8 +341,8 @@ fn show<R: Runtime>(
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         let reduce = reduce_motion();
-        let frame = tick.map(|tick| frame_at(tick, reduce));
-        let ring = ring.map(|tick| frame_at(tick, reduce));
+        let frame = tick.map(|tick| frame_at(tick / TICKS_PER_FRAME, reduce));
+        let ring = ring.map(|tick| if reduce { 0 } else { tick % RING_TICKS });
         let next = shown(choice, variant, frame, ring, has_bundle_icon());
         {
             let mut last = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
@@ -328,7 +351,7 @@ fn show<R: Runtime>(
             }
             *last = Some(next);
         }
-        let ring = next.ring.map(|step| RING_OPACITY[step % FRAMES]);
+        let ring = next.ring.map(ring_opacity);
         match next.icon {
             Icon::Bundle => clear_icon(),
             Icon::Normal(variant) => set_icon(&handle, variant.png(), ring),
@@ -378,11 +401,12 @@ fn dock_inset(canvas: f64) -> (f64, f64) {
     ((canvas - side) / 2.0, side)
 }
 
-/// The attention ring's line width and corner radius for a tile of side `side`: 2.5 % of the tile, and the brand
+/// The attention ring's line width and corner radius for a tile of side `side`: 4 % of the tile, enough to read at
+/// Dock size, and the brand
 /// icon's 22.5 % corner less half the line, so the stroke sits just inside the tile's edge.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn ring_geometry(side: f64) -> (f64, f64) {
-    let width = side * 0.025;
+    let width = side * 0.04;
     (width, side * 0.225 - width / 2.0)
 }
 
@@ -605,25 +629,30 @@ mod tests {
     }
 
     #[test]
-    fn ring_breathes_from_full_to_a_quarter_and_back() {
-        assert_eq!(RING_OPACITY[0], 1.0);
-        assert_eq!(RING_OPACITY[FRAMES / 2], 0.25);
-        for i in 1..FRAMES {
-            assert_eq!(
-                RING_OPACITY[i],
-                RING_OPACITY[FRAMES - i],
-                "step {i} mirrors"
-            );
+    fn ring_breathes_smoothly_between_its_bounds() {
+        assert!((ring_opacity(0) - RING_MAX).abs() < 1e-9);
+        assert!((ring_opacity(RING_TICKS / 2) - RING_MIN).abs() < 1e-9);
+        assert!((ring_opacity(RING_TICKS) - RING_MAX).abs() < 1e-9);
+        for i in 1..RING_TICKS {
+            let (a, b) = (ring_opacity(i - 1), ring_opacity(i));
+            assert!((a - b).abs() < 0.05, "step {i} jumps from {a} to {b}");
+            assert!((RING_MIN - 1e-9..=RING_MAX + 1e-9).contains(&b), "step {i}");
         }
-        // Reduced motion holds step 0, the full ring.
-        assert_eq!(RING_OPACITY[frame_at(5, true)], 1.0);
+    }
+
+    #[test]
+    fn ring_ticks_keep_the_working_frames_pace() {
+        assert_eq!(
+            RING_TICK * TICKS_PER_FRAME as u32,
+            Duration::from_millis(332)
+        );
     }
 
     #[test]
     fn ring_geometry_for_an_824_tile() {
         let (width, radius) = ring_geometry(824.0);
-        assert!((width - 20.6).abs() < 1e-9);
-        assert!((radius - (185.4 - 10.3)).abs() < 1e-9);
+        assert!((width - 32.96).abs() < 1e-9);
+        assert!((radius - (185.4 - 16.48)).abs() < 1e-9);
     }
 
     #[test]
