@@ -100,7 +100,8 @@ export function srgb(hex) {
 
 /**
  * The icon.json of the Icon Composer bundle: the tile colour as the fill and the artwork as one flat layer, each
- * with a dark specialisation. Glass, shadow and translucency are off so the icon keeps the brand look.
+ * with a dark specialisation. Glass, shadow and translucency are off so the icon keeps the brand look; specular is
+ * on so macOS draws the same rim highlight it gives other Liquid Glass icons.
  */
 export function iconJson(light, dark) {
   return {
@@ -117,7 +118,7 @@ export function iconJson(light, dark) {
         ],
         name: "Bricks",
         shadow: { kind: "none", opacity: 0.5 },
-        specular: false,
+        specular: true,
         translucency: { enabled: false, value: 0.5 },
       },
     ],
