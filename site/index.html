@@ -147,6 +147,13 @@
   kbd { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px;
     color: var(--fg); font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
   @media (max-width: 520px) { table.keys th:nth-child(3), table.keys td:nth-child(3) { display: none; } }
+  .key-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-4); }
+  .key-tabs[hidden] { display: none; }
+  .key-tabs button { font: 500 var(--text-label)/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+    background: none; border: 1px solid var(--line); border-radius: var(--radius-control); padding: 8px 12px; cursor: pointer; }
+  .key-tabs button:hover { color: var(--fg); border-color: var(--muted); }
+  .key-tabs button[aria-selected="true"] { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+  table.keys.tabbed tbody tr:first-child:has(th[scope="rowgroup"]) { display: none; }
 
   /* Download */
   .platforms { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
@@ -360,7 +367,9 @@
         <h2>Hands stay on the keys</h2>
         <p>Everything the mouse does has a key. On Windows and Linux the shortcuts take Shift so that the shell keeps <kbd>Ctrl+C</kbd>, <kbd>Ctrl+W</kbd> and the rest.</p>
       </div>
-      <table class="keys">
+      <div>
+      <div class="key-tabs" role="tablist" aria-label="Shortcut groups" hidden></div>
+      <table class="keys" id="keys">
         <thead><tr><th scope="col">Action</th><th scope="col">macOS</th><th scope="col">Windows and Linux</th></tr></thead>
         <!-- generated:shortcuts: `npm run docs` writes this from src/shortcuts.ts; after a merge conflict here, re-run it -->
         <tbody>
@@ -401,6 +410,7 @@
         </tbody>
         <!-- end generated:shortcuts -->
       </table>
+      </div>
     </div>
   </section>
 
@@ -518,6 +528,35 @@ chmod +x tiili_*_amd64.AppImage && ./tiili_*_amd64.AppImage</pre>
     }, { threshold: 0.4 });
     io.observe(video);
   }
+
+  /* Shortcuts: one tab per group, so the table shows a group at a time. Without script every group shows. */
+  const keys = document.getElementById('keys');
+  const tablist = document.querySelector('.key-tabs');
+  const groups = [...keys.tBodies];
+  const tabs = groups.map((body, i) => {
+    body.id = `keys-${i}`;
+    const tab = document.createElement('button');
+    tab.type = 'button'; tab.role = 'tab'; tab.id = `keys-tab-${i}`;
+    tab.setAttribute('aria-controls', body.id);
+    tab.textContent = body.querySelector('th[scope="rowgroup"]').textContent;
+    tablist.append(tab);
+    return tab;
+  });
+  const selectKeys = i => groups.forEach((body, j) => {
+    body.hidden = i !== j;
+    tabs[j].setAttribute('aria-selected', String(i === j));
+    tabs[j].tabIndex = i === j ? 0 : -1;
+  });
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectKeys(i));
+    tab.addEventListener('keydown', e => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      const next = (i + step + tabs.length) % tabs.length;
+      selectKeys(next); tabs[next].focus(); e.preventDefault();
+    });
+  });
+  keys.classList.add('tabbed'); tablist.hidden = false; selectKeys(0);
 
   /* Platform detection and live download links from the latest release. */
   const ua = navigator.userAgent;
