@@ -17,6 +17,9 @@ import { documentTokens, followSystemTheme, terminalTheme } from "./theme";
 /** Resizing settles this long before a pane re-fits and tells its shell the new size. */
 const RESIZE_SETTLE_MS = 50;
 
+/** Drawn output is acknowledged to the backend in batches of at least this many bytes. */
+const ACK_BATCH = 65536;
+
 /** One pane's terminal and the shell session behind it. */
 export interface PaneTerminal {
   term: Terminal;
@@ -45,6 +48,8 @@ export interface PaneTerminal {
   scrollback(): Promise<string>;
   /** The shell session the terminal shows, while it runs. */
   session(): SessionId | undefined;
+  /** Writes the session's `bytes` to the terminal and acknowledges them to the backend once drawn. */
+  output(bytes: Uint8Array): void;
   /** Frees the terminal but leaves its shell running, for a pane that moved to another window. */
   detach(): void;
   /** Ends the shell and frees the terminal. */
@@ -264,9 +269,20 @@ export async function openTerminal(
     term.write(`\r\nCouldn't open the link: ${String(error)}\r\n`),
   );
 
+  // Output drawn but not yet acknowledged; acknowledged in batches so the backend's reader is not held back.
+  let pendingAck = 0;
+  const output = (bytes: Uint8Array) => {
+    term.write(bytes, () => {
+      pendingAck += bytes.length;
+      if (pendingAck >= ACK_BATCH && session !== undefined) {
+        backend.ack?.(session, pendingAck);
+        pendingAck = 0;
+      }
+    });
+  };
+
   const spawn = async (dir?: string) => {
-    const write = (bytes: Uint8Array) => term.write(bytes);
-    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, write, launch, restore?.history);
+    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history);
     running = true;
     onSession(session);
   };
@@ -312,7 +328,7 @@ export async function openTerminal(
     session = id;
     running = true;
     onSession(id);
-    await backend.moves?.attach(id, (bytes) => term.write(bytes));
+    await backend.moves?.attach(id, output);
     if (term.rows > 1) await backend.resize(id, term.rows - 1, term.cols);
     await backend.resize(id, term.rows, term.cols);
   };
@@ -382,6 +398,7 @@ export async function openTerminal(
       return serializer.serialize({ excludeAltBuffer: true });
     },
     session: () => (running ? session : undefined),
+    output,
     detach: () => {
       session = undefined;
       free();
