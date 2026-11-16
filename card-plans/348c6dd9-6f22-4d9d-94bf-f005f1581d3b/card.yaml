@@ -6,3 +6,13 @@ x-harvaaja-card: 348c6dd9-6f22-4d9d-94bf-f005f1581d3b
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Four bug fixes restoring intended behaviour of existing requirements
+    (paste goes to the shell as text, panes close cleanly, settings
+    preview/cancel); no contract changes.
+  citations:
+    - "openspec/specs/clipboard/spec.md: Platform copy and paste shortcuts"
+    - openspec/specs/settings/spec.md
+    - openspec/specs/pane-tiling/spec.md
+  revision: 6a4b02a9-0e42-4907-9a58-4089856c3639
