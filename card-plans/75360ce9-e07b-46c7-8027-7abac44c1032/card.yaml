@@ -1,0 +1,8 @@
+format: 1
+slug: tiili-cli-windows-tiili-cmd-re-parses-ar
+title: "tiili CLI: Windows tiili.cmd re-parses args (injection), non-UTF-8 args
+  panic, control accept loop can spin"
+x-harvaaja-card: 75360ce9-e07b-46c7-8027-7abac44c1032
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
