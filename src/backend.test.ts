@@ -17,7 +17,8 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({ getCurrentWebviewWindow: () =>
 type MenuNew = (options: unknown) => Promise<{ popup: () => Promise<void> }>;
 const menuNew = vi.hoisted(() => vi.fn<MenuNew>(async () => ({ popup: async () => undefined })));
 vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: menuNew } }));
-vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
+const getCurrentWindow = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow }));
 const emitTo = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock("@tauri-apps/api/event", () => ({ emitTo }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
@@ -209,6 +210,21 @@ describe("Tauri backend settings window", () => {
     await settings?.open();
     await settings?.open();
     expect(invoke.mock.calls.map((call) => call[0])).toEqual(["settings_open", "settings_open"]);
+  });
+
+  it.each([
+    ["Keep editing: a handler resolving false keeps the window open", false, true],
+    ["Save from the question: Save closes the window itself, so the OS close is held back", false, true],
+    ["Close with the OS control: a handler resolving true lets the window close", true, false],
+  ])("%s", async (_name, close, prevented) => {
+    type Listener = (event: { preventDefault: () => void }) => Promise<void>;
+    let listener: Listener | undefined;
+    getCurrentWindow.mockReturnValue({ onCloseRequested: async (cb: Listener) => { listener = cb; } });
+    await tauriBackend().settingsWindows?.onCloseRequested(async () => close);
+    const preventDefault = vi.fn();
+    await listener?.({ preventDefault });
+    expect(listener).toBeDefined();
+    expect(preventDefault).toHaveBeenCalledTimes(prevented ? 1 : 0);
   });
 
   it("Previews show in the owning window: the preview goes to the owner only", async () => {
