@@ -6,8 +6,8 @@
 - The Unix control accept loop `continue`s on every accept error, spinning at 100% CPU on EMFILE.
 
 ## What Changes
-1. control_app.rs `install_cli` on Windows places a real `bin\tiili.exe`: skip when size and mtime match `exe`; else hard-link (fall back to copy) to `bin\.tiili-<pid>.exe` and rename over `bin\tiili.exe`; on rename failure remove the temp file and return the error; remove an old `bin\tiili.cmd`. Delete `windows_shim`, update the doc comment.
-2. main.rs collects `args_os`; when `is_cli` and any arg is not UTF-8, calls new `cli::refuse_non_utf8() -> !` (attach_console, report `CliError::Usage("arguments must be valid UTF-8")`, exit with its code). GUI path unchanged.
+1. New console-subsystem `[[bin]] tiili-cli` (src/bin/tiili-cli.rs) running `cli::main`; the release app exe is GUI-subsystem, which shells neither wait for nor take an exit code from. control_app.rs `install_cli` on Windows places a real `bin\tiili.exe` from `tiili-cli.exe` next to the app exe: skip when size and mtime match; else hard-link (fall back to copy) to `bin\.tiili-<pid>.exe` and rename over `bin\tiili.exe`; on rename failure remove the temp file and return the error; then remove an old `bin\tiili.cmd`. Delete `windows_shim`, update the doc comment and docs/packaging.md.
+2. main.rs and tiili-cli.rs collect `args_os`; `cli::main(&[OsString])` reports `CliError::Usage("arguments must be valid UTF-8")` for a non-UTF-8 arg through the same `fail` path as `run` (JSON envelope on stdout with `--json`), exiting 2. GUI path unchanged.
 3. control_server.rs accept loop sleeps 100 ms on Err before continuing. Windows `bind_pipe` untouched.
 
 ## Outcome

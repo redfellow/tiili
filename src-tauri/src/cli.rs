@@ -28,24 +28,31 @@ pub fn is_cli(args: &[String]) -> bool {
     }
 }
 
-/// Runs `tiili ARGS` and exits with its code.
-pub fn main(args: &[String]) -> ! {
+/// Runs `tiili ARGS` and exits with its code. An argument that is not valid UTF-8 is a usage error.
+pub fn main(raw: &[OsString]) -> ! {
     attach_console();
-    let code = run(
-        args,
-        &|name| std::env::var_os(name),
-        std::env::current_dir().ok().as_deref(),
-        &mut io::stdout().lock(),
-        &mut io::stderr().lock(),
-    );
+    let args = lossy(raw);
+    let (out, err) = (&mut io::stdout().lock(), &mut io::stderr().lock());
+    let code = if raw.iter().any(|a| a.to_str().is_none()) {
+        let error = CliError::Usage("arguments must be valid UTF-8".to_string());
+        fail(&args, &error, out, err)
+    } else {
+        run(
+            &args,
+            &|name| std::env::var_os(name),
+            std::env::current_dir().ok().as_deref(),
+            out,
+            err,
+        )
+    };
     std::process::exit(code)
 }
 
-/// Refuses arguments that are not valid UTF-8 with a usage error, and exits with its code.
-pub fn refuse_non_utf8() -> ! {
-    attach_console();
-    let error = CliError::Usage("arguments must be valid UTF-8".to_string());
-    std::process::exit(report(&error, &mut io::stderr().lock()))
+/// The arguments as text, with a byte sequence that is not UTF-8 replaced by U+FFFD.
+pub fn lossy(raw: &[OsString]) -> Vec<String> {
+    raw.iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
 }
 
 /// Runs `tiili ARGS` (without the program name) with the variables `env` reads, from folder `cwd`, printing to
@@ -60,13 +67,16 @@ pub fn run(
 ) -> i32 {
     match execute(args, env, cwd, out) {
         Ok(()) => 0,
-        Err(error) => {
-            if wants_json(args) {
-                let _ = writeln!(out, "{}", error_envelope(&error));
-            }
-            report(&error, err)
-        }
+        Err(error) => fail(args, &error, out, err),
     }
+}
+
+/// Reports `error` from a run of `tiili ARGS`: as JSON on `out` as well when ARGS ask for it. Returns its exit code.
+fn fail(args: &[String], error: &CliError, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+    if wants_json(args) {
+        let _ = writeln!(out, "{}", error_envelope(error));
+    }
+    report(error, err)
 }
 
 /// Prints `error` as `tiili: <message>` and `hint: <suggestion>` (the app's own suggestion for an error it replied
