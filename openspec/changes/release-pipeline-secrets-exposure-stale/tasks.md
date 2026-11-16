@@ -3,7 +3,8 @@
 - [x] 1.1 Add and export `tagPlan(existing, commit)` in `scripts/release.mjs` and use it in `tagMain`: read `git rev-parse --verify --quiet refs/tags/${tag}^{commit}`; create with `git tag -a` when absent, push as is when it equals `commit`, else run `git tag -f -a ${tag} ${commit} -m "Release ${tag}"` before pushing. Add a table-driven "Stale local tag: tagPlan" test to `scripts/release.test.ts`, and rename the "Minor release: rewrites %s" test to "Stamped version: rewrites %s" (the Minor release scenario no longer rewrites files).
   Tests to update: scripts/release.test.ts
   - proof: `npx vitest run scripts/release.test.ts`
-  - proof: `npx eslint scripts/release.mjs scripts/release.test.ts`
+  - proof: `npx eslint scripts/release.mjs scripts/release.d.mts scripts/release.test.ts`
+  - proof: `npm run typecheck`
 
 ## 2. Bundle script
 
