@@ -298,9 +298,11 @@ mod tests {
         assert!(done.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 
+    type Release = fn(&FlowGates, &FlowGate);
+
     #[test]
     fn flow_gate_waiter_at_the_high_mark_wakes_on_ack_reset_or_close() {
-        let release: [(&str, fn(&FlowGates, &FlowGate)); 4] = [
+        let release: [(&str, Release); 4] = [
             ("ack", |_, gate| gate.ack(1)),
             ("reset on detach", |_, gate| gate.reset()),
             ("close", |_, gate| gate.close()),
