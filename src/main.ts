@@ -46,7 +46,8 @@ const SETTINGS_CLOSED_EVENT = "settings-closed";
 
 /**
  * Runs the page as the settings window of tiili window `owner`: each change previews there (and in this page's own
- * colours), Save saves and closes, and Cancel, Esc, × and the OS close control send the opening settings back and close.
+ * colours), Save saves and closes, and Cancel, Esc, × and the OS close control send the opening settings back and close;
+ * Esc and the OS close control ask first when something is unsaved.
  */
 async function startSettings(owner: string): Promise<void> {
   const backend = await loadBackend();
@@ -71,6 +72,7 @@ async function startSettings(owner: string): Promise<void> {
     },
     save: (next) => backend.saveSettings(next),
     clearRestored: clearRestoredOf(backend),
+    confirmUnsaved: () => backend.confirmUnsaved(),
     onClose: () => void backend.closeWindow().catch((error: unknown) => console.error(error)),
     copy: (text) => backend.writeClipboard(text),
     checkForUpdates: async () => {
@@ -86,7 +88,7 @@ async function startSettings(owner: string): Promise<void> {
     page.adopt(next);
     showTheme(next);
   });
-  await windows.onCloseRequested(() => page.discard());
+  await windows.onCloseRequested(() => page.requestClose());
 }
 
 /** Deletes the saved scrollback and commands once Restore scrollback and commands is turned off, where any are kept. */
@@ -192,6 +194,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       apply,
       save: (next) => backend.saveSettings(next),
       clearRestored: clearRestoredOf(backend),
+      confirmUnsaved: () => backend.confirmUnsaved(),
       onClose: () => panes.focusCurrent(),
       copy: (text) => backend.writeClipboard(text),
     });

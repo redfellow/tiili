@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it, vi } from "vitest";
-import { selectBackend, type Backend, type BackendKind, type PaneMoves } from "./backend";
+import { selectBackend, type Backend, type BackendKind, type PaneMoves, type UnsavedChoice } from "./backend";
 import { tauriBackend } from "./backend-tauri";
 import { DEFAULT_SETTINGS, PROMPT_IDS } from "./settings";
 
@@ -17,10 +17,13 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({ getCurrentWebviewWindow: () =>
 type MenuNew = (options: unknown) => Promise<{ popup: () => Promise<void> }>;
 const menuNew = vi.hoisted(() => vi.fn<MenuNew>(async () => ({ popup: async () => undefined })));
 vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: menuNew } }));
-vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
+const getCurrentWindow = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow }));
 const emitTo = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock("@tauri-apps/api/event", () => ({ emitTo }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: vi.fn(), writeText: vi.fn() }));
+const message = vi.hoisted(() => vi.fn<(text: string, options?: unknown) => Promise<string>>(async () => "Cancel"));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ message }));
 
 describe("Backend selection: Tauri internals pick the Tauri backend, otherwise the WebSocket one", () => {
   const cases: [string, object, BackendKind][] = [
@@ -209,10 +212,39 @@ describe("Tauri backend settings window", () => {
     expect(invoke.mock.calls.map((call) => call[0])).toEqual(["settings_open", "settings_open"]);
   });
 
+  it.each([
+    ["Keep editing: a handler resolving false keeps the window open", false, true],
+    ["Save from the question: Save closes the window itself, so the OS close is held back", false, true],
+    ["Close with the OS control: a handler resolving true lets the window close", true, false],
+  ])("%s", async (_name, close, prevented) => {
+    type Listener = (event: { preventDefault: () => void }) => Promise<void>;
+    let listener: Listener | undefined;
+    getCurrentWindow.mockReturnValue({ onCloseRequested: async (cb: Listener) => { listener = cb; } });
+    await tauriBackend().settingsWindows?.onCloseRequested(async () => close);
+    const preventDefault = vi.fn();
+    await listener?.({ preventDefault });
+    expect(listener).toBeDefined();
+    expect(preventDefault).toHaveBeenCalledTimes(prevented ? 1 : 0);
+  });
+
   it("Previews show in the owning window: the preview goes to the owner only", async () => {
     emitTo.mockClear();
     await tauriBackend().settingsWindows?.preview("window-2", DEFAULT_SETTINGS);
     expect(emitTo).toHaveBeenCalledWith("window-2", "settings-preview", DEFAULT_SETTINGS);
+  });
+});
+
+describe("Confirm closing with unsaved changes: the message box's answer picks what happens", () => {
+  it.each<[string, string, UnsavedChoice]>([
+    ["Save from the question: Save saves", "Save", "save"],
+    ["Save from the question: Yes standing in for Save saves", "Yes", "save"],
+    ["Discard discards", "Discard", "discard"],
+    ["No standing in for Discard discards", "No", "discard"],
+    ["Keep editing: Cancel keeps the settings open", "Cancel", "keep"],
+    ["Keep editing: a dismissed box keeps the settings open", "", "keep"],
+  ])("%s", async (_name, answer, choice) => {
+    message.mockResolvedValueOnce(answer);
+    await expect(tauriBackend().confirmUnsaved()).resolves.toBe(choice);
   });
 });
 
