@@ -6,3 +6,13 @@ x-harvaaja-card: bd12f556-d42b-47d9-8e80-2eefbfad718a
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: "Enforces the existing 'Bridge is local' requirement: the proxy
+    currently defeats the loopback-only intent when Vite binds a LAN host. Fix
+    stays inside vite.config.ts devBridge()."
+  citations:
+    - "openspec/specs/dev-browser-backend/spec.md: Requirement: Bridge is local,
+      tokened and dev-only"
+    - vite.config.ts devBridge()
+  revision: ef4c55da-8239-4519-badd-70064c2bfef3
