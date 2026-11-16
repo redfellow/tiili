@@ -1,0 +1,13 @@
+format: 1
+slug: up-to-date-readme-maintenance
+title: Up-to-date README maintenance
+x-harvaaja-card: 16a9a625-7ccc-4bb3-85ab-b68441b0bf79
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: 39c1adf4-3171-4d13-9840-e3420228b481
