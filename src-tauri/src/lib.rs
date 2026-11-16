@@ -209,6 +209,10 @@ fn pty_spawn(
         let _ = on_output.send(data.to_vec());
     }));
     let output_sink = std::sync::Arc::clone(&sink);
+    // A shell that ends before it is registered below is forgotten before the registration, so it
+    // is forgotten again after it.
+    let exited = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let exit_flag = std::sync::Arc::clone(&exited);
     let id = sessions
         .spawn_restored(
             cwd.as_deref().map(Path::new),
@@ -239,6 +243,7 @@ fn pty_spawn(
             })),
             Box::new(move |id, code| {
                 let to = owner_of(&app, id, &exit_label);
+                exit_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                 forget_session(&app, id);
                 let _ = app.emit_to(to.as_str(), PTY_EXIT_EVENT, PtyExit { id, code });
             }),
@@ -246,6 +251,9 @@ fn pty_spawn(
         .map_err(|e| format!("Could not start the shell: {e}"))?;
     window.state::<SessionSinks>().add(id, sink);
     window.state::<WindowSessions>().add(&label, id);
+    if exited.load(std::sync::atomic::Ordering::SeqCst) {
+        forget_session(window.app_handle(), id);
+    }
     Ok(id)
 }
 
@@ -537,6 +545,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SessionRegistry::new())
         .manage(app_icon::IconState::default())
         .manage(Tints::default())
