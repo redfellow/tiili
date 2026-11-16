@@ -419,7 +419,7 @@
       <div class="head">
         <div class="label" id="dl-label">Download · latest release</div>
         <h2>Get tiili</h2>
-        <p>Installers come from the <a href="https://github.com/redfellow/tiili/releases/latest">latest GitHub release</a>. The builds are not signed yet, so the first launch takes one extra step.</p>
+        <p>Installers come from the <a href="https://github.com/redfellow/tiili/releases/latest">latest GitHub release</a>. The builds are not notarised or certificate-signed yet, so the first launch takes one extra step.</p>
       </div>
       <div class="platforms">
         <div class="platform" data-os="mac">
@@ -427,8 +427,9 @@
           <p class="sub">For Apple Silicon: M1 and later.</p>
           <div class="files" data-kinds="dmg"></div>
           <details><summary>First launch</summary>
-            <p>Drag tiili to Applications and open it, then click <b>Open Anyway</b> in System Settings → Privacy &amp; Security. If macOS says the app is damaged:</p>
-            <pre class="term">xattr -dr com.apple.quarantine /Applications/tiili.app</pre>
+            <p>Drag tiili to Applications and open it, then click <b>Open Anyway</b> in System Settings → Privacy &amp; Security. If macOS says the app is damaged, run these two commands, then open it again:</p>
+            <pre class="term">xattr -dr com.apple.quarantine /Applications/tiili.app
+codesign --force --deep --sign - /Applications/tiili.app</pre>
           </details>
         </div>
         <div class="platform" data-os="win">

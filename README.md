@@ -63,10 +63,17 @@ sudo apt install ./tiili_*_amd64.deb
 chmod +x tiili_*_amd64.AppImage && ./tiili_*_amd64.AppImage
 ```
 
-The builds are not signed yet, so the first launch takes one extra step:
+The builds are not notarised by Apple or signed with a Windows certificate yet, so the first launch takes one extra
+step:
 
 - **macOS:** drag tiili to Applications and open it, then click **Open Anyway** in System Settings → Privacy &
-  Security. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/tiili.app`.
+  Security. If macOS says the app is damaged, run these two commands, then open it again:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/tiili.app
+  codesign --force --deep --sign - /Applications/tiili.app
+  ```
+
 - **Windows:** when SmartScreen says "Windows protected your PC", click **More info** → **Run anyway**.
 
 ## Shortcuts

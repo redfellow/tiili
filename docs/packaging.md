@@ -79,7 +79,11 @@ below come from `icon-light-small.svg`. After changing the logo, run `npm run ic
 
 The script also writes `app-light.png` and `app-dark.png`, which the app embeds and swaps in while it runs so its
 icon follows the OS light or dark mode: the Dock icon on macOS, the window and taskbar icon on Windows and Linux. On
-macOS the Settings dialogue's Dock icon choice can pin it to the light or the dark icon instead.
+macOS the Settings dialogue's Dock icon choice can pin it to the light or the dark icon instead. When the choice
+follows the system and no pane is working, the running app hands the Dock back to the bundle's asset catalog icon,
+because macOS draws its Liquid Glass rim only on that icon, not on a PNG set at run time.
+While a pane is marked for attention and tiili is in the background, a breathing koivu ring is drawn round the edge
+of the run-time icon instead.
 
 While tiili is not running, the macOS bundle icon follows the OS appearance as well. `npm run icons` writes
 `src-tauri/icons/AppIcon.icon`, an Icon Composer bundle whose fill is the tile colour and whose single layer is the
