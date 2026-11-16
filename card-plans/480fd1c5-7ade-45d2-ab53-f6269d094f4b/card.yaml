@@ -8,8 +8,7 @@ x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
 route:
   kind: chore
-  rationale: "Test-only clippy fix: factor the fn-pointer tuple type in a sink.rs
-    unit test into a `type Release = ...` alias. No behaviour change."
+  rationale: "Chore: built without a plan"
   citations:
-    - src-tauri/src/sink.rs:303
-  revision: fc02fe82-e2d0-4630-87f3-b8769511c653
+    - The user pressed Build on this chore
+  revision: 174fc957-7ea7-46a1-a794-d1363b42c993
