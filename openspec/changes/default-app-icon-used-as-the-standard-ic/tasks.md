@@ -11,7 +11,7 @@
 
 ## 2. Workflow
 
-- [ ] 2.1 (triage) Upload the fingerprint with the compiled asset catalog
+- [x] 2.1 (triage) Upload the fingerprint with the compiled asset catalog
   - file: .github/workflows/app-icon.yml
   - content:
   ```yaml
