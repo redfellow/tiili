@@ -5,7 +5,8 @@
 // (icon-light-small.svg): as PNG files, as entries in icon.ico, and as the 16 and 32 px entries in icon.icns.
 //
 // It also renders app-light.png and app-dark.png (512 px, large icon), which the app embeds and swaps in at run time
-// so its Dock or taskbar icon follows the OS light or dark mode.
+// so its Dock or taskbar icon follows the OS light or dark mode, and their working frames app-light-working-0.png to
+// app-dark-working-7.png (512 px, large icon), the "Hot cursor" the app cycles while a pane is working.
 //
 // For macOS it writes AppIcon.icon, an Icon Composer bundle with a light and a dark appearance, and compiles it into
 // Assets.car when Xcode 26 or later is installed, so the installed app's icon follows the OS appearance while tiili
@@ -28,7 +29,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
-import { actoolMajor, compile, ICON_NAME, iconJson, splitIcon } from "./app-icon.mjs";
+import { actoolMajor, compile, ICON_NAME, iconJson, LIGHT_BLOOM, splitIcon, workingSvg } from "./app-icon.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const logoDir = join(root, "docs/brand/logo");
@@ -164,6 +165,14 @@ try {
   writeFileSync(join(outDir, "app-light.png"), render(RUNTIME_SIZE));
   const dark = new Resvg(darkSvg, { fitTo: { mode: "width", value: RUNTIME_SIZE } }).render().asPng();
   writeFileSync(join(outDir, "app-dark.png"), dark);
+
+  for (const [variant, svg] of [["light", largeSvg], ["dark", darkSvg]]) {
+    LIGHT_BLOOM.forEach((_, frame) => {
+      const working = workingSvg(svg.toString("utf8"), variant, frame);
+      const png = new Resvg(working, { fitTo: { mode: "width", value: RUNTIME_SIZE } }).render().asPng();
+      writeFileSync(join(outDir, `app-${variant}-working-${frame}.png`), png);
+    });
+  }
 
   writeIconBundle();
 } finally {
