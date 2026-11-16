@@ -135,8 +135,8 @@ pub const TICKS_PER_FRAME: usize = 4;
 pub const RING_TICKS: usize = 36;
 
 /// The attention ring's opacity range: it breathes between these, starting at the top.
-const RING_MIN: f64 = 0.4;
-const RING_MAX: f64 = 0.9;
+const RING_MIN: f64 = 0.35;
+const RING_MAX: f64 = 0.8;
 
 /// The attention ring's opacity at breathing step `step` (taken modulo [`RING_TICKS`]): a cosine from
 /// [`RING_MAX`] down to [`RING_MIN`] and back.
@@ -401,12 +401,12 @@ fn dock_inset(canvas: f64) -> (f64, f64) {
     ((canvas - side) / 2.0, side)
 }
 
-/// The attention ring's line width and corner radius for a tile of side `side`: 4 % of the tile, enough to read at
+/// The attention ring's line width and corner radius for a tile of side `side`: 6 % of the tile, enough to read at
 /// Dock size, and the brand
 /// icon's 22.5 % corner less half the line, so the stroke sits just inside the tile's edge.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn ring_geometry(side: f64) -> (f64, f64) {
-    let width = side * 0.04;
+    let width = side * 0.06;
     (width, side * 0.225 - width / 2.0)
 }
 
@@ -651,8 +651,8 @@ mod tests {
     #[test]
     fn ring_geometry_for_an_824_tile() {
         let (width, radius) = ring_geometry(824.0);
-        assert!((width - 32.96).abs() < 1e-9);
-        assert!((radius - (185.4 - 16.48)).abs() < 1e-9);
+        assert!((width - 49.44).abs() < 1e-9);
+        assert!((radius - (185.4 - 24.72)).abs() < 1e-9);
     }
 
     #[test]
