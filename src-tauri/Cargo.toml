@@ -49,6 +49,16 @@ name = "dev-bridge"
 path = "src/bin/dev-bridge.rs"
 required-features = ["dev-bridge"]
 
+# Small release binaries (the app, tiili-cli and the dev-bridge alike, on every platform): whole-program optimisation,
+# no debug symbols and no unwinding tables. Nothing in src/ catches a panic, so aborting loses nothing. "s" matched
+# opt-level 3 on PTY output throughput and gives the smaller binary.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
 [[test]]
 name = "dev_bridge"
 path = "tests/dev_bridge.rs"
