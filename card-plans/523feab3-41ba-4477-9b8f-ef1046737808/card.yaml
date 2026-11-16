@@ -5,3 +5,15 @@ x-harvaaja-card: 523feab3-41ba-4477-9b8f-ef1046737808
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Assets.car was not recompiled in #147, so the closed/launching macOS
+    icon is the old design. Adds an icon-check contract that Assets.car matches
+    the AppIcon.icon bundle; packaging spec has no such requirement."
+  citations:
+    - "openspec/specs/packaging/spec.md: Requirement: macOS bundle icon follows
+      the appearance"
+    - git show --stat 3880d29 (AppIcon.icon changed, Assets.car not)
+    - scripts/app-icon.mjs compile()
+    - .github/workflows/app-icon.yml
+  revision: 7be95146-5cc1-42a2-aa46-333e8e94cf29
