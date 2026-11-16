@@ -288,7 +288,8 @@ fn line_editing_keys_are_bound_only_where_the_users_config_left_them() {
     const CLASSIC: &str = "\x1b[39m@\x1b[32m";
     const ZSH_QUERY: &str =
         "bindkey -M emacs '^[[H'; bindkey -M emacs '^[[1;5D'; bindkey -M viins '^[[1;5D'";
-    const BASH_QUERY: &str = "bind -p | grep -F '1;'";
+    // bash 3.2 (macOS /bin/bash) lists `\e[` sequences as `\M-[`; newer bash as `\e[`. Read both as `\e[`.
+    const BASH_QUERY: &str = r"bind -p | grep -F '1;' | sed 's/M-\[/e[/'";
     struct Case {
         shell: &'static str,
         rc_name: &'static str,
