@@ -4,8 +4,9 @@ import { Menu } from "@tauri-apps/api/menu";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { message } from "@tauri-apps/plugin-dialog";
 import type { AttentionMark } from "./attention";
-import type { Backend, MenuItem, MovePayload, RunningCommand } from "./backend";
+import type { Backend, MenuItem, MovePayload, RunningCommand, UnsavedChoice } from "./backend";
 import { noteListeners, type NotesChanged } from "./heynoteStore";
 import { currentPlatform } from "./keymap";
 import type { Restored } from "./session";
@@ -23,6 +24,19 @@ function nativeItems(items: MenuItem[], prefix = "item"): NativeItem[] {
     if ("items" in item) return { id, text: item.label, items: nativeItems(item.items, id) };
     return { id, text: item.label, action: () => item.action() };
   });
+}
+
+/** The unsaved settings question's buttons: Save, Discard and Cancel (keep editing). */
+const UNSAVED_BUTTONS = { yes: "Save", no: "Discard", cancel: "Cancel" } as const;
+
+/**
+ * The choice a message box answer means: its custom button's label, or the Yes / No it stands in for; anything else,
+ * the box dismissed included, keeps editing.
+ */
+export function unsavedChoice(answer: string): UnsavedChoice {
+  if (answer === UNSAVED_BUTTONS.yes || answer === "Yes") return "save";
+  if (answer === UNSAVED_BUTTONS.no || answer === "No") return "discard";
+  return "keep";
 }
 
 /** The Tauri app's backend: PTY commands, the clipboard plugin, native menus and the settings file. */
@@ -75,6 +89,12 @@ export function tauriBackend(): Backend {
     },
     loadSettings: () => invoke("settings_load"),
     saveSettings: (value) => invoke("settings_save", { value }),
+    confirmUnsaved: async () =>
+      unsavedChoice(await message("You have unsaved settings changes.", {
+        title: "Settings",
+        kind: "warning",
+        buttons: UNSAVED_BUTTONS,
+      })),
     setAppIcon: (choice) => invoke("app_icon_set", { choice }),
     notes: {
       load: () => invoke("heynote_load"),
@@ -114,7 +134,9 @@ export function tauriBackend(): Backend {
       open: () => invoke("settings_open"),
       preview: (owner, settings) => emitTo(owner, "settings-preview", settings),
       onCloseRequested: async (handler) => {
-        await getCurrentWindow().onCloseRequested(() => handler());
+        await getCurrentWindow().onCloseRequested(async (event) => {
+          if (!(await handler())) event.preventDefault();
+        });
       },
     },
     paneControl: {

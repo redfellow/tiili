@@ -27,6 +27,10 @@ pub type ExitFn = Box<dyn FnOnce(u32) + Send>;
 /// see end of file.
 const LAST_OUTPUT_WAIT: Duration = Duration::from_millis(500);
 
+/// How long a dropped session's shell has to end after its hangup before it is killed outright.
+#[cfg(unix)]
+const KILL_GRACE: Duration = Duration::from_secs(2);
+
 /// The pseudo-terminal's master side; `None` once the shell has exited.
 type SharedMaster = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
 
@@ -51,13 +55,16 @@ impl ForegroundReader {
     }
 }
 
-/// A running shell. Dropping the session kills the shell.
+/// A running shell. Dropping the session ends the shell: a hangup, then SIGKILL on macOS and Linux if it
+/// is still running after [`KILL_GRACE`].
 pub struct PtySession {
     master: SharedMaster,
     /// Queue to the writer thread; `None` once the shell has exited.
     input: Arc<Mutex<Option<Sender<Vec<u8>>>>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
+    /// Set as soon as the shell has been reaped: from then on its pid may belong to another process.
+    exited: Arc<AtomicBool>,
     /// Set once the shell has shown a prompt through tiili's integration and redraws it on SIGUSR1 (zsh): before
     /// that, the signal could reach it ahead of the handler and end it.
     redraws: Arc<AtomicBool>,
@@ -304,12 +311,15 @@ impl PtySession {
                 let _ = read_done_tx.send(());
             })?;
 
+        let exited = Arc::new(AtomicBool::new(false));
+        let waiter_exited = Arc::clone(&exited);
         let waiter_master = Arc::clone(&master);
         let waiter_input = Arc::clone(&input);
         thread::Builder::new()
             .name("pty-waiter".into())
             .spawn(move || {
                 let code = child.wait().map(|s| s.exit_code()).unwrap_or(1);
+                waiter_exited.store(true, Ordering::SeqCst);
                 // Further writes fail; the writer thread ends once its queue is drained.
                 drop(waiter_input.lock().ok().and_then(|mut i| i.take()));
                 // Closing the pseudo-terminal lets the reader finish (ConPTY only ends its output then).
@@ -323,6 +333,7 @@ impl PtySession {
             input,
             killer,
             pid,
+            exited,
             redraws: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -334,9 +345,13 @@ impl PtySession {
         input.send(data.to_vec()).map_err(|_| gone())
     }
 
-    /// The shell's process id, when the platform reports one.
+    /// The shell's process id, when the platform reports one and the shell has not exited yet.
     pub fn pid(&self) -> Option<u32> {
-        self.pid
+        if self.exited.load(Ordering::SeqCst) {
+            None
+        } else {
+            self.pid
+        }
     }
 
     /// Asks the shell to redraw its prompt now, after the prompt choice changed: SIGUSR1 to an integrated zsh that
@@ -346,7 +361,7 @@ impl PtySession {
     pub fn redraw_prompt(&self) -> bool {
         #[cfg(unix)]
         if self.redraws.load(Ordering::Relaxed) {
-            if let Some(pid) = self.pid {
+            if let Some(pid) = self.pid() {
                 // The default action of SIGUSR1 ends the process: only one with a handler gets it.
                 if crate::command::catches_signal(pid, libc::SIGUSR1) == Some(true) {
                     if let Ok(pid) = libc::pid_t::try_from(pid) {
@@ -373,8 +388,33 @@ impl PtySession {
 }
 
 impl Drop for PtySession {
+    /// Hangs up on a shell that still runs and closes the pseudo-terminal; on macOS and Linux a shell
+    /// that is still running [`KILL_GRACE`] later is killed outright.
     fn drop(&mut self) {
+        if self.exited.load(Ordering::SeqCst) {
+            return;
+        }
         let _ = self.killer.kill();
+        drop(self.master.lock().ok().and_then(|mut m| m.take()));
+        #[cfg(unix)]
+        if let Some(pid) = self.pid.and_then(|p| libc::pid_t::try_from(p).ok()) {
+            let exited = Arc::clone(&self.exited);
+            let _ = thread::Builder::new()
+                .name("pty-reap".into())
+                .spawn(move || {
+                    thread::sleep(KILL_GRACE);
+                    if !exited.load(Ordering::SeqCst) {
+                        // The shell leads its session, so its process group id is its pid: the
+                        // group also holds the commands it started that ignore the hangup too.
+                        // SAFETY: kill only sends a signal; the shell has not been reaped, so the
+                        // pid is still its own.
+                        if unsafe { libc::kill(-pid, libc::SIGKILL) } != 0 {
+                            // SAFETY: as above.
+                            unsafe { libc::kill(pid, libc::SIGKILL) };
+                        }
+                    }
+                });
+        }
     }
 }
 
