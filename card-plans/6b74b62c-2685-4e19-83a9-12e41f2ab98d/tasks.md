@@ -1,0 +1,2 @@
+- [x] 1.1 Confirm the README's macOS install steps give `xattr -dr com.apple.quarantine /Applications/tiili.app` (already present from the base branch, so no edit is needed)
+  - proof: `grep -nE 'xattr -dr com.apple.quarantine /Applications/tiili.app' README.md`

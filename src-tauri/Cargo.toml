@@ -81,5 +81,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 libproc = "0.14"
 # Swapping the Dock icon at run time (src/app_icon.rs); tauri already depends on these versions.
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSApplication", "NSGraphics", "NSImage", "NSWorkspace", "objc2-core-foundation"] }
-objc2-foundation = { version = "0.3", features = ["NSData", "NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSApplication", "NSBezierPath", "NSColor", "NSGraphics", "NSImage", "NSWorkspace", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3", features = ["NSBundle", "NSData", "NSGeometry", "NSString"] }
