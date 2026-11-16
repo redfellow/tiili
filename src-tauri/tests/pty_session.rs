@@ -712,3 +712,35 @@ fn up_re_runs_zsh_and_bash_seed_history_and_report_the_typed_command() {
         );
     }
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn dropping_a_session_ends_a_shell_that_ignores_the_hangup() {
+    let mut cmd = portable_pty::CommandBuilder::new("sh");
+    cmd.args(["-c", "trap '' HUP; echo ready; sleep 30"]);
+    let (out_tx, out_rx) = mpsc::channel();
+    let (exit_tx, exit_rx) = mpsc::channel();
+    let session = PtySession::spawn_command(
+        cmd,
+        24,
+        80,
+        Box::new(move |data| {
+            let _ = out_tx.send(data.to_vec());
+        }),
+        Box::new(move |code| {
+            let _ = exit_tx.send(code);
+        }),
+    )
+    .expect("shell starts");
+    let mut seen = Vec::new();
+    assert!(
+        wait_for(&out_rx, &mut seen, "ready"),
+        "the trap was not set"
+    );
+    drop(session);
+    assert!(
+        exit_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+        "the shell still ran 5 s after the session was dropped"
+    );
+}
