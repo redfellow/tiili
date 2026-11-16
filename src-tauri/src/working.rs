@@ -8,11 +8,11 @@ use std::time::{Duration, Instant};
 use crate::command::Running;
 use crate::pty::SessionId;
 
-/// Whether a pane whose shell reports `running` is at its shell: no command line runs and no other program is in
-/// front. The command line counts where the foreground cannot be read (Windows), so panes running a command can work
-/// there too.
-pub fn at_shell(running: &Running) -> bool {
-    running.command.is_none() && running.program.is_none()
+/// Whether a pane whose shell reports `running` is at its shell. Where the foreground can be read (`reads_foreground`,
+/// macOS and Linux) that is whether no other program is in front: the command line can lag behind the prompt there.
+/// Elsewhere (Windows) it is also whether no command line runs, so panes running a command can work there too.
+pub fn at_shell(running: &Running, reads_foreground: bool) -> bool {
+    running.program.is_none() && (reads_foreground || running.command.is_none())
 }
 
 /// How long after its last output a pane with a program in front still counts as working.
@@ -76,7 +76,8 @@ mod tests {
     enum Step {
         Output(Duration),
         Foreground(bool),
-        Reported(Running),
+        /// What runs, and whether the platform reads the foreground.
+        Reported(Running, bool),
         Remove,
     }
     use Step::*;
@@ -90,7 +91,7 @@ mod tests {
             command: command.map(str::to_string),
             program: program.map(str::to_string),
         };
-        let cases: [(&str, Vec<Step>, f32, bool); 10] = [
+        let cases: [(&str, Vec<Step>, f32, bool); 11] = [
             (
                 "Quiet foreground program: shell in front with output is idle",
                 vec![Foreground(true), Output(Duration::ZERO)],
@@ -124,7 +125,7 @@ mod tests {
             (
                 "Script running: a reported command line without a known foreground (Windows) is working",
                 vec![
-                    Reported(running(Some("npm run build"), None)),
+                    Reported(running(Some("npm run build"), None), false),
                     Output(Duration::ZERO),
                 ],
                 1.0,
@@ -133,7 +134,7 @@ mod tests {
             (
                 "Script running: a foreground program without a command line is working",
                 vec![
-                    Reported(running(None, Some("python"))),
+                    Reported(running(None, Some("python")), true),
                     Output(Duration::ZERO),
                 ],
                 1.0,
@@ -141,17 +142,26 @@ mod tests {
             ),
             (
                 "Quiet foreground program: no command line and the shell in front is idle",
-                vec![Reported(running(None, None)), Output(Duration::ZERO)],
+                vec![Reported(running(None, None), false), Output(Duration::ZERO)],
                 1.0,
                 false,
             ),
             (
                 "Quiet foreground program: a reported command quiet for over 3 s is idle",
                 vec![
-                    Reported(running(Some("vim notes.md"), None)),
+                    Reported(running(Some("vim notes.md"), None), false),
                     Output(Duration::ZERO),
                 ],
                 3.5,
+                false,
+            ),
+            (
+                "Quiet foreground program: a stale command line with the shell back in front (macOS, Linux) is idle",
+                vec![
+                    Reported(running(Some("make"), None), true),
+                    Output(Duration::ZERO),
+                ],
+                1.0,
                 false,
             ),
             (
@@ -167,7 +177,7 @@ mod tests {
                 match step {
                     Output(offset) => working.output(1, start + offset),
                     Foreground(is_shell) => working.foreground(1, is_shell),
-                    Reported(running) => working.foreground(1, at_shell(&running)),
+                    Reported(running, reads) => working.foreground(1, at_shell(&running, reads)),
                     Remove => working.remove(1),
                 }
             }

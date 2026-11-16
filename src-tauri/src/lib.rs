@@ -182,7 +182,7 @@ fn report_foreground(app: &AppHandle, id: SessionId) {
     let at_shell = app
         .state::<SessionRegistry>()
         .running(id)
-        .map_or(true, |running| working::at_shell(&running));
+        .map_or(true, |running| working::at_shell(&running, cfg!(unix)));
     app_icon::foreground(app, id, at_shell);
 }
 
