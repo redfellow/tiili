@@ -1,13 +1,13 @@
 ## 1. Release script
 
-- [ ] 1.1 Add and export `tagPlan(existing, commit)` in `scripts/release.mjs` and use it in `tagMain`: read `git rev-parse --verify --quiet refs/tags/${tag}^{commit}`; create with `git tag -a` when absent, push as is when it equals `commit`, else run `git tag -f -a ${tag} ${commit} -m "Release ${tag}"` before pushing. Add a table-driven "Stale local tag: tagPlan" test to `scripts/release.test.ts`, and rename the "Minor release: rewrites %s" test to "Stamped version: rewrites %s" (the Minor release scenario no longer rewrites files).
+- [x] 1.1 Add and export `tagPlan(existing, commit)` in `scripts/release.mjs` and use it in `tagMain`: read `git rev-parse --verify --quiet refs/tags/${tag}^{commit}`; create with `git tag -a` when absent, push as is when it equals `commit`, else run `git tag -f -a ${tag} ${commit} -m "Release ${tag}"` before pushing. Add a table-driven "Stale local tag: tagPlan" test to `scripts/release.test.ts`, and rename the "Minor release: rewrites %s" test to "Stamped version: rewrites %s" (the Minor release scenario no longer rewrites files).
   Tests to update: scripts/release.test.ts
   - proof: `npx vitest run scripts/release.test.ts`
   - proof: `npx eslint scripts/release.mjs scripts/release.test.ts`
 
 ## 2. Bundle script
 
-- [ ] 2.1 In `scripts/bundle.mjs` `main`, spawn `process.execPath` with `[resolve(root, "node_modules/@tauri-apps/cli/tauri.js"), ...args.slice(1)]`, `cwd: root`, `stdio: "inherit"` and no `shell` option. Keep `bundleArgs` unchanged.
+- [x] 2.1 In `scripts/bundle.mjs` `main`, spawn `process.execPath` with `[resolve(root, "node_modules/@tauri-apps/cli/tauri.js"), ...args.slice(1)]`, `cwd: root`, `stdio: "inherit"` and no `shell` option. Keep `bundleArgs` unchanged.
   Tests to update: scripts/bundle.test.ts
   - proof: `npx vitest run scripts/bundle.test.ts`
   - proof: `npx eslint scripts/bundle.mjs`
@@ -15,7 +15,7 @@
 
 ## 3. Spec
 
-- [ ] 3.1 Keep the packaging delta of this change valid.
+- [x] 3.1 Keep the packaging delta of this change valid.
   - proof: `openspec validate release-pipeline-secrets-exposure-stale --strict`
 
 ## 4. Workflow
