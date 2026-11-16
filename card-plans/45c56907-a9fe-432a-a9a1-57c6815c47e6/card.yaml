@@ -1,0 +1,8 @@
+format: 1
+slug: release-pipeline-secrets-exposure-stale
+title: "Release pipeline: secrets exposure, stale-tag release, Windows bundle
+  breakage"
+x-harvaaja-card: 45c56907-a9fe-432a-a9a1-57c6815c47e6
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
