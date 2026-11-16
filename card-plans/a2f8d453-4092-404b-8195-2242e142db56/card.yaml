@@ -1,0 +1,8 @@
+format: 1
+slug: pty-output-has-no-back-pressure-yes-or-a
+title: "PTY output has no back-pressure: `yes` or a huge cat builds an unbounded
+  backlog and xterm drops data"
+x-harvaaja-card: a2f8d453-4092-404b-8195-2242e142db56
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
