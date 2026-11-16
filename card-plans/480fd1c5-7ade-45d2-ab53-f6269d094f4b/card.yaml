@@ -6,3 +6,10 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: chore
+  rationale: "Test-only clippy fix: factor the fn-pointer tuple type in a sink.rs
+    unit test into a `type Release = ...` alias. No behaviour change."
+  citations:
+    - src-tauri/src/sink.rs:303
+  revision: fc02fe82-e2d0-4630-87f3-b8769511c653
