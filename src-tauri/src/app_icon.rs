@@ -3,6 +3,9 @@
 //! The icon follows the OS light or dark mode. On macOS the user can instead pin it to the light or the dark icon
 //! (the `appIcon` setting); the frontend sends that choice with `app_icon_set`. While tiili is not running, the Dock
 //! shows the bundle's asset catalog icon (src-tauri/icons/Assets.car), which follows the OS appearance on its own.
+//! While tiili runs on macOS with the icon following the system and no pane working, it hands the Dock back to that
+//! asset catalog icon, so macOS draws it with the Liquid Glass rim it gives other apps' icons; a PNG set at run time
+//! gets no such effects.
 //!
 //! While any pane is working (see [`crate::working`]) the icon cycles the "Hot cursor" working frames of its variant
 //! every [`FRAME_INTERVAL`], or holds frame 0 when the OS asks for reduced motion. A ticker thread runs only then: it
@@ -97,6 +100,25 @@ pub fn resolve(choice: IconChoice, os: Theme, macos: bool) -> Variant {
         (IconChoice::Dark, true) => Variant::Dark,
         _ if os == Theme::Dark => Variant::Dark,
         _ => Variant::Light,
+    }
+}
+
+/// What the app icon shows: the bundle's asset catalog icon, a variant's normal icon, or one of its working frames.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Icon {
+    Bundle,
+    Normal(Variant),
+    Working(Variant, usize),
+}
+
+/// The icon to show for `choice` and its resolved `variant`, given the working `frame` (None when no pane works)
+/// and whether the app has an asset catalog icon to fall back to (`bundled`, macOS app bundles only). Only the
+/// system choice uses the bundle icon, since that is the one that follows the OS appearance.
+pub fn pick(choice: IconChoice, variant: Variant, frame: Option<usize>, bundled: bool) -> Icon {
+    match frame {
+        Some(i) => Icon::Working(variant, i),
+        None if bundled && choice == IconChoice::System => Icon::Bundle,
+        None => Icon::Normal(variant),
     }
 }
 
@@ -205,29 +227,63 @@ pub fn apply<R: Runtime>(app: &AppHandle<R>) {
         .try_state::<WorkingIcon>()
         .filter(|state| state.ticking.load(Ordering::SeqCst) && state.any_working())
         .map(|state| state.tick.load(Ordering::SeqCst));
-    show(app, variant, tick);
+    show(app, choice, variant, tick);
 }
 
 /// The icon last shown, so a held frame is not set again on every tick.
-static SHOWN: Mutex<Option<(Variant, Option<usize>)>> = Mutex::new(None);
+static SHOWN: Mutex<Option<Icon>> = Mutex::new(None);
 
-/// Shows `variant`'s normal icon, or its working frame for `tick` when given. Runs on the main thread, where the
-/// reduce-motion preference is read and the icon set.
-fn show<R: Runtime>(app: &AppHandle<R>, variant: Variant, tick: Option<usize>) {
+/// Shows the bundle icon, `variant`'s normal icon, or its working frame for `tick` when given (see [`pick`]). Runs on
+/// the main thread, where the reduce-motion preference is read and the icon set.
+fn show<R: Runtime>(app: &AppHandle<R>, choice: IconChoice, variant: Variant, tick: Option<usize>) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         let frame = tick.map(|tick| frame_at(tick, reduce_motion()));
+        let icon = pick(choice, variant, frame, has_bundle_icon());
         {
             let mut shown = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
-            if *shown == Some((variant, frame)) {
+            if *shown == Some(icon) {
                 return;
             }
-            *shown = Some((variant, frame));
+            *shown = Some(icon);
         }
-        let png = frame.map_or(variant.png(), |i| variant.frame(i));
-        set_icon(&handle, png);
+        match icon {
+            Icon::Bundle => clear_icon(),
+            Icon::Normal(variant) => set_icon(&handle, variant.png()),
+            Icon::Working(variant, i) => set_icon(&handle, variant.frame(i)),
+        }
     });
 }
+
+/// Whether the running app is a bundle with an asset catalog icon (CFBundleIconName); `tauri dev` runs a bare binary
+/// without one. Called on the main thread.
+#[cfg(target_os = "macos")]
+fn has_bundle_icon() -> bool {
+    use objc2_foundation::{ns_string, NSBundle};
+    NSBundle::mainBundle()
+        .objectForInfoDictionaryKey(ns_string!("CFBundleIconName"))
+        .is_some()
+}
+
+/// Only macOS bundles carry an asset catalog icon.
+#[cfg(not(target_os = "macos"))]
+fn has_bundle_icon() -> bool {
+    false
+}
+
+/// Hands the Dock back to the bundle's asset catalog icon, which macOS draws with its own effects.
+#[cfg(target_os = "macos")]
+fn clear_icon() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    if let Some(mtm) = MainThreadMarker::new() {
+        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(None) };
+    }
+}
+
+/// Never reached: [`has_bundle_icon`] is false outside macOS.
+#[cfg(not(target_os = "macos"))]
+fn clear_icon() {}
 
 /// The tile's size relative to the canvas in Apple's app icon grid: 824 of 1024 px.
 const DOCK_TILE_RATIO: f64 = 824.0 / 1024.0;
@@ -367,6 +423,35 @@ mod tests {
             resolve(IconChoice::Dark, Theme::Light, false),
             Variant::Light
         );
+    }
+
+    #[test]
+    fn pick_hands_the_idle_system_icon_to_the_bundle() {
+        use IconChoice as C;
+        use Variant as V;
+        // (choice, variant, frame, bundled, icon)
+        let cases = [
+            (C::System, V::Dark, None, true, Icon::Bundle),
+            (C::System, V::Light, None, true, Icon::Bundle),
+            (C::System, V::Dark, None, false, Icon::Normal(V::Dark)),
+            (
+                C::System,
+                V::Light,
+                Some(3),
+                true,
+                Icon::Working(V::Light, 3),
+            ),
+            (C::Light, V::Light, None, true, Icon::Normal(V::Light)),
+            (C::Dark, V::Dark, None, true, Icon::Normal(V::Dark)),
+            (C::Dark, V::Dark, Some(0), true, Icon::Working(V::Dark, 0)),
+        ];
+        for (choice, variant, frame, bundled, icon) in cases {
+            assert_eq!(
+                pick(choice, variant, frame, bundled),
+                icon,
+                "{choice:?} {variant:?} {frame:?} bundled {bundled}"
+            );
+        }
     }
 
     #[test]

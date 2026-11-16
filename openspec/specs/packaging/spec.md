@@ -156,6 +156,17 @@ On macOS, every icon tiili sets at run time (light, dark and working frames) SHA
 - **WHEN** the inset rectangle is computed for a canvas of 1024 px
 - **THEN** it is 824 px square at offset 100 px on both axes
 
+### Requirement: Idle running macOS icon is the bundle icon
+On macOS, when the Dock icon choice follows the system and no pane is working, the running app SHALL show the bundle's asset catalog icon rather than a run-time PNG, so the Dock draws it with the system's Liquid Glass effects. A pinned light or dark choice and the working frames SHALL still use the run-time PNGs. A run without an asset catalog icon (such as `tauri dev`) SHALL show the run-time PNG instead.
+
+#### Scenario: Idle icon keeps the system rim
+- **WHEN** tiili runs from its app bundle on macOS with the Dock icon following the system and no pane working
+- **THEN** the Dock shows the asset catalog icon with the same rim highlight as before launch
+
+#### Scenario: Working after idle
+- **WHEN** a pane starts working and then stops
+- **THEN** the Dock shows the working frames, then the asset catalog icon again
+
 ### Requirement: Asset catalog in step with the icon bundle
 Compiling the macOS app icon SHALL record a fingerprint of the Icon Composer bundle it compiled beside `Assets.car`. The icon check SHALL fail when the fingerprint is missing or differs from the committed bundle, so that the icon macOS shows at launch and while tiili is closed is always the current design.
 
