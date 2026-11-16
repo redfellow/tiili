@@ -1,0 +1,2 @@
+- [x] 1.1 Confirm `site/index.html` on this base has no hardcoded 8px/12px spacing (the two `brand/tokens` errors at line 153 exist only on the unmerged `site/shortcut-tabs` branch, where the `padding: 8px 12px` should become `padding: var(--space-2) var(--space-3)`); no change needed here
+  - proof: `npx eslint site/index.html`
