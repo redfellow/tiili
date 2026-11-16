@@ -1,0 +1,16 @@
+format: 1
+slug: shell-lifecycle-exits-before-pty-spawn-r
+title: "Shell lifecycle: exits before pty_spawn returns are dropped; closing a
+  pane only sends SIGHUP; stale pids get signalled"
+x-harvaaja-card: 86bddef3-e45a-4677-93f5-d718b6030229
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Bug fix making the code meet existing requirements (shell exit closes
+    its pane; closing a window ends its shells); no contract changes.
+  citations:
+    - openspec/specs/terminal-session/spec.md
+    - openspec/specs/pane-tiling/spec.md:151
+  revision: 46738bd1-9d54-40ec-b178-0bfef0019348

@@ -1,0 +1,17 @@
+format: 1
+slug: terminal-links-file-osc-8-links-bypass-r
+title: "Terminal links: file:// OSC 8 links bypass reveal-only, remote file
+  hosts pass as local, launcher lists incomplete"
+x-harvaaja-card: 9c2a1776-a411-4729-b414-80abb8115e97
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Extends the reveal-only launcher list in the terminal-links "Opening
+    paths" requirement and adds that file:// links obey it; a contract change.
+  citations:
+    - "openspec/specs/terminal-links/spec.md: Requirement: Opening paths"
+    - "openspec/specs/terminal-links/spec.md: Requirement: Scheme rules"
+    - "src-tauri/src/links.rs: link_open, file_host, is_reveal_only"
+  revision: 1c8ea55d-96e6-49cf-be45-51fa1512ba5a

@@ -557,14 +557,10 @@ fn shell_join(argv: &[String]) -> String {
         .join(" ")
 }
 
-/// What `<bin>/tiili.cmd` holds on Windows: it runs `exe` with the arguments it was given.
-#[cfg(windows)]
-fn windows_shim(exe: &Path) -> String {
-    format!("@\"{}\" %*\r\n", exe.display())
-}
-
-/// Puts `tiili` in `bin`: a link to `exe` on macOS and Linux, a `tiili.cmd` running it on Windows. An existing one
-/// is replaced, so it follows the app when it moves.
+/// Puts `tiili` in `bin`: a link to `exe` on macOS and Linux. On Windows a hard link to (or, across volumes, a copy
+/// of) the console program `tiili-cli.exe` next to `exe`, named `tiili.exe`: `exe` is a GUI program there, which
+/// shells neither wait for nor take an exit code from, and no batch file sits between, so cmd.exe never re-parses
+/// the arguments. An existing one is replaced, so it follows the app when it moves or updates.
 fn install_cli(bin: &Path, exe: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(bin)?;
     #[cfg(unix)]
@@ -580,7 +576,26 @@ fn install_cli(bin: &Path, exe: &Path) -> std::io::Result<()> {
     }
     #[cfg(windows)]
     {
-        std::fs::write(bin.join("tiili.cmd"), windows_shim(exe))
+        let source = exe.with_file_name("tiili-cli.exe");
+        let target = bin.join("tiili.exe");
+        if let (Ok(have), Ok(want)) = (std::fs::metadata(&target), std::fs::metadata(&source)) {
+            if have.len() == want.len() && have.modified().ok() == want.modified().ok() {
+                let _ = std::fs::remove_file(bin.join("tiili.cmd"));
+                return Ok(());
+            }
+        }
+        let fresh = bin.join(format!(".tiili-{}.exe", std::process::id()));
+        let _ = std::fs::remove_file(&fresh);
+        if std::fs::hard_link(&source, &fresh).is_err() {
+            std::fs::copy(&source, &fresh)?;
+        }
+        if let Err(e) = std::fs::rename(&fresh, &target) {
+            let _ = std::fs::remove_file(&fresh);
+            return Err(e);
+        }
+        // A `tiili.cmd` from an earlier version, whose arguments cmd.exe re-parsed.
+        let _ = std::fs::remove_file(bin.join("tiili.cmd"));
+        Ok(())
     }
 }
 

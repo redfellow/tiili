@@ -281,13 +281,27 @@ export async function openTerminal(
     });
   };
 
+  // Exits heard before the terminal knows its session's id: a shell can end before `spawn` resolves.
+  const earlyExits = new Set<SessionId>();
+  // Marks the terminal's new session running, or ended at once when its shell already exited.
+  const started = (id: SessionId) => {
+    session = id;
+    const ended = earlyExits.delete(id);
+    earlyExits.clear();
+    running = !ended;
+    onSession(id);
+    if (ended) onExit();
+  };
+
   const spawn = async (dir?: string) => {
-    session = await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history);
-    running = true;
-    onSession(session);
+    started(await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history));
   };
 
   const unlistenExit = await backend.onExit((id) => {
+    if (session === undefined) {
+      earlyExits.add(id);
+      return;
+    }
     if (id !== session) return;
     running = false;
     onExit();
@@ -325,9 +339,8 @@ export async function openTerminal(
     await written(term, scrollback).finally(() => {
       replaying = false;
     });
-    session = id;
-    running = true;
-    onSession(id);
+    started(id);
+    if (!running) return;
     await backend.moves?.attach(id, output);
     if (term.rows > 1) await backend.resize(id, term.rows - 1, term.cols);
     await backend.resize(id, term.rows, term.cols);

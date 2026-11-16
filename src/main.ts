@@ -153,14 +153,15 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
     if (!settingsWindows) return dialog?.open();
     settingsWindows.open().catch((error: unknown) => console.error(error));
   };
-  // Settings this window changes itself (the Zen width an edge drag sets): saved, sent to the other windows by the
-  // app, and taken on here.
-  const saveOwn = async (next: Settings) => {
+  // The Zen width an edge drag sets: saved on top of the settings last saved, not a settings window's unsaved
+  // preview, sent to the other windows by the app and taken on here, with any preview still shown.
+  const saveZenWidth = async (width: number) => {
+    const next: Settings = { ...saved, zen: { ...saved.zen, width } };
     await backend.saveSettings(next);
     adoptSettings(next);
-    await apply(next);
+    await apply({ ...settings, zen: { ...settings.zen, width } });
   };
-  const panes = await Panes.create(backend, root, platform, () => settings, openSettings, (next) => saveOwn(next));
+  const panes = await Panes.create(backend, root, platform, () => settings, openSettings, saveZenWidth);
   const report = (error: unknown) => console.error(error);
   // The shells paste in the selection's colour of the theme shown here, not in reverse video's block of text colour.
   const highlightShells = (theme: ITheme) => {

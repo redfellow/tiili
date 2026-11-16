@@ -26,6 +26,10 @@ Cargo runs with `--no-default-features`. That leaves out `dev-bridge`, the brows
 of the package into the installers, and the bridge must never reach users. Plain `cargo build`, `cargo test` and
 `cargo clippy` keep the feature on, so they still build and test it.
 
+The installers also carry `tiili-cli` (`src-tauri/src/bin/tiili-cli.rs`), `tiili <command>` as a console program.
+On Windows the app puts it in its `bin` folder as `tiili.exe`, the `tiili` its panes run: the app's own binary is a
+GUI program there, which shells do not wait for.
+
 ## Installing on this Mac
 
 To try a build as a real Mac app, run:
