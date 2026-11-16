@@ -5,3 +5,14 @@ x-harvaaja-card: d192468e-2a10-4c58-b8d5-c7100ac99a3c
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The running app icon set at run time fills the whole 512 px canvas,
+    so the macOS Dock draws it bigger than other apps, which leave the standard
+    margin. Fixing that adds a size requirement to packaging's Working app icon
+    contract, so it needs a new change. No active changes exist.
+  citations:
+    - "openspec/specs/packaging/spec.md: Requirement: Working app icon"
+    - src-tauri/src/app_icon.rs:233 set_icon (setApplicationIconImage)
+    - scripts/icons.mjs:165-173 runtime PNGs rendered full-bleed at 512 px
+  revision: 8b4c186b-a4f4-4fc8-9d12-553aa0c854b4
