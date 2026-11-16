@@ -36,6 +36,59 @@ export function splitIcon(svg) {
   return { tile: tile[1], layer };
 }
 
+/** Brand tokens the working frames draw the hot cursor and its bloom with. */
+export const KOIVU = "#D9A43A";
+export const KALKKI = "#F6F1E9";
+
+/** Bloom opacity of the light icon's working frames, one per frame; the dark icon's bloom uses these x 0.7. */
+export const LIGHT_BLOOM = [0.95, 0.95, 0.82, 0.64, 0.5, 0.5, 0.64, 0.82];
+
+/** How far the dark icon's cursor is mixed from kalkki towards koivu, one per frame. */
+export const DARK_MIX = [0, 0, 0.2, 0.4, 0.55, 0.55, 0.4, 0.2];
+
+/** The cursor `_` of the brand icon SVGs, inside the group scaled by 2.5. */
+const CURSOR_RECT = /<rect x="27\.015" y="24\.74" width="8\.568" height="2\.6" fill="#[0-9A-Fa-f]{6}"\/>/;
+
+/** The end of the brick's drop-shadow group: the bloom goes after the brick and before its bevel. */
+const BRICK_END = /(<g filter="url\(#drop\)"><rect [^>]*\/><\/g>)/;
+
+/** `a` mixed towards `b` by `t` (0..1), channel by channel in sRGB, rounded. */
+export function mix(a, b, t) {
+  const channel = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  const out = [1, 3, 5].map((i) => Math.round(channel(a, i) + (channel(b, i) - channel(a, i)) * t));
+  return `#${out.map((c) => c.toString(16).padStart(2, "0").toUpperCase()).join("")}`;
+}
+
+/** The cursor fill and bloom colour and opacity of working frame `frame` (0..7) of the `light` or `dark` icon. */
+export function workingStyle(variant, frame) {
+  if (variant === "light") return { cursor: KOIVU, bloom: KOIVU, opacity: LIGHT_BLOOM[frame] };
+  return {
+    cursor: mix(KALKKI, KOIVU, DARK_MIX[frame]),
+    bloom: KALKKI,
+    opacity: Math.round(LIGHT_BLOOM[frame] * 0.7 * 1000) / 1000,
+  };
+}
+
+/**
+ * Rewrites a brand icon SVG into working frame `frame` (0..7) of the `light` or `dark` icon: the cursor gets the hot
+ * fill and a blurred bloom, the cursor grown by 0.4 each side, glows between the brick and its bevel.
+ */
+export function workingSvg(svg, variant, frame) {
+  if (!CURSOR_RECT.test(svg) || !BRICK_END.test(svg) || !svg.includes("</defs>")) {
+    throw new Error("The icon SVG has no cursor or brick to heat up.");
+  }
+  const { cursor, bloom, opacity } = workingStyle(variant, frame);
+  const filter =
+    '<filter id="bloom" x="-50%" y="-150%" width="200%" height="400%"><feGaussianBlur stdDeviation="1.04"/></filter>';
+  const glow =
+    `<rect x="26.615" y="24.34" width="9.368" height="3.4" rx="0.8" fill="${bloom}" ` +
+    `opacity="${opacity}" filter="url(#bloom)"/>`;
+  return svg
+    .replace("</defs>", `${filter}</defs>`)
+    .replace(BRICK_END, `$1${glow}`)
+    .replace(CURSOR_RECT, `<rect x="27.015" y="24.74" width="8.568" height="2.6" fill="${cursor}"/>`);
+}
+
 /** A #RRGGBB colour as an Icon Composer solid colour. */
 export function srgb(hex) {
   const channels = [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(5));

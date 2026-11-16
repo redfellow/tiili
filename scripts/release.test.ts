@@ -9,6 +9,7 @@ import {
   setCargoLockVersion,
   setCargoVersion,
   setJsonVersion,
+  tagPlan,
 } from "./release.mjs";
 
 describe("release", () => {
@@ -27,6 +28,14 @@ describe("release", () => {
     ["patch", "0.0.0", true, { version: "0.0.1", resume: false }],
   ])("Resumable release: pickTarget(%s) after v%s (published %s)", (arg, latest, published, expected) => {
     expect(pickTarget(arg, latest, published)).toEqual(expected);
+  });
+
+  it.each([
+    [undefined, "abc123", "create"],
+    ["abc123", "abc123", "push"],
+    ["def456", "abc123", "retag"],
+  ])("Stale local tag: tagPlan(%s, %s) is %s", (existing, commit, expected) => {
+    expect(tagPlan(existing, commit)).toBe(expected);
   });
 
   it("Resumable release: pickTarget refuses a version that is not newer", () => {
@@ -63,7 +72,7 @@ describe("release", () => {
       '[package]\nname = "tiili"\nversion = "0.1.3"\n\n[dependencies]\nserde = { version = "1" }\nfoo = "2"\n[dependencies.bar]\nversion = "3"\n',
       '[package]\nname = "tiili"\nversion = "0.2.0"\n\n[dependencies]\nserde = { version = "1" }\nfoo = "2"\n[dependencies.bar]\nversion = "3"\n',
     ],
-  ])("Minor release: rewrites %s", (_name, rewrite, before, after) => {
+  ])("Stamped version: rewrites %s", (_name, rewrite, before, after) => {
     expect(rewrite(before, "0.2.0")).toBe(after);
   });
 

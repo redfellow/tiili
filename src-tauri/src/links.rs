@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::cwd::{is_local_host, local_hostname};
+use crate::cwd::local_hostname;
 use crate::pty::{SessionId, SessionRegistry};
 
 /// What may happen to a URL the user opens.
@@ -35,13 +35,57 @@ fn scheme_of(uri: &str) -> Option<String> {
     Some(scheme.to_ascii_lowercase())
 }
 
-/// The host of a `file:` URI: what follows `//` up to the next `/`; empty when there is none.
-fn file_host(uri: &str) -> &str {
-    let rest = &uri[uri.find(':').map_or(0, |i| i + 1)..];
-    match rest.strip_prefix("//") {
-        Some(after) => after.split('/').next().unwrap_or(""),
-        None => "",
+/// Whether the `file:` URI `uri`, as written, has a path starting with two slashes (a backslash counts as a slash).
+fn has_unc_path(uri: &str) -> bool {
+    let rest = uri
+        .split_once(':')
+        .map_or("", |(_, rest)| rest)
+        .replace('\\', "/");
+    let Some(after) = rest.strip_prefix("//") else {
+        return false;
+    };
+    let path = after.find('/').map_or("", |i| &after[i..]);
+    path.starts_with("//")
+}
+
+/// The path a `file:` URI names on a machine named `local`, or `None` when it is not a local path: its host must be
+/// none, empty, `localhost` or exactly `local` (case-insensitive, no first-label shortcut, since a link picks its own
+/// host), and its path must not be a UNC or device path.
+fn local_file_path(uri: &str, local: &str) -> Option<PathBuf> {
+    let url = tauri::Url::parse(uri).ok()?;
+    if url.scheme() != "file" {
+        return None;
     }
+    let host_ok = url.host_str().is_none_or(|host| {
+        host.is_empty()
+            || host.eq_ignore_ascii_case("localhost")
+            || host.eq_ignore_ascii_case(local)
+    });
+    // `file:////host/share` has an empty host and the path `//host/share`, a UNC path on Windows, but `Url` folds the
+    // extra slashes away, so the check reads the URI as written.
+    if !host_ok || has_unc_path(uri) {
+        return None;
+    }
+    // The host is vouched for; `to_file_path` would refuse this machine's own name on Unix.
+    let path = tauri::Url::parse(&format!("file://{}", url.path()))
+        .ok()?
+        .to_file_path()
+        .ok()?;
+    let unc = matches!(
+        path.components().next(),
+        Some(Component::Prefix(prefix)) if matches!(
+            prefix.kind(),
+            std::path::Prefix::UNC(..)
+                | std::path::Prefix::VerbatimUNC(..)
+                | std::path::Prefix::DeviceNS(..)
+        )
+    );
+    (!unc).then_some(path)
+}
+
+/// Whether `uri`, a `file:` URI, names a path on a machine named `local`.
+fn is_local_file_uri(uri: &str, local: &str) -> bool {
+    local_file_path(uri, local).is_some()
 }
 
 /// The rule for `uri` on a machine named `local`.
@@ -55,7 +99,7 @@ pub fn classify_url_on(uri: &str, local: &str) -> UrlRule {
     match scheme.as_str() {
         "http" | "https" | "mailto" => UrlRule::Allow,
         "javascript" | "vbscript" | "data" | "blob" => UrlRule::Deny,
-        "file" if !is_local_host(file_host(uri), local) => UrlRule::Deny,
+        "file" if !is_local_file_uri(uri, local) => UrlRule::Deny,
         _ => UrlRule::Confirm,
     }
 }
@@ -163,12 +207,53 @@ fn executable(_meta: &std::fs::Metadata) -> bool {
 fn is_reveal_only(os: Os, path: &Path, meta: &std::fs::Metadata) -> bool {
     let ext = extension(path);
     match os {
-        Os::MacOs => matches!(ext.as_str(), "app" | "command" | "tool" | "pkg") || executable(meta),
+        Os::MacOs => {
+            matches!(
+                ext.as_str(),
+                "app"
+                    | "command"
+                    | "tool"
+                    | "pkg"
+                    | "terminal"
+                    | "fileloc"
+                    | "inetloc"
+                    | "webloc"
+                    | "jar"
+                    | "mpkg"
+                    | "prefpane"
+                    | "workflow"
+            ) || executable(meta)
+        }
         Os::Windows => matches!(
             ext.as_str(),
-            "exe" | "bat" | "cmd" | "ps1" | "vbs" | "js" | "msi" | "lnk" | "scr"
+            "exe"
+                | "bat"
+                | "cmd"
+                | "ps1"
+                | "vbs"
+                | "js"
+                | "msi"
+                | "lnk"
+                | "scr"
+                | "com"
+                | "pif"
+                | "hta"
+                | "wsf"
+                | "wsh"
+                | "jse"
+                | "vbe"
+                | "cpl"
+                | "msc"
+                | "reg"
+                | "url"
+                | "appref-ms"
+                | "application"
+                | "scf"
+                | "jar"
+                | "psm1"
+                | "msp"
         ),
-        Os::Linux => ext == "desktop" || executable(meta),
+        Os::Linux => matches!(ext.as_str(), "desktop" | "jar") || executable(meta),
     }
 }
 
@@ -215,17 +300,35 @@ pub fn resolve_path(cwd: &Path, home: Option<&Path>, text: &str) -> Option<Resol
 /// needs confirming opens only with `confirmed`.
 #[tauri::command]
 pub fn link_open(app: AppHandle, uri: String, confirmed: bool) -> Result<(), String> {
+    let is_file = scheme_of(&uri).as_deref() == Some("file");
     match classify_url(&uri) {
-        UrlRule::Deny if scheme_of(&uri).as_deref() == Some("file") => Err(format!(
+        UrlRule::Deny if is_file => Err(format!(
             "tiili doesn't open links to files on another computer: {uri}"
         )),
         UrlRule::Deny => Err(format!("tiili never opens {uri}")),
         UrlRule::Confirm if !confirmed => Err(format!("Opening {uri} needs your confirmation")),
+        _ if is_file => open_file_uri(&app, &uri),
         _ => app
             .opener()
             .open_url(uri, None::<&str>)
             .map_err(|e| e.to_string()),
     }
+}
+
+/// Opens the local file or folder a `file:` URI names, under the same reveal-only rule as a printed path.
+fn open_file_uri(app: &AppHandle, uri: &str) -> Result<(), String> {
+    let path =
+        local_file_path(uri, local_hostname()).ok_or_else(|| format!("tiili can't open {uri}"))?;
+    let found = existing(&path.to_string_lossy())?;
+    if found.reveal_only {
+        return Err(format!(
+            "{} would run a program, so tiili only reveals it",
+            found.abs
+        ));
+    }
+    app.opener()
+        .open_path(found.abs, None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// The existing file or folder each of `candidates` names in session `pane_id`'s current folder, in order. A remote

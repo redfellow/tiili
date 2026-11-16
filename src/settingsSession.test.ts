@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import { createSettingsSession, type SettingsSession, turnsOffRestore, whileTyping } from "./settingsSession";
+import { createSettingsSession, dirty, type SettingsSession, turnsOffRestore, whileTyping } from "./settingsSession";
 
 const opening: Settings = { ...DEFAULT_SETTINGS, theme: "nord" };
 const dracula: Settings = { ...DEFAULT_SETTINGS, theme: "dracula" };
@@ -43,6 +43,20 @@ describe("createSettingsSession", () => {
     expect(last).toEqual(result);
     expect(session.saved).toEqual(saved);
     expect(session.draft).toEqual(draft);
+  });
+});
+
+describe("dirty", () => {
+  it.each<[string, Step[], boolean]>([
+    ["a fresh session has nothing unsaved", [], false],
+    ["an edit is unsaved", [(s) => s.edit(dracula)], true],
+    ["an edit undone by hand is no change", [(s) => s.edit(dracula), (s) => s.edit({ ...opening })], false],
+    ["a committed edit is saved", [(s) => s.edit(dracula), (s) => s.commit(s.draft)], false],
+    ["a cancelled edit is gone", [(s) => s.edit(dracula), (s) => s.cancel()], false],
+  ])("%s", (_name, steps, unsaved) => {
+    const session = createSettingsSession(opening);
+    for (const step of steps) step(session);
+    expect(dirty(session)).toBe(unsaved);
   });
 });
 

@@ -17,6 +17,9 @@ export interface SettingsSession {
 /** Whether two settings are equal by value. */
 export const same = (a: Settings, b: Settings) => JSON.stringify(a) === JSON.stringify(b);
 
+/** Whether the session has unsaved changes: its draft differs from the saved settings by value. */
+export const dirty = (session: SettingsSession) => !same(session.draft, session.saved);
+
 /** Whether saving `written` over `saved` turns Restore scrollback and commands off, so what was kept is deleted. */
 export const turnsOffRestore = (saved: Settings, written: Settings) =>
   saved.behaviour.restoreScrollback && !written.behaviour.restoreScrollback;
