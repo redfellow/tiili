@@ -20,7 +20,7 @@
 
 ## 4. Workflow
 
-- [ ] 4.1 (triage) Harden the release workflow: Apple signing step after `npm ci` and the version stamp, `persist-credentials: false` on all three checkouts, rust-toolchain pinned to a commit.
+- [x] 4.1 (triage) Harden the release workflow: Apple signing step after `npm ci` and the version stamp, `persist-credentials: false` on all three checkouts, rust-toolchain pinned to a commit.
   - file: .github/workflows/release.yml
   - content:
   ```yaml
