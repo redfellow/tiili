@@ -5,3 +5,14 @@ x-harvaaja-card: de2a2537-c5da-42c0-9e9d-60f5d30706ba
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Adds new packaging contracts: an optimised release profile, an
+    lzma-compressed DMG, and a Heynote build without duplicate woff fonts. No
+    active change covers this."
+  citations:
+    - openspec/specs/packaging/spec.md
+    - scripts/bundle.mjs
+    - scripts/heynote.mjs
+    - src-tauri/Cargo.toml
+  revision: e3162053-0b8b-4cd8-b9bf-d95c0d28d465
