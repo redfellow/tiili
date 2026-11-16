@@ -225,6 +225,11 @@ export interface Backend {
   resize(id: SessionId, rows: number, cols: number): Promise<void>;
   /** Ends session `id`, killing its shell if it still runs. */
   close(id: SessionId): Promise<void>;
+  /**
+   * Tells the backend the terminal has drawn `bytes` more of session `id`'s output, so it reads on; where there is
+   * none, output is not flow-controlled. Fire-and-forget.
+   */
+  ack?(id: SessionId, bytes: number): void;
   /** The working directory of session `id`'s shell, when the backend can read it. */
   cwd(id: SessionId): Promise<string | undefined>;
   /** Calls `callback` whenever a shell exits. Resolves to a function that stops listening. */
