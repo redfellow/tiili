@@ -5,4 +5,4 @@
   - proof: `grep -F 'xattr -dr com.apple.quarantine /Applications/tiili.app' README.md`
 - [x] 1.2 Download page (site/index.html): same wording and commands as the README
   - proof: `grep -F 'codesign --force --deep --sign - /Applications/tiili.app' site/index.html`
-  - proof: `npx vitest run src/links.test.ts`
+  - proof: `npx vitest run src/docs-sync/links.test.ts`
