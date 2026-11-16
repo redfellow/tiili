@@ -92,11 +92,13 @@ Dark. The `.icon` bundle is drawn from the large icon only, so the closed app's 
 `actool` comes with Xcode 26 or later, not with the Command Line Tools. When it is installed, `npm run icons`
 compiles `Assets.car` too. Otherwise, after the icon changed, push the branch, run the **app-icon** workflow
 (`.github/workflows/app-icon.yml`, started by hand on a macOS 26 runner) on it, download its `Assets.car` artifact
-and commit it as `src-tauri/icons/Assets.car`. Builds only need the committed file, not Xcode.
+and commit both files it holds, `src-tauri/icons/Assets.car` and `src-tauri/icons/Assets.car.source`. The second is
+a SHA-256 fingerprint of `AppIcon.icon` written each time the bundle is compiled, so `Assets.car.source` must be
+committed with every `Assets.car`. Builds only need the committed files, not Xcode.
 
 `scripts/icons.test.ts` checks that every icon each platform needs is present at the right size, that
-`AppIcon.icon/icon.json` matches the brand icons, and, on macOS, that `Assets.car` holds the light and the dark
-appearance.
+`AppIcon.icon/icon.json` matches the brand icons, that `Assets.car.source` matches the committed `AppIcon.icon` (so a
+stale `Assets.car` fails the check), and, on macOS, that `Assets.car` holds the light and the dark appearance.
 
 ## Signing and notarisation
 

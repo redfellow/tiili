@@ -1,12 +1,12 @@
 ## 1. Fingerprint guard
 
-- [ ] 1.1 Add `iconFingerprint(iconPath)` to `scripts/app-icon.mjs` (SHA-256 over sorted relative paths and bytes of `icon.json` and `Assets/*.png`), declare it in `scripts/app-icon.d.mts`, and make `compile` write it to `<carPath>.source` after a successful compile
+- [x] 1.1 Add `iconFingerprint(iconPath)` to `scripts/app-icon.mjs` (SHA-256 over sorted relative paths and bytes of `icon.json` and `Assets/*.png`), declare it in `scripts/app-icon.d.mts`, and make `compile` write it to `<carPath>.source` after a successful compile
   - proof: `npx eslint scripts/app-icon.mjs`
   - proof: `npm run typecheck`
-- [ ] 1.2 In `scripts/icons.test.ts`, add `Assets.car.source` to the macOS appearance set and a test that its contents equal `iconFingerprint` of `src-tauri/icons/AppIcon.icon`, failing with a message that names the stale `Assets.car` and the app-icon workflow. Also add a small table-driven test showing that the fingerprint changes when a bundle file in a temp folder changes
+- [x] 1.2 In `scripts/icons.test.ts`, add `Assets.car.source` to the macOS appearance set and a test that its contents equal `iconFingerprint` of `src-tauri/icons/AppIcon.icon`, failing with a message that names the stale `Assets.car` and the app-icon workflow. Also add a small table-driven test showing that the fingerprint changes when a bundle file in a temp folder changes
   Tests to update: scripts/icons.test.ts
   - proof: `npx eslint scripts/icons.test.ts`
-- [ ] 1.3 Update `docs/packaging.md` (and the header comment of `scripts/app-icon.mjs`) to say that `Assets.car.source` must be committed with every `Assets.car`
+- [x] 1.3 Update `docs/packaging.md` (and the header comment of `scripts/app-icon.mjs`) to say that `Assets.car.source` must be committed with every `Assets.car`
   - proof: `grep -n "Assets.car.source" docs/packaging.md scripts/app-icon.mjs`
 
 ## 2. Workflow
