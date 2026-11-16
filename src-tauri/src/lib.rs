@@ -176,6 +176,16 @@ fn forget_session(app: &AppHandle, id: SessionId) {
     app_icon::forget(app, id);
 }
 
+/// Tells the working app icon whether session `id` is at its shell (see [`working::at_shell`]); before the session
+/// is registered, it is.
+fn report_foreground(app: &AppHandle, id: SessionId) {
+    let at_shell = app
+        .state::<SessionRegistry>()
+        .running(id)
+        .map_or(true, |running| working::at_shell(&running));
+    app_icon::foreground(app, id, at_shell);
+}
+
 /// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
 /// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
 /// the `tiili open` that asked for it, when given), and returns its session id. A shell started with `history` has that
@@ -225,6 +235,10 @@ fn pty_spawn(
             rows,
             cols,
             Box::new(move |id, data| {
+                // Where the foreground cannot be read (Windows), what runs is known only from the command line the
+                // shell reports, which titles alone would not follow: read it with each output.
+                #[cfg(not(unix))]
+                report_foreground(&output_app, id);
                 app_icon::output(&output_app, id);
                 if let Ok(mut sink) = output_sink.lock() {
                     sink.write(data);
@@ -237,13 +251,8 @@ fn pty_spawn(
                 let _ = cwd_app.emit_to(to.as_str(), PANE_CWD_EVENT, event);
             })),
             Some(Box::new(move |id, command| {
-                // What runs changed, so who is in front may have: the pane works only with a program there. Before
-                // the session is registered, its shell is.
-                let is_shell = command_app
-                    .state::<SessionRegistry>()
-                    .running(id)
-                    .map_or(true, |running| running.program.is_none());
-                app_icon::foreground(&command_app, id, is_shell);
+                // What runs changed, so who is in front may have: the pane works only away from its shell.
+                report_foreground(&command_app, id);
                 let event = PaneCommandEvent {
                     pane_id: id,
                     command: command.to_string(),

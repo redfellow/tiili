@@ -1,11 +1,19 @@
-//! Which panes are working: a pane works while its foreground program is not its shell and it printed output in the
+//! Which panes are working: a pane works while it is away from its shell ([`at_shell`]) and it printed output in the
 //! last [`WORKING_WINDOW`]. Pure, so it is testable without a window or a pseudo-terminal; the app feeds it from each
 //! pane's output and foreground reports, and the running app icon shows the working frames while any pane works.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use crate::command::Running;
 use crate::pty::SessionId;
+
+/// Whether a pane whose shell reports `running` is at its shell: no command line runs and no other program is in
+/// front. The command line counts where the foreground cannot be read (Windows), so panes running a command can work
+/// there too.
+pub fn at_shell(running: &Running) -> bool {
+    running.command.is_none() && running.program.is_none()
+}
 
 /// How long after its last output a pane with a program in front still counts as working.
 pub const WORKING_WINDOW: Duration = Duration::from_secs(3);
@@ -68,6 +76,7 @@ mod tests {
     enum Step {
         Output(Duration),
         Foreground(bool),
+        Reported(Running),
         Remove,
     }
     use Step::*;
@@ -77,7 +86,11 @@ mod tests {
         let start = Instant::now();
         let at = |secs: f32| start + Duration::from_secs_f32(secs);
         // (case, steps on pane 1 with output at the given offsets, checked at, working)
-        let cases: [(&str, Vec<Step>, f32, bool); 6] = [
+        let running = |command: Option<&str>, program: Option<&str>| Running {
+            command: command.map(str::to_string),
+            program: program.map(str::to_string),
+        };
+        let cases: [(&str, Vec<Step>, f32, bool); 10] = [
             (
                 "Quiet foreground program: shell in front with output is idle",
                 vec![Foreground(true), Output(Duration::ZERO)],
@@ -109,6 +122,39 @@ mod tests {
                 false,
             ),
             (
+                "Script running: a reported command line without a known foreground (Windows) is working",
+                vec![
+                    Reported(running(Some("npm run build"), None)),
+                    Output(Duration::ZERO),
+                ],
+                1.0,
+                true,
+            ),
+            (
+                "Script running: a foreground program without a command line is working",
+                vec![
+                    Reported(running(None, Some("python"))),
+                    Output(Duration::ZERO),
+                ],
+                1.0,
+                true,
+            ),
+            (
+                "Quiet foreground program: no command line and the shell in front is idle",
+                vec![Reported(running(None, None)), Output(Duration::ZERO)],
+                1.0,
+                false,
+            ),
+            (
+                "Quiet foreground program: a reported command quiet for over 3 s is idle",
+                vec![
+                    Reported(running(Some("vim notes.md"), None)),
+                    Output(Duration::ZERO),
+                ],
+                3.5,
+                false,
+            ),
+            (
                 "a new pane starts with its shell in front",
                 vec![Output(Duration::ZERO)],
                 0.5,
@@ -121,6 +167,7 @@ mod tests {
                 match step {
                     Output(offset) => working.output(1, start + offset),
                     Foreground(is_shell) => working.foreground(1, is_shell),
+                    Reported(running) => working.foreground(1, at_shell(&running)),
                     Remove => working.remove(1),
                 }
             }
