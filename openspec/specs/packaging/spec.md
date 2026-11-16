@@ -167,6 +167,21 @@ On macOS, when the Dock icon choice follows the system and no pane is working, t
 - **WHEN** a pane starts working and then stops
 - **THEN** the Dock shows the working frames, then the asset catalog icon again
 
+### Requirement: Attention ring on the macOS Dock icon
+On macOS, while any pane is marked for attention and no tiili window is in front, the Dock icon SHALL show a koivu ring just inside the tile's edge, 6 % of the tile wide, breathing smoothly in opacity between 80 % and 35 % over about 3 seconds. It SHALL draw over the normal icon or working frame, so the run-time normal icon replaces the bundle icon while it shows. With reduced motion it SHALL hold at 80 %. It SHALL go when the last mark clears or a tiili window comes to the front.
+
+#### Scenario: Agent waiting while in another app
+- **WHEN** a pane rings the bell while the user is in another app
+- **THEN** the Dock icon gets the breathing koivu ring as well as the badge
+
+#### Scenario: Back in tiili
+- **WHEN** the user brings a tiili window to the front
+- **THEN** the ring goes and, with no pane working and the icon following the system, the bundle icon shows again
+
+#### Scenario: Reduced motion ring
+- **WHEN** a pane is marked while tiili is in the background and the OS reduce-motion preference is on
+- **THEN** the ring shows at 80 % opacity and does not change
+
 ### Requirement: Asset catalog in step with the icon bundle
 Compiling the macOS app icon SHALL record a fingerprint of the Icon Composer bundle it compiled beside `Assets.car`. The icon check SHALL fail when the fingerprint is missing or differs from the committed bundle, so that the icon macOS shows at launch and while tiili is closed is always the current design.
 

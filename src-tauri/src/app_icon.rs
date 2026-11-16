@@ -10,6 +10,10 @@
 //! While any pane is working (see [`crate::working`]) the icon cycles the "Hot cursor" working frames of its variant
 //! every [`FRAME_INTERVAL`], or holds frame 0 when the OS asks for reduced motion. A ticker thread runs only then: it
 //! starts on output and, once nothing works, shows the normal icon and ends.
+//!
+//! On macOS, while a pane is marked for attention and no tiili window is in front (see [`crate::attention`]), a
+//! koivu ring breathes around the Dock icon's edge on top of whatever icon shows. The same ticker drives it, ticking
+//! every [`RING_TICK`] while the ring shows so the breathing is smooth; with reduced motion the ring holds still.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -122,6 +126,53 @@ pub fn pick(choice: IconChoice, variant: Variant, frame: Option<usize>, bundled:
     }
 }
 
+/// How often the ticker ticks while the attention ring shows: a quarter of [`FRAME_INTERVAL`], so the working
+/// frames keep their pace by moving on every [`TICKS_PER_FRAME`] ticks.
+pub const RING_TICK: Duration = Duration::from_millis(83);
+pub const TICKS_PER_FRAME: usize = 4;
+
+/// Ticks in one breath of the attention ring, about 3 seconds.
+pub const RING_TICKS: usize = 36;
+
+/// The attention ring's opacity range: it breathes between these, starting at the top.
+const RING_MIN: f64 = 0.35;
+const RING_MAX: f64 = 0.8;
+
+/// The attention ring's opacity at breathing step `step` (taken modulo [`RING_TICKS`]): a cosine from
+/// [`RING_MAX`] down to [`RING_MIN`] and back.
+pub fn ring_opacity(step: usize) -> f64 {
+    let phase = (step % RING_TICKS) as f64 / RING_TICKS as f64 * std::f64::consts::TAU;
+    let mid = (RING_MAX + RING_MIN) / 2.0;
+    mid + (RING_MAX - mid) * phase.cos()
+}
+
+/// Koivu, the attention ring's colour, as sRGB components.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const KOIVU: (f64, f64, f64) = (217.0 / 255.0, 164.0 / 255.0, 58.0 / 255.0);
+
+/// What the Dock shows: an icon, and the attention ring's breathing step when a pane wants the user.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shown {
+    pub icon: Icon,
+    pub ring: Option<usize>,
+}
+
+/// What to show for `choice` and its `variant`, given the working `frame`, the ring's breathing step `ring` (None
+/// when nothing asks for attention) and whether a bundle icon is there (`bundled`). The ring is drawn onto a
+/// run-time icon, so it never shows over the bundle icon: with a ring, the normal icon stands in for it.
+pub fn shown(
+    choice: IconChoice,
+    variant: Variant,
+    frame: Option<usize>,
+    ring: Option<usize>,
+    bundled: bool,
+) -> Shown {
+    Shown {
+        icon: pick(choice, variant, frame, bundled && ring.is_none()),
+        ring,
+    }
+}
+
 /// The user's current choice, kept so an OS appearance change can re-apply it.
 #[derive(Default)]
 pub struct IconState(Mutex<IconChoice>);
@@ -143,6 +194,8 @@ pub struct WorkingIcon {
     ticking: AtomicBool,
     /// The ticker's current tick, counting up from 0 each time it starts.
     tick: AtomicUsize,
+    /// Set while a pane wants the user and no tiili window is in front (macOS only).
+    attention: AtomicBool,
 }
 
 impl WorkingIcon {
@@ -152,6 +205,33 @@ impl WorkingIcon {
 
     fn any_working(&self) -> bool {
         self.with(|w| w.any_working(Instant::now()))
+    }
+
+    fn wants_attention(&self) -> bool {
+        self.attention.load(Ordering::SeqCst)
+    }
+
+    /// Whether the ticker has anything to animate.
+    fn active(&self) -> bool {
+        self.any_working() || self.wants_attention()
+    }
+}
+
+/// Shows or hides the breathing attention ring. Only macOS draws it; elsewhere this does nothing.
+pub fn set_attention<R: Runtime>(app: &AppHandle<R>, on: bool) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let Some(state) = app.try_state::<WorkingIcon>() else {
+        return;
+    };
+    if state.attention.swap(on, Ordering::SeqCst) == on {
+        return;
+    }
+    if on && !state.ticking.swap(true, Ordering::SeqCst) {
+        start_ticker(app.clone());
+    } else {
+        apply(app);
     }
 }
 
@@ -183,7 +263,8 @@ pub fn forget<R: Runtime>(app: &AppHandle<R>, id: crate::pty::SessionId) {
     }
 }
 
-/// Runs the ticker until nothing works: each tick shows the next working frame, then the normal icon at the end.
+/// Runs the ticker until nothing works and nothing wants attention: each tick shows the next working frame and ring
+/// step, then the plain icon at the end.
 fn start_ticker<R: Runtime>(app: AppHandle<R>) {
     let spawned = std::thread::Builder::new()
         .name("app-icon-ticker".into())
@@ -193,16 +274,22 @@ fn start_ticker<R: Runtime>(app: AppHandle<R>) {
                 let state = app.state::<WorkingIcon>();
                 state.tick.store(0, Ordering::SeqCst);
                 loop {
-                    if state.any_working() {
+                    if state.active() {
                         apply(&app);
-                        std::thread::sleep(FRAME_INTERVAL);
-                        state.tick.fetch_add(1, Ordering::SeqCst);
+                        // Tick fast only while the ring breathes; the working frames alone need a tick per frame.
+                        let (sleep, step) = if state.wants_attention() {
+                            (RING_TICK, 1)
+                        } else {
+                            (FRAME_INTERVAL, TICKS_PER_FRAME)
+                        };
+                        std::thread::sleep(sleep);
+                        state.tick.fetch_add(step, Ordering::SeqCst);
                         continue;
                     }
                     state.ticking.store(false, Ordering::SeqCst);
                     apply(&app);
-                    // Output that arrived while the ticker was stopping found it still running: carry on for it.
-                    if !state.any_working() || state.ticking.swap(true, Ordering::SeqCst) {
+                    // Output or a mark that arrived while the ticker was stopping found it still running: carry on.
+                    if !state.active() || state.ticking.swap(true, Ordering::SeqCst) {
                         return;
                     }
                 }
@@ -216,41 +303,59 @@ fn start_ticker<R: Runtime>(app: AppHandle<R>) {
 }
 
 /// Shows the icon that the stored choice and the OS appearance call for: its current working frame while a pane is
-/// working, else the normal icon.
+/// working, else the normal icon, with the attention ring while a pane wants the user.
 pub fn apply<R: Runtime>(app: &AppHandle<R>) {
     let choice = app
         .try_state::<IconState>()
         .map(|state| *state.0.lock().unwrap_or_else(|e| e.into_inner()))
         .unwrap_or_default();
     let variant = resolve(choice, os_theme(app), cfg!(target_os = "macos"));
-    let tick = app
+    let (tick, ring) = app
         .try_state::<WorkingIcon>()
-        .filter(|state| state.ticking.load(Ordering::SeqCst) && state.any_working())
-        .map(|state| state.tick.load(Ordering::SeqCst));
-    show(app, choice, variant, tick);
+        .map(|state| {
+            let tick = state
+                .ticking
+                .load(Ordering::SeqCst)
+                .then(|| state.tick.load(Ordering::SeqCst));
+            let working = tick.filter(|_| state.any_working());
+            let ring = state.wants_attention().then(|| tick.unwrap_or(0));
+            (working, ring)
+        })
+        .unwrap_or((None, None));
+    show(app, choice, variant, tick, ring);
 }
 
 /// The icon last shown, so a held frame is not set again on every tick.
-static SHOWN: Mutex<Option<Icon>> = Mutex::new(None);
+static SHOWN: Mutex<Option<Shown>> = Mutex::new(None);
 
-/// Shows the bundle icon, `variant`'s normal icon, or its working frame for `tick` when given (see [`pick`]). Runs on
-/// the main thread, where the reduce-motion preference is read and the icon set.
-fn show<R: Runtime>(app: &AppHandle<R>, choice: IconChoice, variant: Variant, tick: Option<usize>) {
+/// Shows the bundle icon, `variant`'s normal icon, or its working frame for `tick` when given, with the attention
+/// ring at the step for `ring` when given (see [`shown`]). Runs on the main thread, where the reduce-motion
+/// preference is read and the icon set.
+fn show<R: Runtime>(
+    app: &AppHandle<R>,
+    choice: IconChoice,
+    variant: Variant,
+    tick: Option<usize>,
+    ring: Option<usize>,
+) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        let frame = tick.map(|tick| frame_at(tick, reduce_motion()));
-        let icon = pick(choice, variant, frame, has_bundle_icon());
+        let reduce = reduce_motion();
+        let frame = tick.map(|tick| frame_at(tick / TICKS_PER_FRAME, reduce));
+        let ring = ring.map(|tick| if reduce { 0 } else { tick % RING_TICKS });
+        let next = shown(choice, variant, frame, ring, has_bundle_icon());
         {
-            let mut shown = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
-            if *shown == Some(icon) {
+            let mut last = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
+            if *last == Some(next) {
                 return;
             }
-            *shown = Some(icon);
+            *last = Some(next);
         }
-        match icon {
+        let ring = next.ring.map(ring_opacity);
+        match next.icon {
             Icon::Bundle => clear_icon(),
-            Icon::Normal(variant) => set_icon(&handle, variant.png()),
-            Icon::Working(variant, i) => set_icon(&handle, variant.frame(i)),
+            Icon::Normal(variant) => set_icon(&handle, variant.png(), ring),
+            Icon::Working(variant, i) => set_icon(&handle, variant.frame(i), ring),
         }
     });
 }
@@ -296,12 +401,22 @@ fn dock_inset(canvas: f64) -> (f64, f64) {
     ((canvas - side) / 2.0, side)
 }
 
+/// The attention ring's line width and corner radius for a tile of side `side`: 6 % of the tile, enough to read at
+/// Dock size, and the brand
+/// icon's 22.5 % corner less half the line, so the stroke sits just inside the tile's edge.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn ring_geometry(side: f64) -> (f64, f64) {
+    let width = side * 0.06;
+    (width, side * 0.225 - width / 2.0)
+}
+
 /// Sets the Dock icon. The icon is drawn onto a transparent canvas of its own size with the tile inset to the icon
-/// grid, so it is as big as the other apps' icons rather than filling the canvas edge to edge.
+/// grid, so it is as big as the other apps' icons rather than filling the canvas edge to edge. With `ring`, a koivu
+/// ring of that opacity is stroked round the tile's edge.
 #[cfg(target_os = "macos")]
-fn set_icon<R: Runtime>(_app: &AppHandle<R>, png: &'static [u8]) {
+fn set_icon<R: Runtime>(_app: &AppHandle<R>, png: &'static [u8], ring: Option<f64>) {
     use objc2::{AllocAnyThread, MainThreadMarker};
-    use objc2_app_kit::{NSApplication, NSCompositingOperation, NSImage};
+    use objc2_app_kit::{NSApplication, NSBezierPath, NSColor, NSCompositingOperation, NSImage};
     use objc2_foundation::{NSData, NSPoint, NSRect, NSSize};
 
     let Some(mtm) = MainThreadMarker::new() else {
@@ -328,13 +443,27 @@ fn set_icon<R: Runtime>(_app: &AppHandle<R>, png: &'static [u8]) {
             NSCompositingOperation::SourceOver,
             1.0,
         );
+        if let Some(alpha) = ring {
+            let (width, radius) = ring_geometry(side_x);
+            let inset = width / 2.0;
+            let rect = NSRect::new(
+                NSPoint::new(offset_x + inset, offset_y + inset),
+                NSSize::new(side_x - width, side_y - width),
+            );
+            let path =
+                NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, radius, radius);
+            path.setLineWidth(width);
+            let (r, g, b) = KOIVU;
+            NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, alpha).setStroke();
+            path.stroke();
+        }
         padded.unlockFocus();
     }
     unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&padded)) };
 }
 
 #[cfg(not(target_os = "macos"))]
-fn set_icon<R: Runtime>(app: &AppHandle<R>, png: &'static [u8]) {
+fn set_icon<R: Runtime>(app: &AppHandle<R>, png: &'static [u8], _ring: Option<f64>) {
     let Ok(image) = tauri::image::Image::from_bytes(png) else {
         return;
     };
@@ -452,6 +581,78 @@ mod tests {
                 "{choice:?} {variant:?} {frame:?} bundled {bundled}"
             );
         }
+    }
+
+    #[test]
+    fn ring_takes_the_dock_off_the_bundle_icon() {
+        use IconChoice as C;
+        use Variant as V;
+        // (choice, frame, ring, bundled, shown)
+        let cases = [
+            (C::System, None, None, true, Icon::Bundle, None),
+            (
+                C::System,
+                None,
+                Some(2),
+                true,
+                Icon::Normal(V::Dark),
+                Some(2),
+            ),
+            (
+                C::System,
+                Some(5),
+                Some(5),
+                true,
+                Icon::Working(V::Dark, 5),
+                Some(5),
+            ),
+            (C::Dark, None, Some(0), true, Icon::Normal(V::Dark), Some(0)),
+            (
+                C::System,
+                None,
+                Some(7),
+                false,
+                Icon::Normal(V::Dark),
+                Some(7),
+            ),
+        ];
+        for (choice, frame, ring, bundled, icon, expected_ring) in cases {
+            assert_eq!(
+                shown(choice, V::Dark, frame, ring, bundled),
+                Shown {
+                    icon,
+                    ring: expected_ring
+                },
+                "{choice:?} {frame:?} {ring:?} bundled {bundled}"
+            );
+        }
+    }
+
+    #[test]
+    fn ring_breathes_smoothly_between_its_bounds() {
+        assert!((ring_opacity(0) - RING_MAX).abs() < 1e-9);
+        assert!((ring_opacity(RING_TICKS / 2) - RING_MIN).abs() < 1e-9);
+        assert!((ring_opacity(RING_TICKS) - RING_MAX).abs() < 1e-9);
+        for i in 1..RING_TICKS {
+            let (a, b) = (ring_opacity(i - 1), ring_opacity(i));
+            assert!((a - b).abs() < 0.05, "step {i} jumps from {a} to {b}");
+            assert!((RING_MIN - 1e-9..=RING_MAX + 1e-9).contains(&b), "step {i}");
+        }
+    }
+
+    #[test]
+    fn ring_ticks_keep_the_working_frames_pace() {
+        assert_eq!(
+            RING_TICK * TICKS_PER_FRAME as u32,
+            Duration::from_millis(332)
+        );
+    }
+
+    #[test]
+    fn ring_geometry_for_an_824_tile() {
+        let (width, radius) = ring_geometry(824.0);
+        assert!((width - 49.44).abs() < 1e-9);
+        assert!((radius - (185.4 - 24.72)).abs() < 1e-9);
     }
 
     #[test]
