@@ -408,6 +408,9 @@ fn show_os(app: &AppHandle, marked: Option<SessionId>) {
         let _ = window.set_overlay_icon(icon);
     }
 
+    // The Dock icon's breathing ring shows while anything is marked and no tiili window is in front.
+    crate::app_icon::set_attention(app, !decision.cancel);
+
     if decision.cancel {
         for window in &main_windows {
             let _ = window.request_user_attention(None);
