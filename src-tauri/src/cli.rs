@@ -41,6 +41,13 @@ pub fn main(args: &[String]) -> ! {
     std::process::exit(code)
 }
 
+/// Refuses arguments that are not valid UTF-8 with a usage error, and exits with its code.
+pub fn refuse_non_utf8() -> ! {
+    attach_console();
+    let error = CliError::Usage("arguments must be valid UTF-8".to_string());
+    std::process::exit(report(&error, &mut io::stderr().lock()))
+}
+
 /// Runs `tiili ARGS` (without the program name) with the variables `env` reads, from folder `cwd`, printing to
 /// `out` and `err`; returns the exit code. A failure prints `tiili: <message>` and `hint: <suggestion>` on `err`
 /// and exits with its [`CliError`] code; asked for JSON, it also prints the error as JSON on `out`.

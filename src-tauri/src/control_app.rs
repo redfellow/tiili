@@ -557,14 +557,9 @@ fn shell_join(argv: &[String]) -> String {
         .join(" ")
 }
 
-/// What `<bin>/tiili.cmd` holds on Windows: it runs `exe` with the arguments it was given.
-#[cfg(windows)]
-fn windows_shim(exe: &Path) -> String {
-    format!("@\"{}\" %*\r\n", exe.display())
-}
-
-/// Puts `tiili` in `bin`: a link to `exe` on macOS and Linux, a `tiili.cmd` running it on Windows. An existing one
-/// is replaced, so it follows the app when it moves.
+/// Puts `tiili` in `bin`: a link to `exe` on macOS and Linux, a hard link to (or, across volumes, a copy of) `exe`
+/// named `tiili.exe` on Windows, so no shell re-parses its arguments. An existing one is replaced, so it follows the
+/// app when it moves or updates.
 fn install_cli(bin: &Path, exe: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(bin)?;
     #[cfg(unix)]
@@ -580,7 +575,22 @@ fn install_cli(bin: &Path, exe: &Path) -> std::io::Result<()> {
     }
     #[cfg(windows)]
     {
-        std::fs::write(bin.join("tiili.cmd"), windows_shim(exe))
+        // A `tiili.cmd` from an earlier version: cmd.exe re-parsed its arguments.
+        let _ = std::fs::remove_file(bin.join("tiili.cmd"));
+        let target = bin.join("tiili.exe");
+        if let (Ok(have), Ok(want)) = (std::fs::metadata(&target), std::fs::metadata(exe)) {
+            if have.len() == want.len() && have.modified().ok() == want.modified().ok() {
+                return Ok(());
+            }
+        }
+        let fresh = bin.join(format!(".tiili-{}.exe", std::process::id()));
+        let _ = std::fs::remove_file(&fresh);
+        if std::fs::hard_link(exe, &fresh).is_err() {
+            std::fs::copy(exe, &fresh)?;
+        }
+        std::fs::rename(&fresh, &target).inspect_err(|_| {
+            let _ = std::fs::remove_file(&fresh);
+        })
     }
 }
 

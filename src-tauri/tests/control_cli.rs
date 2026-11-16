@@ -97,6 +97,30 @@ fn outside_tiili_and_bad_arguments_fail_with_a_code() {
     );
 }
 
+/// Usage errors: an argument that is not valid UTF-8 is refused with a usage error, not a crash.
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_argument_is_a_usage_error() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let out = Command::new(TIILI)
+        .args([OsStr::new("attention"), OsStr::from_bytes(b"bad\xff")])
+        .env_remove("TIILI_SOCKET")
+        .env_remove("TIILI_TOKEN")
+        .env_remove("TIILI_PANE")
+        .output()
+        .expect("tiili runs");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.lines().next(),
+        Some("tiili: arguments must be valid UTF-8"),
+        "{stderr}"
+    );
+}
+
 #[cfg(unix)]
 mod listener {
     use std::sync::{Arc, Mutex};
