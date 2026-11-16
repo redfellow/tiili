@@ -5,3 +5,12 @@ x-harvaaja-card: e32ef535-442f-4c40-b886-7cfa3f65ca96
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds a new observable contract (working app icon) to packaging; no
+    active change shares this intent.
+  citations:
+    - "openspec/specs/packaging/spec.md: Requirement: Complete icon set"
+    - src-tauri/src/app_icon.rs
+    - scripts/icons.mjs
+  revision: 5ebfa7a9-7987-464d-850b-9beee443d7f7
