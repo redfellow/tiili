@@ -33,7 +33,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use pty::{PaneCommand, SessionId, SessionRegistry};
-use sink::SessionSinks;
+use sink::{FlowGate, FlowGates, SessionSinks};
 use tints::Tints;
 use windows::WindowSessions;
 
@@ -163,11 +163,13 @@ fn owner_of(app: &AppHandle, id: SessionId, spawner: &str) -> String {
         .unwrap_or_else(|| spawner.to_string())
 }
 
-/// Session `id` has ended: it leaves its window, the tint counts, its sink and its reports.
+/// Session `id` has ended: it leaves its window, the tint counts, its sink, its flow gate (releasing its reader) and
+/// its reports.
 fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<WindowSessions>().remove(id);
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
+    app.state::<FlowGates>().remove(id);
     app.state::<SessionReports>().forget(id);
     app.state::<control_app::PaneOpens>().forget(id);
     app.state::<control_app::PaneOwners>().forget(id);
@@ -209,6 +211,8 @@ fn pty_spawn(
         let _ = on_output.send(data.to_vec());
     }));
     let output_sink = std::sync::Arc::clone(&sink);
+    let gate = FlowGate::new();
+    let output_gate = std::sync::Arc::clone(&gate);
     // A shell that ends before it is registered below is forgotten before the registration, so it
     // is forgotten again after it.
     let exited = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -222,9 +226,12 @@ fn pty_spawn(
             rows,
             cols,
             Box::new(move |_id, data| {
+                // Outside the sink lock, so pty_detach and pty_attach never wait behind a held-back reader.
+                output_gate.wait();
                 if let Ok(mut sink) = output_sink.lock() {
                     sink.write(data);
                 }
+                output_gate.sent(data.len());
             }),
             Some(Box::new(move |id, at| {
                 let event = PaneCwdEvent::new(id, at, &cwd_app.state::<Tints>());
@@ -250,6 +257,7 @@ fn pty_spawn(
         )
         .map_err(|e| format!("Could not start the shell: {e}"))?;
     window.state::<SessionSinks>().add(id, sink);
+    window.state::<FlowGates>().add(id, gate);
     window.state::<WindowSessions>().add(&label, id);
     if exited.load(std::sync::atomic::Ordering::SeqCst) {
         forget_session(window.app_handle(), id);
@@ -257,10 +265,19 @@ fn pty_spawn(
     Ok(id)
 }
 
-/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`.
+/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`. The old terminal never
+/// acknowledges again, so the flow gate counts from zero: what is kept from now is acknowledged by the new window.
 #[tauri::command]
-fn pty_detach(sinks: State<'_, SessionSinks>, id: SessionId) -> Result<(), String> {
-    sinks.detach(id)
+fn pty_detach(
+    sinks: State<'_, SessionSinks>,
+    gates: State<'_, FlowGates>,
+    id: SessionId,
+) -> Result<(), String> {
+    sinks.detach(id)?;
+    if let Some(gate) = gates.get(id) {
+        gate.reset();
+    }
+    Ok(())
 }
 
 /// Session `id`'s pane has arrived in the calling window: the session belongs to it, the output kept since
@@ -322,6 +339,15 @@ fn pty_close(
     sessions.close(id).map_err(text)
 }
 
+/// The calling window's terminal has drawn `bytes` more of session `id`'s output; a reader held back for it reads
+/// on. Does nothing for an ended session.
+#[tauri::command]
+fn pty_ack(gates: State<'_, FlowGates>, id: SessionId, bytes: usize) {
+    if let Some(gate) = gates.get(id) {
+        gate.ack(bytes);
+    }
+}
+
 /// The prompt choice changed (picked, saved, cancelled or saved in another window): new shells and the open local
 /// zsh, bash and PowerShell shells follow it; an idle zsh redraws its prompt at once.
 #[tauri::command]
@@ -345,6 +371,7 @@ fn window_destroyed(app: &AppHandle, label: &str) {
         app.state::<control_app::PaneOpens>().forget(id);
         app.state::<control_app::PaneOwners>().forget(id);
         attention::forget(app, id);
+        app.state::<FlowGates>().remove(id);
         let _ = registry.close(id);
     }
     app.state::<windows::LastFocused>().forget(label);
@@ -555,6 +582,7 @@ pub fn run() {
         .manage(windows::WindowNames::default())
         .manage(windows::PendingMoves::default())
         .manage(SessionSinks::default())
+        .manage(FlowGates::default())
         .manage(SessionReports::default())
         .manage(MoveMenu::default())
         .manage(attention::Attention::default())
@@ -655,6 +683,7 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_close,
+            pty_ack,
             pty_cwd,
             pty_running,
             pty_set_prompt,

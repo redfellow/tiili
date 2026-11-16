@@ -599,7 +599,7 @@ export class Panes {
         payload.scrollback = await terminal.serialize();
         await moves.move(target, payload);
       } catch (error) {
-        await moves.attach(session, (bytes) => terminal.term.write(bytes)).catch(() => undefined);
+        await moves.attach(session, (bytes) => terminal.output(bytes)).catch(() => undefined);
         throw error;
       }
     }
@@ -657,7 +657,7 @@ export class Panes {
     } catch (error) {
       await Promise.all(
         detached.map(({ session, terminal }) =>
-          moves.attach(session, (bytes) => terminal.term.write(bytes)).catch(() => undefined),
+          moves.attach(session, (bytes) => terminal.output(bytes)).catch(() => undefined),
         ),
       );
       throw error;
