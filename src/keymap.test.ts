@@ -5,6 +5,7 @@ import {
   clipboardAction,
   findAction,
   layoutAction,
+  lineEditInput,
   paneAction,
   settingsShortcut,
   tabAction,
@@ -335,5 +336,30 @@ describe("zenAction", () => {
       expect(zoomAction(event, platform)).toBeNull();
       expect(findAction(event, platform)).toBeNull();
     }
+  });
+});
+
+const lineEditCases: [string, Platform, KeyChord, string | null][] = [
+  ["Command and Option arrows edit the line: ⌘← sends ^A", "macos", chord("ArrowLeft", { metaKey: true }), "\x01"],
+  ["Command and Option arrows edit the line: ⌘→ sends ^E", "macos", chord("ArrowRight", { metaKey: true }), "\x05"],
+  ["Command and Option arrows edit the line: ⌥← sends ESC b", "macos", chord("ArrowLeft", { altKey: true }), "\x1bb"],
+  ["Command and Option arrows edit the line: ⌥→ sends ESC f", "macos", chord("ArrowRight", { altKey: true }), "\x1bf"],
+  ["Command and Option arrows edit the line: ⌘⌫ sends ^U", "macos", chord("Backspace", { metaKey: true }), "\x15"],
+  ["Command and Option arrows edit the line: ⌥⌫ sends ^W", "macos", chord("Backspace", { altKey: true }), "\x17"],
+  ["Layout keys and other platforms untouched: ⌃⌘← passes through", "macos", chord("ArrowLeft", { ctrlKey: true, metaKey: true }), null],
+  ["Layout keys and other platforms untouched: ⇧⌘← passes through", "macos", chord("ArrowLeft", { shiftKey: true, metaKey: true }), null],
+  ["Layout keys and other platforms untouched: ⇧⌥← passes through", "macos", chord("ArrowLeft", { shiftKey: true, altKey: true }), null],
+  ["Layout keys and other platforms untouched: ⌘⌥← passes through", "macos", chord("ArrowLeft", { metaKey: true, altKey: true }), null],
+  ["Layout keys and other platforms untouched: plain ← passes through", "macos", chord("ArrowLeft"), null],
+  ["Layout keys and other platforms untouched: ⌘↑ passes through", "macos", chord("ArrowUp", { metaKey: true }), null],
+  ["Layout keys and other platforms untouched: Ctrl+← on Windows", "windows", chord("ArrowLeft", { ctrlKey: true }), null],
+  ["Layout keys and other platforms untouched: Alt+← on Windows", "windows", chord("ArrowLeft", { altKey: true }), null],
+  ["Layout keys and other platforms untouched: Ctrl+← on Linux", "linux", chord("ArrowLeft", { ctrlKey: true }), null],
+  ["Layout keys and other platforms untouched: Alt+← on Linux", "linux", chord("ArrowLeft", { altKey: true }), null],
+];
+
+describe("lineEditInput", () => {
+  it.each(lineEditCases)("%s", (_name, platform, event, expected) => {
+    expect(lineEditInput(event, platform)).toBe(expected);
   });
 });

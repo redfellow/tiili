@@ -55,6 +55,24 @@ if (( ${#_tiili_highlight_contexts} )); then
   add-zsh-hook precmd _tiili_apply_highlight
 fi
 
+# Home, End and the Ctrl/Alt word moves: stock zsh binds none of them. Each is bound in the emacs and viins keymaps
+# only where the user's files left it unbound, so their own bindings stay.
+() {
+  emulate -L zsh
+  local map seq
+  local -A widgets=(
+    '^[[H' beginning-of-line '^[OH' beginning-of-line
+    '^[[F' end-of-line '^[OF' end-of-line
+    '^[[1;3D' backward-word '^[[1;5D' backward-word
+    '^[[1;3C' forward-word '^[[1;5C' forward-word
+  )
+  for map in emacs viins; do
+    for seq in ${(k)widgets}; do
+      [[ $(bindkey -M $map $seq 2>/dev/null) == (|*' undefined-key') ]] && bindkey -M $map $seq $widgets[$seq]
+    done
+  done
+}
+
 # Report the folder with OSC 7 before every prompt, whichever prompt is shown, so tiili knows this pane is local.
 _tiili_osc7() {
   local _tiili_status=$?

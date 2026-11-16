@@ -71,6 +71,19 @@ _tiili_apply_highlight() {
 }
 if [ -n "$_tiili_highlights" ]; then _tiili_apply_highlight; fi
 
+# Ctrl/Alt+arrows move by a word, unless the user's inputrc or startup files bound them already. Only where readline
+# edits the line: an interactive shell with emacs or vi editing on.
+if [[ $- == *i* ]] && { [[ -o emacs ]] || [[ -o vi ]]; }; then
+  _tiili_bound=$(bind -p 2>/dev/null)
+  for _tiili_key in '\e[1;5D:backward-word' '\e[1;3D:backward-word' '\e[1;5C:forward-word' '\e[1;3C:forward-word'; do
+    case $_tiili_bound in
+      *"\"${_tiili_key%%:*}\": "*) ;;
+      *) bind "\"${_tiili_key%%:*}\": ${_tiili_key#*:}" ;;
+    esac
+  done
+  unset _tiili_bound _tiili_key
+fi
+
 # Report the folder with OSC 7 before every prompt, whichever prompt is shown, so tiili knows this pane is local, and
 # follow the prompt choice and the paste colour where this shell does. It runs first and keeps $? for the user's own
 # prompt commands.
