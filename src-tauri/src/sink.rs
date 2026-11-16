@@ -2,7 +2,8 @@
 //! window, a buffer that keeps it until the pane's new target attaches. No Tauri types, so it tests without a window.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 use crate::pty::SessionId;
 
@@ -96,9 +97,100 @@ impl SessionSinks {
     }
 }
 
+/// Unacknowledged output, in bytes, at which a session's reader stops until the terminal catches up.
+pub const FLOW_HIGH: usize = 1 << 20;
+
+/// A session's output flow control: counts bytes sent but not yet acknowledged by the terminal, and holds the reader
+/// back while [`FLOW_HIGH`] of them are pending, until acknowledged or [`close`](Self::close)d.
+pub struct FlowGate {
+    unacked: Mutex<usize>,
+    closed: AtomicBool,
+    cv: Condvar,
+}
+
+impl FlowGate {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            unacked: Mutex::new(0),
+            closed: AtomicBool::new(false),
+            cv: Condvar::new(),
+        })
+    }
+
+    /// `n` more bytes have been sent to the terminal.
+    pub fn sent(&self, n: usize) {
+        if let Ok(mut unacked) = self.unacked.lock() {
+            *unacked = unacked.saturating_add(n);
+        }
+    }
+
+    /// Blocks while [`FLOW_HIGH`] or more bytes are unacknowledged and the gate is open.
+    pub fn wait(&self) {
+        let Ok(mut unacked) = self.unacked.lock() else {
+            return;
+        };
+        while *unacked >= FLOW_HIGH && !self.closed.load(Ordering::SeqCst) {
+            unacked = match self.cv.wait(unacked) {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
+        }
+    }
+
+    /// The terminal has drawn `n` bytes.
+    pub fn ack(&self, n: usize) {
+        if let Ok(mut unacked) = self.unacked.lock() {
+            *unacked = unacked.saturating_sub(n);
+        }
+        self.cv.notify_all();
+    }
+
+    /// The terminal that was to acknowledge the pending bytes has let go of the session and never will: counting
+    /// starts again from zero, and a waiting reader reads on.
+    pub fn reset(&self) {
+        if let Ok(mut unacked) = self.unacked.lock() {
+            *unacked = 0;
+        }
+        self.cv.notify_all();
+    }
+
+    /// The session is going away: releases a waiting reader, and [`wait`](Self::wait) never blocks again.
+    pub fn close(&self) {
+        // Under the lock, so a reader between its check and its wait cannot miss the wake-up.
+        let _guard = self.unacked.lock();
+        self.closed.store(true, Ordering::SeqCst);
+        self.cv.notify_all();
+    }
+}
+
+/// Every session's flow gate, by session id.
+#[derive(Default)]
+pub struct FlowGates(Mutex<HashMap<SessionId, Arc<FlowGate>>>);
+
+impl FlowGates {
+    pub fn add(&self, id: SessionId, gate: Arc<FlowGate>) {
+        if let Ok(mut map) = self.0.lock() {
+            map.insert(id, gate);
+        }
+    }
+
+    pub fn get(&self, id: SessionId) -> Option<Arc<FlowGate>> {
+        self.0.lock().ok().and_then(|map| map.get(&id).cloned())
+    }
+
+    /// Session `id` has ended: its gate goes, closed so its reader is not left waiting.
+    pub fn remove(&self, id: SessionId) {
+        let gate = self.0.lock().ok().and_then(|mut map| map.remove(&id));
+        if let Some(gate) = gate {
+            gate.close();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     /// A target recording what it receives in `log`.
     fn recorder(log: &Arc<Mutex<Vec<u8>>>) -> SinkTarget {
@@ -185,5 +277,49 @@ mod tests {
         sinks.remove(7);
         assert!(sinks.detach(7).is_err());
         assert!(sinks.attach(8, recorder(&second)).is_err());
+    }
+
+    /// Starts a thread that waits on `gate` and reports on the returned receiver when the wait returns.
+    fn waiter(gate: &Arc<FlowGate>) -> std::sync::mpsc::Receiver<()> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let gate = Arc::clone(gate);
+        std::thread::spawn(move || {
+            gate.wait();
+            let _ = tx.send(());
+        });
+        rx
+    }
+
+    #[test]
+    fn flow_gate_wait_returns_at_once_below_the_high_mark() {
+        let gate = FlowGate::new();
+        gate.sent(FLOW_HIGH - 1);
+        let done = waiter(&gate);
+        assert!(done.recv_timeout(Duration::from_secs(5)).is_ok());
+    }
+
+    type Release = fn(&FlowGates, &FlowGate);
+
+    #[test]
+    fn flow_gate_waiter_at_the_high_mark_wakes_on_ack_reset_or_close() {
+        let release: [(&str, Release); 4] = [
+            ("ack", |_, gate| gate.ack(1)),
+            ("reset on detach", |_, gate| gate.reset()),
+            ("close", |_, gate| gate.close()),
+            ("removed from the map", |gates, _| gates.remove(1)),
+        ];
+        for (name, release) in release {
+            let gates = FlowGates::default();
+            let gate = FlowGate::new();
+            gates.add(1, Arc::clone(&gate));
+            gate.sent(FLOW_HIGH);
+            let done = waiter(&gate);
+            assert!(
+                done.recv_timeout(Duration::from_millis(100)).is_err(),
+                "{name}: blocked before release"
+            );
+            release(&gates, &gate);
+            assert!(done.recv_timeout(Duration::from_secs(5)).is_ok(), "{name}");
+        }
     }
 }

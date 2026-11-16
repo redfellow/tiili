@@ -26,6 +26,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
+# The settings window's "unsaved changes" message box.
+tauri-plugin-dialog = "2"
 # The control channel's per-run token (src/control.rs).
 getrandom = "0.3"
 
@@ -35,6 +37,12 @@ getrandom = "0.3"
 # bundler puts every binary of the package into the installers and the bridge must never reach users.
 default = ["dev-bridge"]
 dev-bridge = ["dep:tungstenite"]
+
+# `tiili <command>` as a console program (src/bin/tiili-cli.rs): on Windows the app installs it as `bin\tiili.exe`,
+# so shells wait for it and see its exit code.
+[[bin]]
+name = "tiili-cli"
+path = "src/bin/tiili-cli.rs"
 
 [[bin]]
 name = "dev-bridge"
@@ -50,14 +58,18 @@ required-features = ["dev-bridge"]
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# The OS reduce-motion preference for the working app icon (src/app_icon.rs); tauri already depends on this version.
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+gtk = "0.18"
+
 # The control channel's named pipe and the console of `tiili <subcommand>` (src/control_server.rs, src/cli.rs):
-# release builds are GUI-subsystem apps, which start without one.
+# release builds are GUI-subsystem apps, which start without one. The reduce-motion preference (src/app_icon.rs).
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Console", "Win32_System_IO", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Console", "Win32_System_IO", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.14"
 # Swapping the Dock icon at run time (src/app_icon.rs); tauri already depends on these versions.
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSImage"] }
+objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSApplication", "NSImage", "NSWorkspace"] }
 objc2-foundation = { version = "0.3", features = ["NSData"] }

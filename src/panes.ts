@@ -141,7 +141,7 @@ export class Panes {
     private readonly platform: Platform,
     private readonly settings: () => Settings,
     private readonly openSettings: () => void,
-    private readonly saveSettings: (next: Settings) => Promise<void>,
+    private readonly saveZenWidth: (columns: number) => Promise<void>,
   ) {
     this.tabHooks = {
       rendered: () => {
@@ -171,7 +171,7 @@ export class Panes {
   /**
    * Sets up the panes in `root`, with the menus and shortcuts that act on them. Every pane is styled by
    * `settings()`; the settings shortcut and the right-click menu's Settings… item call `openSettings`, and a Zen
-   * edge drag saves the new Zen width through `saveSettings`. Shells, clipboard, menus and the window come from
+   * edge drag saves the new Zen width through `saveZenWidth`. Shells, clipboard, menus and the window come from
    * `backend`.
    */
   static async create(
@@ -180,9 +180,9 @@ export class Panes {
     platform: Platform,
     settings: () => Settings,
     openSettings: () => void,
-    saveSettings: (next: Settings) => Promise<void>,
+    saveZenWidth: (columns: number) => Promise<void>,
   ): Promise<Panes> {
-    const panes = new Panes(backend, root, platform, settings, openSettings, saveSettings);
+    const panes = new Panes(backend, root, platform, settings, openSettings, saveZenWidth);
     await backend.onAppEvent(PANE_CWD_EVENT, (place) => panes.onCwd(place));
     await backend.onAppEvent(PANE_COMMAND_EVENT, (command) => panes.onCommand(command));
     if (backend.attention) {
@@ -599,7 +599,7 @@ export class Panes {
         payload.scrollback = await terminal.serialize();
         await moves.move(target, payload);
       } catch (error) {
-        await moves.attach(session, (bytes) => terminal.term.write(bytes)).catch(() => undefined);
+        await moves.attach(session, (bytes) => terminal.output(bytes)).catch(() => undefined);
         throw error;
       }
     }
@@ -617,45 +617,58 @@ export class Panes {
     const tab = this.tabs[index];
     if (!moves || !tab || this.tabs.length === 1) return;
     const panes = [...tab.panes];
+    const focusedPane = panes[tab.focused];
     const detached: { session: SessionId; terminal: PaneTerminal }[] = [];
+    const moved: Pane[] = [];
+    const skipped: Pane[] = [];
     try {
       const payloads: PaneMovePayload[] = [];
+      let focused = 0;
       for (const pane of panes) {
+        if (pane === focusedPane) focused = payloads.length;
         if (pane.note) {
           pane.note.flush();
           payloads.push({ kind: "heynote" });
+          moved.push(pane);
           continue;
         }
         const terminal = pane.terminal;
         const session = terminal?.session();
-        // A pane whose shell has not started yet has nothing to move; it closes with the tab.
-        if (!terminal || session === undefined) continue;
+        // A pane whose shell has not started yet has nothing to move; it is closed once the tab has moved.
+        if (!terminal || session === undefined) {
+          if (pane === focusedPane) focused = 0;
+          skipped.push(pane);
+          continue;
+        }
         // Output from here on waits in the core, so none lands after the scrollback is read and none is lost.
         await moves.detach(session);
         detached.push({ session, terminal });
         payloads.push({ kind: "terminal", session, scrollback: await terminal.serialize(), zoom: pane.zoom });
+        moved.push(pane);
       }
       const { colSizes, rowSizes } = tab.layout;
       await moves.move(undefined, {
         kind: "tab",
         name: tab.name,
         layout: { colSizes, rowSizes },
-        focused: Math.max(0, tab.focused),
+        focused,
         panes: payloads,
       });
     } catch (error) {
       await Promise.all(
         detached.map(({ session, terminal }) =>
-          moves.attach(session, (bytes) => terminal.term.write(bytes)).catch(() => undefined),
+          moves.attach(session, (bytes) => terminal.output(bytes)).catch(() => undefined),
         ),
       );
       throw error;
     }
     // The panes keep their attention marks: they go with them to the new window ("Mark moves").
-    for (const pane of panes) {
+    for (const pane of moved) {
       this.remove(pane);
       pane.terminal?.detach();
     }
+    // A pane still opening ends here, its shell with it, once that shell has started.
+    await Promise.all(skipped.map((pane) => this.close(pane)));
   }
 
   /**
@@ -1238,9 +1251,8 @@ export class Panes {
 
   /** Saves `columns` as the Zen width when it changed, which every window then uses. */
   private async saveZenColumns(columns: number): Promise<void> {
-    const settings = this.settings();
-    if (columns === settings.zen.width) return;
-    await this.saveSettings({ ...settings, zen: { ...settings.zen, width: columns } });
+    if (columns === this.settings().zen.width) return;
+    await this.saveZenWidth(columns);
   }
 
   /**
@@ -1363,9 +1375,18 @@ export class Panes {
     return false;
   }
 
+  /**
+   * Shows `error`: in the focused pane's terminal, else the first pane's that has one, else the console. Only
+   * with no panes at all does it take the window's place.
+   */
   private report(error: unknown): void {
-    const term = this.current()?.terminal?.term;
+    const panes = this.allPanes();
+    if (panes.length === 0) {
+      this.root.textContent = `tiili could not start the terminal: ${String(error)}`;
+      return;
+    }
+    const term = this.current()?.terminal?.term ?? panes.find((pane) => pane.terminal)?.terminal?.term;
     if (term) term.write(`\r\n${String(error)}\r\n`);
-    else this.root.textContent = `tiili could not start the terminal: ${String(error)}`;
+    else console.error(error);
   }
 }

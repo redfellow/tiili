@@ -1,0 +1,13 @@
+format: 1
+slug: spacing-token-lint-errors-in-site-index
+title: Spacing token lint errors in site/index.html (8px and 12px hardcoded values)
+x-harvaaja-card: 2465b7cd-21ae-4f5d-b343-bad11957357c
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: chore
+  rationale: "Chore: built without a plan"
+  citations:
+    - The user pressed Build on this chore
+  revision: d1a51dc9-5a5e-4c02-bf06-3a94abb40efe

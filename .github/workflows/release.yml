@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           # The notes need the earlier tags and main's history since the previous release.
           fetch-depth: 0
       # The version comes from the tag, not from package.json: releases do not commit version bumps.
@@ -44,17 +45,25 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # stable
+        with:
+          toolchain: stable
       - name: Linux dependencies
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
             libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: npm ci
+      - name: Stamp the version from the tag
+        shell: bash
+        run: node scripts/stamp-version.mjs "$GITHUB_REF_NAME"
       - name: Signing variables from secrets that are set
         if: matrix.os == 'macos-latest'
         shell: bash
@@ -76,10 +85,6 @@ jobs:
               } >> "$GITHUB_ENV"
             fi
           done
-      - run: npm ci
-      - name: Stamp the version from the tag
-        shell: bash
-        run: node scripts/stamp-version.mjs "$GITHUB_REF_NAME"
       - name: Updater signing key
         shell: bash
         env:
@@ -120,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*

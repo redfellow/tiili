@@ -1,0 +1,2 @@
+## Approach
+Reuse `existing()` and `inspect` for `file://` links so one reveal-only rule covers both OSC 8 links and printed paths. Host locality uses exact match on the parsed URL host, not the first-label rule OSC 7 needs, because a link is untrusted input that picks the host. UNC/device prefixes are rejected from `to_file_path()`'s first component (Windows only in practice). The extension lists stay as `matches!` arms in `is_reveal_only`.

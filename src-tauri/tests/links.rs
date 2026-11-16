@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use tiili_lib::links::{classify_url_on, resolve_path_on, strip_line_suffix, Os, UrlRule};
 
-/// Scheme rules: http, https and mailto open; forbidden schemes and file:// on another host never do; the rest ask.
+/// Remote file host: UNC and look-alike hosts never open. Scheme rules: http, https and mailto open; forbidden schemes and file:// on another host never do; the rest ask.
 #[test]
 fn scheme_rules() {
     let cases = [
@@ -17,7 +17,12 @@ fn scheme_rules() {
         ("ssh://host", UrlRule::Confirm),
         ("file:///Users/me/notes.txt", UrlRule::Confirm),
         ("file://localhost/etc/hosts", UrlRule::Confirm),
-        ("file://mac/etc/hosts", UrlRule::Confirm),
+        ("file://mac.local/etc/hosts", UrlRule::Confirm),
+        ("file://MAC.local/etc/hosts", UrlRule::Confirm),
+        ("file://mac/etc/hosts", UrlRule::Deny),
+        ("file://mac.attacker.example/x", UrlRule::Deny),
+        ("file:////attacker/share/x.exe", UrlRule::Deny),
+        ("file://///attacker/share/x.exe", UrlRule::Deny),
         ("file://elsewhere/etc/hosts", UrlRule::Deny),
         ("javascript:alert(1)", UrlRule::Deny),
         ("JavaScript:alert(1)", UrlRule::Deny),
@@ -100,6 +105,7 @@ fn path_resolution() {
     scratch.file("home/notes.txt");
     scratch.file("project/tool.exe");
     scratch.file("project/launch.desktop");
+    scratch.file("project/notes.terminal");
     let script = scratch.file("project/build.sh");
     make_executable(&script);
     fs::create_dir_all(cwd.join("App.app")).unwrap();
@@ -160,6 +166,11 @@ fn path_resolution() {
             Some((abs("project/App.app"), true, true)),
         ),
         ("C:\\nowhere\\file.rs", Os::MacOs, None),
+        (
+            "notes.terminal",
+            Os::MacOs,
+            Some((abs("project/notes.terminal"), false, true)),
+        ),
     ];
     for (text, os, expected) in cases {
         let got =

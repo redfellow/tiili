@@ -175,6 +175,9 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     onAppEvent: async () => undefined,
     loadSettings: async () => null,
     saveSettings: async () => undefined,
+    // No native message box with a Save button here: OK discards, Cancel keeps editing.
+    confirmUnsaved: async () =>
+      window.confirm("You have unsaved settings changes. Discard them?") ? "discard" : "keep",
     setAppIcon: async () => undefined,
     // The dev server has no files of its own for notes: the browser keeps them.
     notes: localNoteStore(localStorage),

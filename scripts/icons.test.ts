@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ICON_NAME, iconJson, splitIcon, srgb } from "./app-icon.mjs";
+import { DARK_MIX, ICON_NAME, iconJson, LIGHT_BLOOM, splitIcon, srgb, workingSvg } from "./app-icon.mjs";
 
 const iconsDir = resolve(__dirname, "../src-tauri/icons");
 const logoDir = resolve(__dirname, "../docs/brand/logo");
@@ -49,6 +49,10 @@ const REQUIRED: Record<string, [file: string, size: number | null][]> = {
   "Run time": [
     ["app-light.png", 512],
     ["app-dark.png", 512],
+    // The "Hot cursor" frames the app cycles while a pane is working.
+    ...(["light", "dark"] as const).flatMap((variant) =>
+      LIGHT_BLOOM.map((_, frame): [string, number] => [`app-${variant}-working-${frame}.png`, 512]),
+    ),
   ],
 };
 
@@ -141,5 +145,39 @@ describe("Appearance icon check: the macOS bundle icon has a light and a dark ap
     );
     // Tauri takes CFBundleIconName from the first flat icon image.
     expect(renditions.find((r) => r.AssetType === "Icon Image")?.Name).toBe(ICON_NAME);
+  });
+});
+
+describe("Frame set check: workingSvg heats the cursor and leaves the brick and chevron alone", () => {
+  const sources = {
+    light: readFileSync(join(logoDir, "icon-light.svg"), "utf8"),
+    dark: readFileSync(join(logoDir, "icon-dark.svg"), "utf8"),
+  };
+  const cursorFill = (svg: string) => svg.match(/<rect x="27\.015" y="24\.74"[^>]*fill="(#[0-9A-F]{6})"/)?.[1];
+  const bloomOpacity = (svg: string) => Number(svg.match(/<rect [^>]*opacity="([\d.]+)" filter="url\(#bloom\)"/)?.[1]);
+  const brickAndChevron = (svg: string) => [
+    svg.match(/<g filter="url\(#drop\)">.*?<\/g>/)?.[0],
+    svg.match(/<path [^>]*\/>/)?.[0],
+  ];
+
+  // [variant, frame, cursor fill, bloom opacity]
+  const cases: ["light" | "dark", number, string, number][] = [
+    ["light", 0, "#D9A43A", 0.95],
+    ["light", 4, "#D9A43A", 0.5],
+    ["light", 7, "#D9A43A", 0.82],
+    ["dark", 0, "#F6F1E9", 0.665],
+    ["dark", 3, "#EAD2A3", 0.448],
+    ["dark", 4, "#E6C789", 0.35],
+  ];
+
+  it.each(cases)("%s frame %i: cursor %s, bloom opacity %f", (variant, frame, fill, opacity) => {
+    const svg = workingSvg(sources[variant], variant, frame);
+    expect(cursorFill(svg)).toBe(fill);
+    expect(bloomOpacity(svg)).toBeCloseTo(opacity, 3);
+    expect(brickAndChevron(svg)).toEqual(brickAndChevron(sources[variant]));
+  });
+
+  it("has 8 frames for each variant", () => {
+    expect([LIGHT_BLOOM.length, DARK_MIX.length]).toEqual([8, 8]);
   });
 });

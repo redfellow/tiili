@@ -1,0 +1,3 @@
+- [x] 1.1 Factor the release table's function-pointer type in `src-tauri/src/sink.rs` tests into a `type` alias so clippy's type_complexity passes
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --lib --tests -- -D warnings`
+  - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
