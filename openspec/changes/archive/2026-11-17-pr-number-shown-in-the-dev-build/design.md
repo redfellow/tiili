@@ -1,0 +1,2 @@
+## Approach
+`vite.config.ts` runs `execFileSync("gh", ["pr", "view", "--json", "number", "-q", ".number"], {timeout: 5000})` only when the app version contains `-`; any error or non-numeric output yields `""`. Defined as `__APP_PR__`, declared in `src/globals.d.ts`, exported as `APP_PR` from `src/version.ts`. A pure helper `settingsVersionLabel(label, pr)` in `src/version.ts` builds the footer text; settingsDialog.ts uses it. The parse of gh output is a pure function `parsePrNumber(output)` in src/prNumber.ts, imported by vite.config.ts, unit-tested.

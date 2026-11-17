@@ -9,3 +9,11 @@ export const DEV_BUILD: boolean = APP_VERSION.includes("-");
 
 /** The version as shown to people: "v1.2.3" for a release, "dev build" for a local build. */
 export const VERSION_LABEL: string = DEV_BUILD ? "dev build" : `v${APP_VERSION}`;
+
+/** The pull request number the dev build was made on, from `gh` at build time (see vite.config.ts); "" when none. */
+export const APP_PR: string = __APP_PR__;
+
+/** The version text for the settings footer: a dev build with a pull request reads "dev build · PR #123". */
+export function settingsVersionLabel(label: string, pr: string): string {
+  return pr ? `${label} · PR #${pr}` : label;
+}

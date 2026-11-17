@@ -11,7 +11,7 @@ import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
 import { createSettingsSession, dirty, same, turnsOffRestore, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
-import { APP_VERSION, VERSION_LABEL } from "./version";
+import { APP_PR, APP_VERSION, settingsVersionLabel, VERSION_LABEL } from "./version";
 
 /** Fonts shipped with the app, listed under "Bundled". */
 const BUNDLED_FONTS = [
@@ -805,7 +805,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     preview,
     body,
     element("footer", { className: "settings-footer" },
-      element("span", { className: "settings-version" }, `tiili ${VERSION_LABEL}`),
+      element("span", { className: "settings-version" }, `tiili ${settingsVersionLabel(VERSION_LABEL, APP_PR)}`),
       reset, confirm, element("div", { className: "settings-actions" }, cancel, save)),
   );
   const show = (settings: Settings) => {
