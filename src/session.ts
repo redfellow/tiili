@@ -224,6 +224,7 @@ function paneRestore(restored: Restored, pane: SavedPane, withScrollback: boolea
   const program = pane.program ? plain(pane.program) : "";
   if (pane.host) preface += dimLine(`— was connected to ${plain(pane.host)} —`);
   else if (command || program) preface += dimLine(`— was running: ${command || program} —`);
-  const history = withScrollback && command ? pane.command?.trim() : undefined;
+  // A remote pane's command is whatever the remote side printed, so it never seeds the local history.
+  const history = withScrollback && command && !pane.host ? pane.command?.trim() : undefined;
   return { ...base, cwd, preface, history };
 }

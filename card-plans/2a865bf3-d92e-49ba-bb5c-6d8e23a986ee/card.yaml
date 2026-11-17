@@ -1,0 +1,18 @@
+format: 1
+slug: restored-remote-panes-seed-local-shell-h
+title: Restored remote panes seed local shell history with a command the remote
+  side reported (security bug)
+x-harvaaja-card: 2a865bf3-d92e-49ba-bb5c-6d8e23a986ee
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The 'Programs are not re-run' requirement reads as if a remote pane's
+    command also seeds history; the fix changes that observable contract, so a
+    small MODIFIED delta states remote panes get no history.
+  citations:
+    - "openspec/specs/session-restore/spec.md#Requirement: Programs are not
+      re-run"
+    - src/session.ts paneRestore
+  revision: 3a23f0d9-3309-403c-8095-79daaf2f7857
