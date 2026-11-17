@@ -1597,7 +1597,7 @@ dialog.link-dialog {
   user-select: text;
 }
 
-/* The release's What's new items, in the update dialog and the What's new panel: the sunken notes block as a list. */
+/* The release's What's new items in the What's new panel after an update: the sunken notes block as a list. */
 .update-items {
   padding-left: var(--space-5);
   font-family: inherit;
@@ -1607,6 +1607,48 @@ dialog.link-dialog {
 
 .update-items li + li {
   margin-top: var(--space-1);
+}
+
+/* The release notes in the update dialog, rendered from Markdown: the sunken notes block in the normal font. */
+.update-markdown {
+  font-family: inherit;
+  white-space: normal;
+}
+
+.update-markdown > :first-child {
+  margin-top: 0;
+}
+
+.update-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.update-markdown h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: inherit;
+}
+
+.update-markdown p,
+.update-markdown ul,
+.update-markdown ol {
+  margin: var(--space-1) 0;
+}
+
+.update-markdown ul,
+.update-markdown ol {
+  padding-left: var(--space-5);
+}
+
+.update-markdown li + li {
+  margin-top: var(--space-1);
+}
+
+.update-markdown code {
+  font-family: var(--font-mono);
+}
+
+.update-markdown a {
+  color: var(--accent-text);
 }
 
 .update-all-changes {
