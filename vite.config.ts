@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import type { Plugin, UserConfig } from "vite";
+import { parsePrNumber } from "./src/prNumber";
 
 /**
  * The app version from src-tauri/Cargo.toml's [package] table (Tauri reads the same one), baked into the frontend as
@@ -7,6 +9,25 @@ import type { Plugin, UserConfig } from "vite";
  */
 const cargoToml = readFileSync(new URL("./src-tauri/Cargo.toml", import.meta.url), "utf8");
 const appVersion = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/m.exec(cargoToml)?.[1] ?? "0.0.0-dev";
+
+/**
+ * The pull request number of the checked-out branch, from `gh`, baked into the frontend as `__APP_PR__`. Only a dev
+ * build (a pre-release version) looks; a release, a missing `gh`, no pull request or any failure gives "" so the
+ * build never fails over it.
+ */
+function lookupPr(version: string): string {
+  if (!version.includes("-")) return "";
+  try {
+    const output = execFileSync("gh", ["pr", "view", "--json", "number", "-q", ".number"], {
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return parsePrNumber(output);
+  } catch {
+    return "";
+  }
+}
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -47,7 +68,7 @@ export function devBridge(env: Record<string, string | undefined> = process.env)
 // server loads it before vitest is necessarily installed. Test settings live in vitest.config.ts.
 const config: UserConfig = {
   clearScreen: false,
-  define: { __APP_VERSION__: JSON.stringify(appVersion) },
+  define: { __APP_VERSION__: JSON.stringify(appVersion), __APP_PR__: JSON.stringify(lookupPr(appVersion)) },
   plugins: [devBridge()],
   server: {
     port: 1420,
