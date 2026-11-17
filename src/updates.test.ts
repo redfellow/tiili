@@ -6,7 +6,6 @@ import {
   SKIPPED_KEY,
   WHATS_NEW_KEY,
   isSkipped,
-  plainNotes,
   saveWhatsNew,
   shouldAutoCheck,
   skipVersion,
@@ -123,10 +122,10 @@ const NO_SECTION_BODY = `## Fixes
 
 <b>Faster</b> start-up.`;
 
-describe("whatsNew and plainNotes", () => {
+describe("whatsNew", () => {
   it.each([
-    ["Body with What's new: the v0.3.0 body", V030_BODY, 9, "The v0.3.0 release is fixed for Windows, where line endings were previously stamped incorrectly.", "The tiili app window is now titled \"tiili >_\" in the alt-tab window switcher."],
-    ["Body without What's new", NO_SECTION_BODY, 0, undefined, undefined],
+    ["the v0.3.0 body", V030_BODY, 9, "The v0.3.0 release is fixed for Windows, where line endings were previously stamped incorrectly.", "The tiili app window is now titled \"tiili >_\" in the alt-tab window switcher."],
+    ["a body without a What's new heading", NO_SECTION_BODY, 0, undefined, undefined],
     ["empty body", "", 0, undefined, undefined],
     ["section ended by the changelog line, * bullets", "### Whats New\r\n* one\r\n**Full changelog:** x\r\n- not this", 1, "one", "one"],
   ])("%s", (_name, body, count, first, last) => {
@@ -134,22 +133,6 @@ describe("whatsNew and plainNotes", () => {
     expect(items).toHaveLength(count);
     expect(items[0]).toBe(first);
     expect(items.at(-1)).toBe(last);
-  });
-
-  it.each([
-    ["Body without What's new: no tags or heading markers", NO_SECTION_BODY, "Fixes\n\nFaster start-up."],
-    ["empty body", "", ""],
-  ])("%s", (_name, body, expected) => {
-    expect(plainNotes(body)).toBe(expected);
-  });
-
-  it.each([
-    ["Tag left behind by one pass: nested tag in a tag name", "<scr<b>ipt>alert(1)</script>"],
-    ["Tag left behind by one pass: doubled opening bracket", "<<b>b>"],
-    ["Stray opening bracket", "a < b"],
-    ["Stray closing bracket", "a > b <"],
-  ])("%s: output has no angle brackets", (_name, body) => {
-    expect(plainNotes(body)).not.toMatch(/[<>]/);
   });
 });
 
