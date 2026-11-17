@@ -1,0 +1,16 @@
+format: 1
+slug: basic-markdown-rendering-for-patch-notes
+title: Basic Markdown rendering for patch notes in the update dialog
+x-harvaaja-card: 616e6517-4093-4ceb-b5e5-5ffdd4c346ce
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "Changes the app-updates requirement \"Release notes in the update
+    dialog\": whole body rendered as Markdown instead of What's new items /
+    plain text."
+  citations:
+    - openspec/specs/app-updates/spec.md#Release notes in the update dialog
+    - src/updateDialog.ts:29-33
+  revision: d1cebdbe-32a8-4b8a-a47c-01b9824659cb

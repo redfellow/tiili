@@ -1,7 +1,7 @@
 // @harvaaja-test-tier: fast
 import type { ConfigEnv, UserConfig } from "vite";
 import { describe, expect, it } from "vitest";
-import { devBridge } from "../vite.config";
+import { devBridge, lookupPr } from "../vite.config";
 
 const ENV: ConfigEnv = { command: "serve", mode: "development" };
 const BRIDGE = { TIILI_BRIDGE_PORT: "4000", TIILI_BRIDGE_TOKEN: "secret" };
@@ -33,4 +33,28 @@ describe("dev bridge host check", () => {
       expect(run(env, "0.0.0.0")).toEqual({});
     },
   );
+});
+
+describe("lookupPr", () => {
+  it.each([
+    ["Dev build with a pull request: the number is found", "0.0.0-dev", {}, "123\n", 1, "123"],
+    ["Release: gh is not asked", "1.2.3", {}, "123\n", 0, ""],
+    ["Tests: gh is not asked, so no GitHub request is made", "0.0.0-dev", { VITEST: "true" }, "123\n", 0, ""],
+    ["Dev build without a pull request: the number is empty", "0.0.0-dev", {}, "", 1, ""],
+  ])("%s", (_name, version, env, output, calls, expected) => {
+    let asked = 0;
+    const ask = () => {
+      asked += 1;
+      return output;
+    };
+    expect(lookupPr(version, env, ask)).toBe(expected);
+    expect(asked).toBe(calls);
+  });
+
+  it("Dev build where gh fails: the number is empty", () => {
+    const ask = () => {
+      throw new Error("gh: not found");
+    };
+    expect(lookupPr("0.0.0-dev", {}, ask)).toBe("");
+  });
 });
