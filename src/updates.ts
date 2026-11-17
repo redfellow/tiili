@@ -23,9 +23,12 @@ export type InstallKind = "deb" | "bundle";
 export interface FoundUpdate {
   version: string;
   currentVersion: string;
-  /** The release notes, as plain text; empty when the release has none. */
+  /** The release body, as Markdown; empty when the release has none. */
   notes: string;
-  /** The bullets under the release notes' What's new heading; empty when there is no such section. */
+  /**
+   * The bullets under the release notes' What's new heading, saved by Install now for the What's new panel after the
+   * update; empty when there is no such section.
+   */
   whatsNew: string[];
   kind: InstallKind;
   /** The release's page on GitHub. */
@@ -57,23 +60,6 @@ export function whatsNew(body: string): string[] {
     if (BULLET.test(line)) items.push(line.replace(BULLET, ""));
   }
   return items;
-}
-
-/**
- * The release body as plain text: HTML tags and markdown heading markers removed, and trimmed. The result is shown as
- * text, never as HTML. Tag removal repeats until the text stops changing (one pass can leave a new tag behind, as in
- * `<scr<b>ipt>`), then any leftover `<` or `>` is dropped.
- */
-export function plainNotes(body: string): string {
-  let text = body;
-  for (let previous = ""; previous !== text; ) {
-    previous = text;
-    text = text.replace(/<[^>]*>/g, "");
-  }
-  return text
-    .replace(/[<>]/g, "")
-    .replace(/^[ \t]*#{1,6}[ \t]*/gm, "")
-    .trim();
 }
 
 /** Whether an automatic check is due at `now`: checks are on and the last one (if any) is a day old or more. */
