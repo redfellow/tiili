@@ -5,3 +5,12 @@ x-harvaaja-card: a5c22003-d29c-4778-a0db-65ed82c14b4f
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Math results showing note text literally (never as markup) is new
+    observable behaviour of the Heynote pane, which heynote-pane covers but no
+    requirement states.
+  citations:
+    - openspec/specs/heynote-pane/spec.md
+    - scripts/heynote.mjs
+  revision: b48f30dd-a57b-4124-bfc1-c6d38f9e88ce
