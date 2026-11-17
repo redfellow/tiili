@@ -10,20 +10,28 @@ import { parsePrNumber } from "./src/prNumber";
 const cargoToml = readFileSync(new URL("./src-tauri/Cargo.toml", import.meta.url), "utf8");
 const appVersion = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/m.exec(cargoToml)?.[1] ?? "0.0.0-dev";
 
+/** Asks `gh` for the current branch's pull request number; throws when `gh` is missing or fails. */
+function askGh(): string {
+  return execFileSync("gh", ["pr", "view", "--json", "number", "-q", ".number"], {
+    encoding: "utf8",
+    timeout: 5000,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+}
+
 /**
  * The pull request number of the checked-out branch, from `gh`, baked into the frontend as `__APP_PR__`. Only a dev
  * build (a pre-release version) looks; a release, a missing `gh`, no pull request or any failure gives "" so the
- * build never fails over it.
+ * build never fails over it. It never looks under Vitest (`VITEST` is set), so tests make no GitHub request.
  */
-function lookupPr(version: string): string {
-  if (!version.includes("-")) return "";
+export function lookupPr(
+  version: string,
+  env: Record<string, string | undefined> = process.env,
+  ask: () => string = askGh,
+): string {
+  if (!version.includes("-") || env.VITEST) return "";
   try {
-    const output = execFileSync("gh", ["pr", "view", "--json", "number", "-q", ".number"], {
-      encoding: "utf8",
-      timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return parsePrNumber(output);
+    return parsePrNumber(ask());
   } catch {
     return "";
   }
