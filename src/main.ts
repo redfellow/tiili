@@ -232,7 +232,6 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
       overlay: platform === "macos" && selectBackend(window) === "tauri",
       onNewPane: thenRefocus(() => panes.act({ type: "new" })),
       onHeynote: thenRefocus(() => panes.act({ type: "heynote" })),
-      onClosePane: thenRefocus(() => panes.act({ type: "close" })),
       onResetLayout: thenRefocus(() => panes.actLayout("reset")),
       onSettings: openSettings,
       attentionCount: attention !== undefined,
