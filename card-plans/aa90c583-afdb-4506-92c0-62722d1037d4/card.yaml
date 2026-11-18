@@ -5,3 +5,13 @@ x-harvaaja-card: aa90c583-afdb-4506-92c0-62722d1037d4
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The Daily update check requirement says the check runs at startup
+    only; checking again when a window is focused after 24 hours changes that
+    contract.
+  citations:
+    - "openspec/specs/app-updates/spec.md: Requirement: Daily update check"
+    - src/main.ts startupCheck call
+    - src/updates.ts startupCheck
+  revision: 923b12c4-18a4-43f4-9008-134fc6605aeb
