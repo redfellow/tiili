@@ -12,7 +12,7 @@ Ten candidate ideas for tiili. None of them is already covered by `openspec/spec
 
 ## Agent workflows
 
-6. **Agent status on each pane chip**: Each pane shows whether its agent is working, waiting for you or done, and the top bar counts them, so you can see at a glance which pane needs you. Builds on: `pane-attention`.
+6. **Working and done states for agents**: Next to the existing waiting-for-you mark, each pane shows whether its agent is still working or has finished, so you can see which agents are busy and which are done, not just which are waiting for you. Builds on: `pane-attention`.
 7. **More fan-out skills**: Ready-made skills that open one pane per task for work other than pull request reviews, such as running a failing test file in each pane and fixing it in parallel. Builds on: `agent-skills`.
 8. **Let agents focus a pane and send it text**: `tiili focus` and `tiili send` let one agent hand work to, or answer a prompt in, a pane it opened, without you switching panes. Builds on: `pane-control`.
 9. **Wait for a pane to finish**: `tiili wait <pane>` blocks until that pane's command exits and prints its exit code, so an agent can start several panes and carry on when all are done. Builds on: `pane-control`.
