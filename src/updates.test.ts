@@ -5,11 +5,11 @@ import {
   LAST_CHECK_KEY,
   SKIPPED_KEY,
   WHATS_NEW_KEY,
+  autoCheck,
   isSkipped,
   saveWhatsNew,
   shouldAutoCheck,
   skipVersion,
-  startupCheck,
   takeWhatsNew,
   whatsNew,
   type FoundUpdate,
@@ -63,7 +63,7 @@ const found = (version: string): FoundUpdate => ({
   install: async () => undefined,
 });
 
-describe("startupCheck", () => {
+describe("autoCheck", () => {
   it.each([
     ["Checked today already: no request", true, { [LAST_CHECK_KEY]: String(NOW - 3 * HOUR) }, "0.3.0", false, false],
     ["Checks off: no request", false, {}, "0.3.0", false, false],
@@ -71,20 +71,34 @@ describe("startupCheck", () => {
       { [LAST_CHECK_KEY]: String(NOW - CHECK_INTERVAL_MS), [SKIPPED_KEY]: "0.3.0" }, "0.3.0", true, false],
     ["A newer version after a skip: the dialog is shown", true, { [SKIPPED_KEY]: "0.3.0" }, "0.3.1", true, true],
     ["up to date: no dialog", true, {}, undefined, true, false],
+    ["Focused a day later: one request, the dialog is shown", true,
+      { [LAST_CHECK_KEY]: String(NOW - 25 * HOUR) }, "0.3.0", true, true],
+    ["Focused soon after a check: no request", true, { [LAST_CHECK_KEY]: String(NOW - 2 * HOUR) }, "0.3.0", false, false],
   ])("%s", async (_name, enabled, entries, latest, requested, shown) => {
     const storage = memoryStorage(entries);
     const find = vi.fn(async () => (latest ? found(latest) : undefined));
     const show = vi.fn();
-    await startupCheck({ enabled, show, storage, now: NOW, find });
+    await autoCheck({ enabled, show, storage, now: NOW, find });
     expect(find).toHaveBeenCalledTimes(requested ? 1 : 0);
     expect(show).toHaveBeenCalledTimes(shown ? 1 : 0);
     if (requested) expect(storage.map.get(LAST_CHECK_KEY)).toBe(String(NOW));
   });
 
+  it("busy: no request, and no check is recorded so the next focus can check", async () => {
+    const entries = { [LAST_CHECK_KEY]: String(NOW - 25 * HOUR) };
+    const storage = memoryStorage(entries);
+    const find = vi.fn(async () => found("0.3.0"));
+    const show = vi.fn();
+    await autoCheck({ enabled: true, show, storage, now: NOW, find, busy: () => true });
+    expect(find).not.toHaveBeenCalled();
+    expect(show).not.toHaveBeenCalled();
+    expect(storage.map.get(LAST_CHECK_KEY)).toBe(entries[LAST_CHECK_KEY]);
+  });
+
   it("a failed check shows nothing and waits a day", async () => {
     const storage = memoryStorage();
     const show = vi.fn();
-    await startupCheck({ enabled: true, show, storage, now: NOW, find: () => Promise.reject(new Error("offline")) });
+    await autoCheck({ enabled: true, show, storage, now: NOW, find: () => Promise.reject(new Error("offline")) });
     expect(show).not.toHaveBeenCalled();
     expect(shouldAutoCheck(NOW + HOUR, Number(storage.map.get(LAST_CHECK_KEY)), true)).toBe(false);
   });
