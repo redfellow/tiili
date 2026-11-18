@@ -22,6 +22,8 @@ export interface Pane {
   chip: HTMLElement;
   /** The Zen icon at the right end of the title row. */
   zenButton: HTMLElement;
+  /** The close icon right of the Zen icon, which closes this pane. */
+  closeButton: HTMLElement;
   ready: Promise<PaneTerminal | undefined>;
   terminal?: PaneTerminal;
   /** The id of the shell session now running in the pane. */
@@ -267,8 +269,8 @@ export class Tab {
   }
 
   /**
-   * Shows the Zen icons: hidden with one pane, lit on the Zen pane, with a dot there while a hidden pane of this tab
-   * needs the user.
+   * Shows the Zen and close icons: both hidden with one pane; the Zen icon lit on the Zen pane, with a dot there
+   * while a hidden pane of this tab needs the user.
    */
   showZen(): void {
     const single = this.panes.length <= 1;
@@ -278,6 +280,7 @@ export class Tab {
     for (const pane of this.panes) {
       const on = pane.id === this.zen;
       pane.zenButton.hidden = single;
+      pane.closeButton.hidden = single;
       pane.zenButton.toggleAttribute("data-on", on);
       pane.zenButton.toggleAttribute("data-marked", on && marked);
       pane.zenButton.setAttribute("aria-pressed", String(on));

@@ -92,6 +92,11 @@ const ZEN_ICON =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="6" height="10" ' +
   'rx="0.5"/><path d="M2.5 5v6M13.5 5v6"/></svg>';
 
+/** The close icon on a pane's title row: the top bar's × glyph. */
+const CLOSE_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+
 /** A pane `tiili open` asked for: the program it runs and the title its chip shows. */
 interface Requested extends PaneLaunch {
   title?: string;
@@ -718,8 +723,16 @@ export class Panes {
    * in every other tiili window, so the pane opens in the window that asked for it.
    */
   async openHeynote(tab: Tab = this.tab): Promise<void> {
-    const { element, chip, zenButton, host } = this.paneElement();
-    const pane: Pane = { id: this.nextId++, element, chip, zenButton, zoom: 0, ready: Promise.resolve(undefined) };
+    const { element, chip, zenButton, closeButton, host } = this.paneElement();
+    const pane: Pane = {
+      id: this.nextId++,
+      element,
+      chip,
+      zenButton,
+      closeButton,
+      zoom: 0,
+      ready: Promise.resolve(undefined),
+    };
     this.listen(pane);
     showPaneChip(element, chip, "Heynote");
     pane.note = openHeynote(
@@ -737,13 +750,26 @@ export class Panes {
     this.markFocused(tab, tab.panes.length - 1);
   }
 
-  /** Focus follows the keyboard and clicks into `pane`, in whichever tab it is by then. */
+  /**
+   * Focus follows the keyboard and clicks into `pane`, in whichever tab it is by then. Its close icon closes it, by
+   * id, as ⌘W closes the focused pane, and gives the keyboard back to the focused pane.
+   */
   private listen(pane: Pane): void {
     pane.element.addEventListener("focusin", () => this.paneFocused(pane));
     pane.element.addEventListener("mousedown", () => {
       this.paneFocused(pane);
       give(pane);
     });
+    const id = pane.id;
+    pane.closeButton.addEventListener("click", () => this.closeById(id));
+  }
+
+  /** Closes the pane `id` wherever it is, whichever pane has the focus, then refocuses the focused pane. */
+  private closeById(id: PaneId): void {
+    const pane = this.allPanes().find((p) => p.id === id);
+    if (!pane) return;
+    this.close(pane).catch((error: unknown) => this.report(error));
+    this.focusCurrent();
   }
 
   /** `pane` got the focus: it becomes its tab's focused pane. */
@@ -753,10 +779,17 @@ export class Panes {
   }
 
   /**
-   * A pane's element: its title row with the chip and the Zen icon, the host its content goes in and the grab strip.
-   * The icon and a double-click on the title row toggle Zen; the pane's own mousedown has focused it by then.
+   * A pane's element: its title row with the chip, the Zen icon and the close icon, the host its content goes in and
+   * the grab strip. The Zen icon and a double-click on the title row toggle Zen; the pane's own mousedown has focused
+   * it by then. A press on the close icon leaves the focus where it is; `listen` wires its click.
    */
-  private paneElement(): { element: HTMLElement; chip: HTMLElement; zenButton: HTMLElement; host: HTMLElement } {
+  private paneElement(): {
+    element: HTMLElement;
+    chip: HTMLElement;
+    zenButton: HTMLElement;
+    closeButton: HTMLElement;
+    host: HTMLElement;
+  } {
     const element = document.createElement("div");
     element.className = "pane";
     const title = document.createElement("div");
@@ -772,9 +805,21 @@ export class Panes {
     zenButton.innerHTML = ZEN_ICON;
     zenButton.addEventListener("mousedown", (event) => event.preventDefault());
     zenButton.addEventListener("click", () => this.toggleZen());
-    title.append(chip, zenButton);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "pane-close-toggle";
+    closeButton.title = `Close pane ${this.platform === "macos" ? "⌘W" : "Ctrl+Shift+W"}`;
+    closeButton.setAttribute("aria-label", "Close pane");
+    closeButton.tabIndex = -1;
+    closeButton.innerHTML = CLOSE_ICON;
+    closeButton.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      // Closing a pane does not focus it first: the focused pane keeps the focus.
+      event.stopPropagation();
+    });
+    title.append(chip, zenButton, closeButton);
     title.addEventListener("dblclick", (event) => {
-      if (event.target instanceof Element && event.target.closest(".pane-zen-toggle")) return;
+      if (event.target instanceof Element && event.target.closest(".pane-zen-toggle, .pane-close-toggle")) return;
       if (!this.tab.dragged()) this.toggleZen();
     });
     // Dragging the top edge onto another pane swaps the two; dragging inside the terminal still selects.
@@ -783,7 +828,7 @@ export class Panes {
     const host = document.createElement("div");
     host.className = "pane-terminal";
     element.append(title, host, grab);
-    return { element, chip, zenButton, host };
+    return { element, chip, zenButton, closeButton, host };
   }
 
   /**
@@ -870,7 +915,7 @@ export class Panes {
     requested?: Requested,
     restored?: PaneRestore,
   ): Promise<Pane> {
-    const { element, chip, zenButton, host } = this.paneElement();
+    const { element, chip, zenButton, closeButton, host } = this.paneElement();
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
@@ -879,6 +924,7 @@ export class Panes {
       element,
       chip,
       zenButton,
+      closeButton,
       zoom: adopt?.zoom ?? restored?.zoom ?? 0,
       ready: new Promise((r) => (resolve = r)),
       gate: new AttentionGate(),

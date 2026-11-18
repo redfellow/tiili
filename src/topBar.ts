@@ -19,7 +19,6 @@ export interface TopBarOptions {
   overlay: boolean;
   onNewPane: () => void;
   onHeynote: () => void;
-  onClosePane: () => void;
   onResetLayout: () => void;
   onSettings: () => void;
   /** Shows the count of panes that need you; off where the backend keeps no attention marks. */
@@ -194,7 +193,6 @@ const ICONS = {
   // A note page with a folded corner and a plus.
   heynote:
     `${SVG_OPEN}<path d="M9.5 2.5h-6v11h9v-8z"/><path d="M9.5 2.5v3h3"/><path d="M8 7.5v4M6 9.5h4"/></svg>`,
-  closePane: `${SVG_OPEN}<path d="M4 4l8 8M12 4l-8 8"/></svg>`,
   resetLayout:
     `${SVG_OPEN}<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="0.5"/><rect x="9" y="2.5" width="4.5" ` +
     'height="4.5" rx="0.5"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="0.5"/><rect x="9" y="9" ' +
@@ -205,9 +203,10 @@ const ICONS = {
 };
 
 /**
- * Fills `bar`, the window's top bar, with the New pane, Heynote, Close pane, Reset layout and Settings buttons on its
- * right, led by the count of panes that need you (hidden at zero), and the window's tab strip on its left. Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title bar the bar
- * leaves room for the native window buttons and shows the title; dragging the bar moves the window.
+ * Fills `bar`, the window's top bar, with the New pane, Heynote, Reset layout and Settings buttons on its right, led
+ * by the count of panes that need you (hidden at zero), and the window's tab strip on its left; each pane closes from
+ * its own title row. Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title
+ * bar the bar leaves room for the native window buttons and shows the title; dragging the bar moves the window.
  */
 export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
   const { platform } = options;
@@ -231,7 +230,6 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
   const buttons: TopBarButton[] = [
     { name: "New pane", shortcut: ["⌘T", "Ctrl+Shift+T"], icon: ICONS.newPane, action: options.onNewPane },
     { name: "Heynote", icon: ICONS.heynote, action: options.onHeynote },
-    { name: "Close pane", shortcut: ["⌘W", "Ctrl+Shift+W"], icon: ICONS.closePane, action: options.onClosePane },
     {
       name: "Reset layout",
       shortcut: ["⌃⌘0", "Ctrl+Alt+Shift+0"],
