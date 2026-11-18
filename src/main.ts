@@ -12,7 +12,7 @@ import type { ITheme } from "@xterm/xterm";
 import { localDay, playSplash, splashDue } from "./splash";
 import { createTopBar } from "./topBar";
 import { showUpdateDialog } from "./updateDialog";
-import { findUpdate, startupCheck, takeWhatsNew } from "./updates";
+import { autoCheck, findUpdate, takeWhatsNew } from "./updates";
 import { APP_VERSION, DEV_BUILD } from "./version";
 import { showWhatsNewDialog } from "./whatsNewDialog";
 
@@ -266,18 +266,27 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   if (!arrived && !reopened) await panes.open(startCwd || undefined);
   void splash?.done.then(() => panes.focusCurrent());
 
-  // Only the first window checks for updates, once the splash is over, so the dialog shows once and on top. Before
-  // that, the first start after an in-app update shows what's new in the version it installed.
+  // Only the first window checks for updates, so the dialog shows once and on top: at startup once the splash is
+  // over, then whenever the window gains focus (the 24-hour gap in autoCheck limits the requests). Before the
+  // startup check, the first start after an in-app update shows what's new in the version it installed.
   if (selectBackend(window) === "tauri" && getCurrentWindow().label === "main") {
+    const check = () =>
+      autoCheck({
+        // Read now, not captured at startup, so turning checks off in Settings stops later checks. A local dev build
+        // would always find the release "newer" and offer to replace itself.
+        enabled: settings.updates.autoCheck && !DEV_BUILD,
+        show: (update) => showUpdateDialog(update, () => panes.focusCurrent()),
+        busy: () => document.querySelector("dialog.update-dialog:not(.whats-new)") !== null,
+      });
     void (splash?.done ?? Promise.resolve()).then(() => {
       const items = takeWhatsNew(APP_VERSION);
       if (items?.length) showWhatsNewDialog(APP_VERSION, items, () => panes.focusCurrent());
-      return startupCheck({
-        // A local dev build would always find the release "newer" and offer to replace itself.
-        enabled: settings.updates.autoCheck && !DEV_BUILD,
-        show: (update) => showUpdateDialog(update, () => panes.focusCurrent()),
+      void check();
+      // From here on, focus checks too, so none opens its dialog under the splash.
+      return getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+        if (focused) void check();
       });
-    });
+    }).catch((error: unknown) => console.error(error));
   }
 }
 

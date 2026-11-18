@@ -3,7 +3,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 
 /**
- * Updates from tiili's latest GitHub release: the once-a-day startup check, the skipped version and installing.
+ * Updates from tiili's latest GitHub release: the once-a-day automatic check, the skipped version and installing.
  * The check is one anonymous request for the release's `latest.json` (the endpoint is in tauri.conf.json).
  */
 
@@ -171,7 +171,7 @@ export async function findUpdate(): Promise<FoundUpdate | undefined> {
   };
 }
 
-export interface StartupCheck {
+export interface AutoCheck {
   /** Whether automatic checks are on in Settings. */
   enabled: boolean;
   /** Shows the update dialog. */
@@ -179,19 +179,24 @@ export interface StartupCheck {
   storage?: UpdateStorage;
   now?: number;
   find?: () => Promise<FoundUpdate | undefined>;
+  /** Whether an update dialog is already open; when it is, the check does nothing, not even record a check. */
+  busy?: () => boolean;
 }
 
 /**
- * The startup check: when checks are on and none was made in the last day, asks for the latest release and shows
- * an update that is newer and not skipped. A failed check stays quiet and waits for the next day.
+ * The automatic check, run at startup and whenever the main window gains focus: when no update dialog is open,
+ * checks are on and none was made in the last day, asks for the latest release and shows an update that is newer
+ * and not skipped. A failed check stays quiet and waits for the next day.
  */
-export async function startupCheck({
+export async function autoCheck({
   enabled,
   show,
   storage = localStorage,
   now = Date.now(),
   find = findUpdate,
-}: StartupCheck): Promise<void> {
+  busy = () => false,
+}: AutoCheck): Promise<void> {
+  if (busy()) return;
   const last = read(storage, LAST_CHECK_KEY);
   if (!shouldAutoCheck(now, last === undefined ? undefined : Number(last), enabled)) return;
   write(storage, LAST_CHECK_KEY, String(now));
