@@ -794,6 +794,36 @@ html[data-pane-dragging] * {
   color: var(--accent);
 }
 
+/* The close icon right of the Zen toggle: styled like it, but shown only while the pointer is over its pane (or it
+   has keyboard focus), never for the attention dot. */
+.pane-close-toggle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pane-close-toggle[hidden] {
+  display: none;
+}
+
+.pane:not(:hover) .pane-close-toggle:not(:focus-visible) {
+  visibility: hidden;
+}
+
+.pane-close-toggle:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
 .pane-zen-toggle[data-marked]::after {
   content: "";
   position: absolute;

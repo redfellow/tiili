@@ -6,19 +6,26 @@ import { badgeCount, insertBeside, neighbourIndex, reorder, stepIndex, tabLabel,
 // The grid's DOM view is not under test: a Tab only needs it to exist and to be told to render.
 vi.mock("./layout/view", () => ({ TileView: class { render() {} } }));
 
-/** A pane with just enough element to take the Zen icon's state. */
+/** A pane with just enough element to take the Zen and close icons' state. */
 function fakePane(id: number): Pane {
-  const element = { toggleAttribute() {}, setAttribute() {}, hidden: false } as unknown as HTMLElement;
-  return { id, element, chip: element, zenButton: element, ready: Promise.resolve(undefined), zoom: 0 };
+  const fake = () => ({ toggleAttribute() {}, setAttribute() {}, hidden: false }) as unknown as HTMLElement;
+  const element = fake();
+  return { id, element, chip: element, zenButton: fake(), closeButton: fake(), ready: Promise.resolve(undefined), zoom: 0 };
+}
+
+const hooks = { rendered() {}, marked: () => false } as unknown as TabHooks;
+
+/** A tab holding panes 1 to `count`. */
+function tabWith(count: number): Tab {
+  vi.stubGlobal("document", { createElement: () => ({}) });
+  const t = new Tab({ append() {} } as unknown as HTMLElement, "grid", hooks);
+  for (let id = 1; id <= count; id++) t.add(fakePane(id));
+  return t;
 }
 
 describe("Tab.add", () => {
-  const hooks = { rendered() {}, marked: () => false } as unknown as TabHooks;
   const tab = (zenOn: boolean): Tab => {
-    vi.stubGlobal("document", { createElement: () => ({}) });
-    const t = new Tab({ append() {} } as unknown as HTMLElement, "grid", hooks);
-    t.add(fakePane(1));
-    t.add(fakePane(2));
+    const t = tabWith(2);
     if (zenOn) t.setZen(1);
     return t;
   };
@@ -31,6 +38,27 @@ describe("Tab.add", () => {
     const t = tab(zenOn);
     t.add(fakePane(3), showAlone);
     expect(t.zen).toBe(expected);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("Pane close icon", () => {
+  it.each<[string, number, boolean]>([
+    ["One pane: it shows no close icon", 1, true],
+    ["Close on hover: with two panes each pane has a close icon", 2, false],
+  ])("%s", (_name, count, hidden) => {
+    const t = tabWith(count);
+    t.showZen();
+    for (const pane of t.panes) expect(pane.closeButton.hidden).toBe(hidden);
+    vi.unstubAllGlobals();
+  });
+
+  it("Closes the clicked pane: closing pane 1 while pane 2 has focus leaves pane 2 focused", () => {
+    const t = tabWith(2);
+    t.markFocused(1);
+    const first = t.panes[0];
+    expect(first && t.remove(first)).toBe(false);
+    expect(t.current()?.id).toBe(2);
     vi.unstubAllGlobals();
   });
 });
