@@ -5,3 +5,13 @@ x-harvaaja-card: 800fe37e-c2ef-4fca-9fd1-bfb6700cb44c
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: 'User chose "Ideas list only": a written shortlist of feature ideas,
+    no code and no behaviour change, so no spec delta.'
+  citations:
+    - "Question batch f8950b49 answer: Ideas list only (Recommended)"
+    - openspec/specs/pane-tiling/spec.md
+    - openspec/specs/agent-skills/spec.md
+    - openspec/specs/pane-control/spec.md
+  revision: b83b6f2a-7d20-4d0e-841d-59232f6d5163
