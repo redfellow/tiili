@@ -1,0 +1,13 @@
+## Approach
+
+- **Opening a window from Rust.** Add `windows::open_from_launcher(app)` that creates a window with `start_url(None, None)` (home folder) via the same builder `window_new` uses, cascaded from the last focused window when one exists, then `show` + `set_focus`. Dock menu, single-instance callback and the first-launch `--new-window` path all call it.
+- **Single instance.** Register `tauri_plugin_single_instance::init` first in `run()` (the plugin requires it first). The callback receives argv; a pure `launch_action(args) -> LaunchAction { Focus | NewWindow }` in a new `src-tauri/src/launch.rs` decides, unit-tested table-driven. Focus uses `windows::LastFocused`, falling back to `MAIN_WINDOW`; unminimise + show + set_focus. The plugin exits the second process before `setup`, so `session_app::restore` never runs twice. Not built for macOS-specific behaviour change: on macOS LaunchServices already reuses the app; the plugin is harmless there.
+- **First launch with `--new-window`.** `is_cli` already treats dash-prefixed args as GUI; a first launch restores the session as usual and does not open an extra window (the session's window is new already).
+- **macOS Dock menu.** In a new `src-tauri/src/dock_menu.rs` (cfg macos): at setup, get `NSApp().delegate()`'s class, `class_addMethod` for `applicationDockMenu:` returning a retained `NSMenu` with one `NSMenuItem` "New Window" whose target is a small objc2 `define_class!` object; its action posts to the app via a stored `AppHandle` (run on main thread) calling `open_from_launcher`. A window created while the app is active opens on the current Space; set `NSWindowCollectionBehaviorMoveToActiveSpace` is not needed, but the new window is made key before activation so macOS doesn't jump to another window's Space.
+- **Windows jump list.** At setup (cfg windows) use `windows` crate COM: `ICustomDestinationList` + `IShellLinkW` (path = `current_exe`, args `--new-window`, title "New Window") in `AddUserTasks`. Failures are logged, never fatal.
+- **Linux desktop action.** `bundle.linux.deb.desktopTemplate` and `bundle.linux.appimage` … Tauri 2 reads `desktopTemplate` for deb (and rpm); AppImage builds from the deb's desktop file. Add `src-tauri/linux/tiili.desktop` (handlebars template from Tauri's default plus the action) and point `bundle.linux.deb.desktopTemplate` at it.
+- **Docs.** New section in `docs/packaging.md` and the README feature list.
+
+## Risks
+
+- Adding a method to tao's delegate class: if tao later implements `applicationDockMenu:`, `class_addMethod` returns false; log and skip.
