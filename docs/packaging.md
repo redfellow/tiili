@@ -204,17 +204,37 @@ One command cuts a release from a clean checkout:
 npm run release patch   # or minor, major
 ```
 
-It refuses to run without a kind (`patch`, `minor` or `major`) or with uncommitted changes. Otherwise it tags
-origin/main's commit `vX.Y.Z` (the highest tag bumped by the kind) and pushes only the tag; nothing is committed. The
-release workflow stamps that version into `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` before it builds
-(`scripts/stamp-version.mjs`).
+It takes a kind (`patch`, `minor` or `major`) or an `x.y.z` version. It tags origin/main's commit `vX.Y.Z` (the
+highest tag on GitHub bumped by the kind) and pushes only the tag; nothing is committed and the checkout, its branch
+and any uncommitted changes are left alone. The release workflow stamps that version into `src-tauri/Cargo.toml` and
+`src-tauri/Cargo.lock` before it builds (`scripts/stamp-version.mjs`). The command follows the build with a live
+view and publishes the release once every job has passed. Running it again after a stop or a failure carries on
+where it left off.
+
+### Release notes
+
+Before it tags, on a terminal with the [`claude`](https://claude.com/claude-code) CLI signed in, Claude writes the
+notes' "What's new" from the full descriptions of the pull requests in the release (the ones each promotion since
+the last tag carries). It orders them from the biggest change for users to the least, words them for users
+(no codenames or in-jokes) and leaves out what users never see. The command shows them and asks:
+
+- **Enter** or **y** uses them, **e** opens them in `$VISUAL` / `$EDITOR` first, **n** keeps the workflow's notes.
+- The chosen notes go on the draft as soon as the workflow creates it, so `latest.json`, and with it the in-app
+  update dialog and What's new panel, carries the same text. Before publishing, the command checks both and sets
+  them again if they differ.
+- The collapsed list of every change and the Full changelog link are built by `scripts/release-notes.mjs`, as in
+  the workflow's notes.
+
+Off a terminal, without `claude`, with `TIILI_RELEASE_NOTES=auto`, or when Claude fails, the release keeps the
+workflow's notes: the update notes written in each promotion, plus the same list and link.
 
 ### What CI does
 
 The tag starts `.github/workflows/release.yml`:
 
 1. It fails unless the tag is a `vX.Y.Z` version.
-2. It creates a draft GitHub Release for the tag with generated notes (or reuses the draft if it exists).
+2. It creates a draft GitHub Release for the tag with notes from the promotions since the previous tag
+   (`scripts/release-notes.mjs`), or reuses the draft if it exists.
 3. It builds on `macos-latest`, `windows-latest` and `ubuntu-22.04` with `npm ci` and `npm run bundle`, and
    uploads the `.dmg`, the setup `.exe`, the `.AppImage` and the `.deb` to the draft.
 
@@ -244,7 +264,7 @@ sent. The updater only installs bundles signed with the key whose public half is
 
 ### Publishing
 
-The release stays a draft. When all three build jobs have finished, open the draft on GitHub, check it holds the
-`.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb` (and, with the updater secrets set, the updater bundles,
-their `.sig` files and `latest.json`), and publish it by hand. Installed apps see a release only once it is
-published, as GitHub's latest release.
+`npm run release` publishes the draft as GitHub's latest release once every job has passed. Installed apps see a
+release only then. A workflow run started some other way leaves the draft for you to check and publish on GitHub:
+it should hold the `.dmg`, the `-setup.exe`, the `.AppImage` and the `.deb` (and, with the updater secrets set, the
+updater bundles, their `.sig` files and `latest.json`).
