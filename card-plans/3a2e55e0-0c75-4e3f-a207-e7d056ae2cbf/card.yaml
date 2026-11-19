@@ -1,0 +1,18 @@
+format: 1
+slug: new-window-from-the-dock-taskbar-icon-ri
+title: "New Window from the Dock / taskbar icon: right-click menu everywhere,
+  middle-click where the OS allows"
+x-harvaaja-card: 3a2e55e0-0c75-4e3f-a207-e7d056ae2cbf
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: "New observable behaviour: Dock menu, jump list, desktop action and
+    single-instance launch handling. No active change covers it; new capability
+    app-launch."
+  citations:
+    - openspec/specs/packaging/spec.md
+    - openspec/specs/session-restore/spec.md
+    - src-tauri/src/lib.rs:589
+  revision: 72efc37b-ed0d-4cb9-a7e0-13a6d507c870

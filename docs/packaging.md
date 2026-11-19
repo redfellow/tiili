@@ -175,6 +175,27 @@ No signing. The `.AppImage` and `.deb` are built unsigned.
 - **Linux**: needs webkit2gtk and the AppImage tools on the build host. Build on the oldest distribution you
   want to support (glibc is linked dynamically), such as Ubuntu 22.04.
 
+## New Window from the Dock or taskbar
+
+Each platform offers New Window from tiili's app icon. It opens a window on the current desktop or Space, focuses
+it, and starts its first pane in the home folder.
+
+- **macOS**: right-click (or long-press) the Dock icon and choose **New Window**. tiili adds this Dock menu at
+  start (`src-tauri/src/dock_menu.rs`). A plain click on the Dock icon keeps macOS's own behaviour.
+- **Windows**: right-click the taskbar icon and choose **New Window** under **Tasks**. tiili writes this jump list
+  at every start (`src-tauri/src/jump_list.rs`); the task runs `tiili.exe --new-window`.
+- **Linux**: right-click tiili in the launcher or dash and choose **New Window**. The `.deb` and the AppImage
+  install a desktop entry built from `src-tauri/linux/tiili.desktop`, whose `new-window` action runs
+  `tiili --new-window`.
+
+Only one tiili runs at a time. Starting it again while it runs hands the command line to the running tiili and
+exits without restoring the session a second time: `--new-window` opens a new window, and anything else brings the
+last focused window to the front. A development run (`npm run tauri dev`) is left out of this hand-off: it
+starts its own tiili even while the installed one runs, though both use the identifier `app.tiili`.
+
+Middle-click opens no new window anywhere. The macOS Dock passes no middle click to apps, and on Windows and Linux
+a middle-click starts tiili again, which brings the last focused window to the front.
+
 ## Releasing
 
 One command cuts a release from a clean checkout:
