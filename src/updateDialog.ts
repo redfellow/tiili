@@ -17,7 +17,7 @@ function message(error: unknown): string {
 }
 
 /** One inline run as a DOM node; a link calls `open` with its (always `https:`) URL instead of navigating. */
-function renderInline(run: Inline, open: (url: string) => void): Node {
+export function renderInline(run: Inline, open: (url: string) => void): Node {
   switch (run.kind) {
     case "text":
       return document.createTextNode(run.text);

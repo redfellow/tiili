@@ -5,6 +5,7 @@ import {
   LAST_CHECK_KEY,
   SKIPPED_KEY,
   WHATS_NEW_KEY,
+  WHATS_NEW_LIMIT,
   autoCheck,
   isSkipped,
   saveWhatsNew,
@@ -12,6 +13,7 @@ import {
   skipVersion,
   takeWhatsNew,
   whatsNew,
+  whatsNewPanelItems,
   type FoundUpdate,
 } from "./updates";
 
@@ -147,6 +149,19 @@ describe("whatsNew", () => {
     expect(items).toHaveLength(count);
     expect(items[0]).toBe(first);
     expect(items.at(-1)).toBe(last);
+  });
+});
+
+describe("whatsNewPanelItems", () => {
+  it("Item with bold: the bold lead is a strong run and the asterisks are gone", () => {
+    expect(whatsNewPanelItems(["**Close a pane right where it is.** Every pane has its own ×"])).toEqual([
+      [{ kind: "strong", text: "Close a pane right where it is." }, { kind: "text", text: " Every pane has its own ×" }],
+    ]);
+  });
+
+  it("lists at most WHATS_NEW_LIMIT items", () => {
+    const items = Array.from({ length: WHATS_NEW_LIMIT + 3 }, (_, i) => `item ${i}`);
+    expect(whatsNewPanelItems(items)).toHaveLength(WHATS_NEW_LIMIT);
   });
 });
 
