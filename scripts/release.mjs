@@ -11,16 +11,23 @@
 //   2. Follow that workflow with a live view of each platform's build, then publish the draft as the latest release.
 //      The website and the README badge read the latest release from GitHub, so they follow on their own.
 //
+// Before tagging, on a terminal with the `claude` CLI, Claude writes the notes' "What's new" from the full
+// descriptions of the pull requests in the release, ordered by impact and worded for users. You use them, edit them
+// first or keep the workflow's own notes. Chosen notes go on the draft as soon as it exists, so the updater's
+// latest.json carries them too; before publishing, both are checked and set again if they differ.
+// TIILI_RELEASE_NOTES=auto skips Claude.
+//
 // It runs origin/main's copy of itself when this one differs, so a checkout that is behind releases with the current
 // flow. Each step checks whether it is already done: running the same command again after a stop or a failure carries
 // on where it left off, and an unpublished release is finished before a new one is cut. When that release's build
 // failed, it builds again: from main's newer commit if a fix has landed (the draft and tag were never published, so they
 // are replaced), or by running only the failed jobs again.
-import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { createInterface } from "node:readline/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 export const KINDS = ["patch", "minor", "major"];
@@ -30,6 +37,8 @@ const MAIN = "main";
 const WORKFLOW = "release.yml";
 const LATEST_ENV = "TIILI_RELEASE_LATEST";
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const NOTES_ENV = "TIILI_RELEASE_NOTES";
+const CLAUDE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function bumpVersion(version, kind) {
   const match = SEMVER.exec(version);
@@ -120,6 +129,25 @@ export function tagPlan(existing, commit) {
   return existing === commit ? "push" : "retag";
 }
 
+/**
+ * What an answer to "Use these notes?" means: "use" (Enter or y), "edit" (e), "auto" (n or a, the workflow's own
+ * notes), or undefined for anything else, which asks again.
+ */
+export function notesChoice(answer) {
+  const a = answer.trim().toLowerCase();
+  if (a === "" || a === "y" || a === "yes") return "use";
+  if (a === "e" || a === "edit") return "edit";
+  if (a === "n" || a === "no" || a === "a" || a === "auto") return "auto";
+  return undefined;
+}
+
+/** latest.json's text with its notes set to `notes`, or undefined when they are already the same. */
+export function manifestWithNotes(text, notes) {
+  const manifest = JSON.parse(text);
+  if ((manifest.notes ?? "").trim() === notes.trim()) return undefined;
+  return `${JSON.stringify({ ...manifest, notes: notes.trim() }, null, 2)}\n`;
+}
+
 /** 0:42, 7:26 or 1:02:05 for a number of milliseconds. */
 export function formatDuration(ms) {
   const total = Math.max(0, Math.round(ms / 1000));
@@ -134,7 +162,9 @@ const PLATFORM = { macos: "macOS", windows: "Windows", ubuntu: "Linux" };
 /** One line of the build view for a workflow job from `gh run view --json jobs`; `frame` is the spinner frame. */
 export function describeJob(job, frame) {
   const os = /\((\w+)-/.exec(job.name)?.[1];
-  const name = (PLATFORM[os] ?? job.name).padEnd(8);
+  const title = PLATFORM[os] ?? job.name;
+  // Padded to line up the platforms; a longer job name such as "manifest" still gets a space before its status.
+  const name = title.length < 8 ? title.padEnd(8) : `${title} `;
   if (job.status === "completed") {
     const took = job.startedAt && job.completedAt ? `  ${formatDuration(Date.parse(job.completedAt) - Date.parse(job.startedAt))}` : "";
     if (job.conclusion === "success") return `✓ ${name}done${took}`;
@@ -302,6 +332,153 @@ function tagMain(version, latest) {
   console.log(`  pushed ${tag} at ${commit.slice(0, 7)}`);
 }
 
+
+/** Where the notes chosen for `version` wait until the release is published, so a rerun after a stop reuses them. */
+function notesFile(version) {
+  return join(tmpdir(), `tiili-release-notes-v${version}.md`);
+}
+
+/**
+ * scripts/release-notes.mjs beside this script, or origin/main's copy when this script runs from a temporary folder
+ * (see runLatest), written next to it.
+ */
+async function notesModule() {
+  const file = join(dirname(fileURLToPath(import.meta.url)), "release-notes.mjs");
+  if (!existsSync(file)) writeFileSync(file, `${out("git", ["show", `origin/${MAIN}:scripts/release-notes.mjs`])}\n`);
+  return import(pathToFileURL(file).href);
+}
+
+/** Claude's reply to `prompt`, from the `claude` CLI with no tools, outside the repository. */
+function askClaude(prompt) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "claude",
+      ["-p", "--tools", "", "--no-session-persistence", "--strict-mcp-config", "--output-format", "text"],
+      { cwd: tmpdir(), stdio: ["pipe", "pipe", "pipe"], shell: process.platform === "win32" },
+    );
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`claude gave no answer in ${formatDuration(CLAUDE_TIMEOUT_MS)}`));
+    }, CLAUDE_TIMEOUT_MS);
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`claude exited with ${code}${stderr.trim() ? `: ${stderr.trim().split("\n").at(-1)}` : ""}`));
+    });
+    child.stdin.end(prompt);
+  });
+}
+
+/**
+ * Has Claude write "What's new" for the release of `version` (main since `v<latest>`) and asks whether to use it.
+ * The chosen notes are saved to notesFile(version). Off a terminal, without `claude`, with TIILI_RELEASE_NOTES=auto
+ * or when anything fails, the workflow's own notes stay and nothing is saved.
+ */
+async function writeNotes(version, latest) {
+  const file = notesFile(version);
+  rmSync(file, { force: true });
+  if (process.env[NOTES_ENV] === "auto") return;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log("  not on a terminal: the release keeps the workflow's notes");
+    return;
+  }
+  if (tryOut("claude", ["--version"]) === undefined) {
+    console.log("  claude is not installed: the release keeps the workflow's notes");
+    return;
+  }
+  const tag = `v${version}`;
+  let notes;
+  const started = Date.now();
+  const view = liveView((frame) => [`${frame} Claude is reading the pull requests  ${formatDuration(Date.now() - started)}`]);
+  try {
+    const { buildNotes, claudePromptFor, mainEntries, parseClaudeNotes } = await notesModule();
+    const entries = await mainEntries(latest === "0.0.0" ? `origin/${MAIN}` : `v${latest}..origin/${MAIN}`);
+    if (!entries.length) throw new Error(`nothing is new on ${MAIN}`);
+    const whatsNew = parseClaudeNotes(await askClaude(await claudePromptFor(entries)));
+    const repo = out("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);
+    const compareUrl = latest === "0.0.0" ? undefined : `https://github.com/${repo}/compare/v${latest}...${tag}`;
+    notes = buildNotes({ entries, compareUrl, whatsNew });
+  } catch (error) {
+    view.stop();
+    console.log(`  Claude couldn't write the notes (${error instanceof Error ? error.message : error}): keeping the workflow's notes`);
+    return;
+  }
+  view.stop();
+  writeFileSync(file, notes);
+  const whatsNew = notes.split("<details>")[0].trim();
+  console.log(`\n${whatsNew.replace(/^/gm, "    ")}\n`);
+  for (;;) {
+    const choice = notesChoice(await ask("  Use these notes? [Y]es, [e]dit first, [n]o (the workflow's notes): "));
+    if (choice === "use") {
+      console.log("  using Claude's notes");
+      return;
+    }
+    if (choice === "auto") {
+      rmSync(file, { force: true });
+      console.log("  keeping the workflow's notes");
+      return;
+    }
+    if (choice === "edit") {
+      const editor = process.env.VISUAL || process.env.EDITOR || "vi";
+      const result = spawnSync(`${editor} ${JSON.stringify(file)}`, { stdio: "inherit", shell: true });
+      if (result.status === 0 && readFileSync(file, "utf8").trim()) {
+        console.log("  using your edited notes");
+        return;
+      }
+      console.log(`  ${editor} didn't save the notes; answer again`);
+    }
+  }
+}
+
+/** One answer from the terminal. A new reader each time, so an editor in between gets the terminal to itself. */
+async function ask(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
+
+/** Sets the draft's notes to the chosen ones; true when they are set (or none were chosen). */
+async function applyNotes(tag, file) {
+  if (!existsSync(file)) return true;
+  const body = await outAsync("gh", ["release", "view", tag, "--json", "body", "--jq", ".body"]).catch(() => undefined);
+  if (body === undefined) return false;
+  if (body.trim() !== readFileSync(file, "utf8").trim()) await outAsync("gh", ["release", "edit", tag, "--notes-file", file]);
+  return true;
+}
+
+/**
+ * Before publishing: the release and its latest.json carry the chosen notes. latest.json is written from the draft's
+ * notes when the build ends, so it differs only when the notes reached the draft late; then it is uploaded again.
+ */
+async function finishNotes(tag, file) {
+  if (!existsSync(file)) return;
+  const notes = readFileSync(file, "utf8");
+  await applyNotes(tag, file);
+  const dir = mkdtempSync(join(tmpdir(), "tiili-release-manifest-"));
+  try {
+    if (tryOut("gh", ["release", "download", tag, "--pattern", "latest.json", "--dir", dir]) === undefined) return;
+    const manifest = join(dir, "latest.json");
+    const updated = manifestWithNotes(readFileSync(manifest, "utf8"), notes);
+    if (!updated) return;
+    writeFileSync(manifest, updated);
+    out("gh", ["release", "upload", tag, manifest, "--clobber"]);
+    console.log("  put the chosen notes into latest.json");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** How long the last successful release workflow took, for the estimate; undefined when there is none. */
 function lastDuration() {
   const json = tryOut("gh", [
@@ -311,8 +488,9 @@ function lastDuration() {
   return last ? Date.parse(last.updatedAt) - Date.parse(last.startedAt) : undefined;
 }
 
-async function followBuild(tag) {
+async function followBuild(tag, notes) {
   const sha = out("git", ["rev-parse", `refs/tags/${tag}^{commit}`]);
+  let notesSet = !notes || !existsSync(notes);
   const estimate = lastDuration();
   const startedWaiting = Date.now();
   let runId;
@@ -323,7 +501,8 @@ async function followBuild(tag) {
     const of = estimate ? ` of about ${formatDuration(estimate)}` : "";
     if (!runId) return [`${frame} waiting for GitHub to start the release workflow  ${elapsed}`];
     const jobs = state.jobs.filter((job) => job.name !== "draft" || job.status !== "completed" || job.conclusion !== "success");
-    return [`${frame} building ${tag}  ${elapsed}${of}`, ...jobs.map((job) => `  ${describeJob(job, frame)}`)];
+    const notesLine = notes && existsSync(notes) ? [`  ${notesSet ? "✓" : frame} notes   ${notesSet ? "chosen notes on the draft" : "waiting for the draft"}`] : [];
+    return [`${frame} building ${tag}  ${elapsed}${of}`, ...notesLine, ...jobs.map((job) => `  ${describeJob(job, frame)}`)];
   });
   try {
     for (;;) {
@@ -335,6 +514,8 @@ async function followBuild(tag) {
         ]).catch(() => "");
         if (id) runId = id;
       }
+      // The chosen notes go on the draft as soon as it exists, before the manifest job copies them into latest.json.
+      if (!notesSet) notesSet = await applyNotes(tag, notes).catch(() => false);
       if (runId) {
         const json = await outAsync("gh", ["run", "view", runId, "--json", "status,conclusion,startedAt,jobs,url"]).catch(() => "");
         if (json) state = JSON.parse(json);
@@ -387,8 +568,11 @@ function retryFailedBuild(version) {
 
 async function buildAndPublish(version) {
   const tag = `v${version}`;
-  if (releaseState(tag)?.isDraft !== false) await followBuild(tag);
+  const notes = notesFile(version);
+  if (releaseState(tag)?.isDraft !== false) await followBuild(tag, notes);
+  await finishNotes(tag, notes);
   run("gh", ["release", "edit", tag, "--draft=false", "--latest"]);
+  rmSync(notes, { force: true });
   console.log(`\nReleased ${tag}: ${releaseState(tag)?.url ?? ""}`);
   console.log("The website and the README badge pick it up as the latest release.");
 }
@@ -418,6 +602,8 @@ async function main() {
     }
   } else {
     console.log(`Releasing v${version} from ${MAIN} (latest is v${latest}).`);
+    step("Write the release notes");
+    await writeNotes(version, latest);
     step(`Tag ${MAIN} v${version}`);
     tagMain(version, latest);
   }

@@ -12,6 +12,8 @@ export function setCargoVersion(text: string, version: string): string;
 export function setCargoLockVersion(text: string, version: string): string;
 export function tagPlan(existing: string | undefined, commit: string): "create" | "push" | "retag";
 export function formatDuration(ms: number): string;
+export function notesChoice(answer: string): "use" | "edit" | "auto" | undefined;
+export function manifestWithNotes(text: string, notes: string): string | undefined;
 export interface WorkflowJob {
   name: string;
   status: string;

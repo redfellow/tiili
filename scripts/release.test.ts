@@ -5,6 +5,8 @@ import {
   describeJob,
   formatDuration,
   highestTag,
+  manifestWithNotes,
+  notesChoice,
   pickTarget,
   setCargoLockVersion,
   setCargoVersion,
@@ -140,5 +142,33 @@ describe("release", () => {
       "✗ Linux   failure",
     );
     expect(describeJob({ name: "bundle (ubuntu-22.04)", status: "queued" }, "⠋")).toBe("· Linux   waiting for a runner");
+  });
+
+  it("Job names: a job name of 8 letters or more keeps a space before its status", () => {
+    expect(describeJob({ name: "manifest", status: "queued" }, "⠋")).toBe("· manifest waiting for a runner");
+  });
+
+  it.each([
+    ["", "use"],
+    ["Y", "use"],
+    [" yes ", "use"],
+    ["e", "edit"],
+    ["n", "auto"],
+    ["auto", "auto"],
+    ["maybe", undefined],
+  ])("Notes choice: %j means %s", (answer, choice) => {
+    expect(notesChoice(answer)).toBe(choice);
+  });
+
+  it("Chosen notes in latest.json: the notes are replaced and the rest kept, or nothing when they match", () => {
+    const manifest = JSON.stringify({ version: "1.2.0", notes: "old", pub_date: "x", platforms: { "linux-x86_64": {} } });
+    const updated = manifestWithNotes(manifest, "## What's new\n\n- new\n");
+    expect(JSON.parse(updated ?? "{}")).toEqual({
+      version: "1.2.0",
+      notes: "## What's new\n\n- new",
+      pub_date: "x",
+      platforms: { "linux-x86_64": {} },
+    });
+    expect(manifestWithNotes(updated ?? "", "## What's new\n\n- new")).toBeUndefined();
   });
 });
