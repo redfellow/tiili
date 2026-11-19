@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { parseInline, type Inline } from "./markdown";
 
@@ -178,7 +177,7 @@ export async function findUpdate(): Promise<FoundUpdate | undefined> {
           onProgress(1);
         }
       });
-      await relaunch();
+      await invoke("relaunch_after_update");
     },
   };
 }
