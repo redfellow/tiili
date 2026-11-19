@@ -1673,11 +1673,13 @@ dialog.link-dialog {
   margin-top: var(--space-1);
 }
 
-.update-markdown code {
+.update-markdown code,
+.update-items code {
   font-family: var(--font-mono);
 }
 
-.update-markdown a {
+.update-markdown a,
+.update-items a {
   color: var(--accent-text);
 }
 
