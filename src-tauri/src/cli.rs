@@ -266,6 +266,8 @@ mod tests {
             (&["frobnicate"], true),
             (&[], false),
             (&["-psn_0_12345"], false),
+            // The jump list's and the desktop action's New Window.
+            (&["--new-window"], false),
             (&["--", "open"], false),
             (&["--frobnicate"], false),
         ];

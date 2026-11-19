@@ -30,6 +30,8 @@ tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
 # The control channel's per-run token (src/control.rs).
 getrandom = "0.3"
+# One running tiili: a second launch hands its command line over and exits (src/launch.rs).
+tauri-plugin-single-instance = "2"
 
 [features]
 # The browser dev server's shell bridge (src/bin/dev-bridge.rs) and its test. On by default, so cargo build, test and
@@ -76,10 +78,12 @@ gtk = "0.18"
 # release builds are GUI-subsystem apps, which start without one. The reduce-motion preference (src/app_icon.rs).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Console", "Win32_System_IO", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+# The taskbar jump list's New Window task (src/jump_list.rs), through COM; tauri already depends on this version.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_EnhancedStorage", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_Shell_PropertiesSystem"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.14"
 # Swapping the Dock icon at run time (src/app_icon.rs); tauri already depends on these versions.
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSApplication", "NSBezierPath", "NSColor", "NSGraphics", "NSImage", "NSWorkspace", "objc2-core-foundation"] }
+objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSApplication", "NSBezierPath", "NSColor", "NSGraphics", "NSImage", "NSMenu", "NSMenuItem", "NSWorkspace", "objc2-core-foundation"] }
 objc2-foundation = { version = "0.3", features = ["NSBundle", "NSData", "NSGeometry", "NSString"] }

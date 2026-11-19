@@ -9,7 +9,12 @@ pub mod control;
 mod control_app;
 pub mod control_server;
 pub mod cwd;
+#[cfg(target_os = "macos")]
+mod dock_menu;
 pub mod intents;
+#[cfg(windows)]
+mod jump_list;
+pub mod launch;
 pub mod links;
 pub mod notes;
 pub mod pty;
@@ -587,7 +592,21 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First, as the plugin requires: a second launch hands its command line to this tiili and exits before it opens a
+    // window or restores the session. A dev run (`npm run tauri dev`) shares the installed tiili's identifier, so it
+    // leaves the plugin out: otherwise it would hand off to the installed tiili and never open.
+    let builder = if tauri::is_dev() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            match launch::launch_action(&argv) {
+                launch::LaunchAction::Focus => windows::focus_last(app),
+                launch::LaunchAction::NewWindow => windows::open_from_launcher(app),
+            }
+        }))
+    };
+    builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -654,8 +673,11 @@ pub fn run() {
             if let Some(main) = app.get_webview_window(windows::MAIN_WINDOW) {
                 windows::reveal_later(&main);
             }
+            #[cfg(windows)]
+            jump_list::write();
             #[cfg(target_os = "macos")]
             {
+                dock_menu::install(app.handle());
                 let menu = macos_menu(app.handle())?;
                 app.set_menu(menu)?;
                 // Menu items act on the focused window only.
