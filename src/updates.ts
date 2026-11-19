@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { parseInline, type Inline } from "./markdown";
 
 /**
  * Updates from tiili's latest GitHub release: the once-a-day automatic check, the skipped version and installing.
@@ -38,6 +39,17 @@ export interface FoundUpdate {
    * `undefined` while the size is unknown.
    */
   install(onProgress: (fraction: number | undefined) => void): Promise<void>;
+}
+
+/** The most items the What's new panel lists; See all changes has the rest. */
+export const WHATS_NEW_LIMIT = 6;
+
+/**
+ * The What's new panel's items as inline Markdown runs, at most `WHATS_NEW_LIMIT` of them, so `**New window.**` shows
+ * in bold as it does in the update dialog instead of with its asterisks.
+ */
+export function whatsNewPanelItems(items: string[]): Inline[][] {
+  return items.slice(0, WHATS_NEW_LIMIT).map(parseInline);
 }
 
 const WHATS_NEW_HEADING = /^#{1,6}\s*what'?s new/i;

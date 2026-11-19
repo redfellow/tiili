@@ -1,8 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { releasePageUrl } from "./updates";
-
-/** The most items the panel lists; See all changes has the rest. */
-export const WHATS_NEW_LIMIT = 6;
+import { renderInline } from "./updateDialog";
+import { releasePageUrl, whatsNewPanelItems } from "./updates";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -16,17 +14,24 @@ function element<K extends keyof HTMLElementTagNameMap>(
 
 /**
  * Shows the What's new panel for `version` in this window, on the first start after an in-app update: the first
- * items of the release's What's new list, a See all changes link to the release page and Close (or Esc).
+ * items of the release's What's new list (with their bold, italic, code and `https:` links, like the update dialog), a
+ * See all changes link to the release page and Close (or Esc).
  * `onClose` runs once the panel has closed.
  */
 export function showWhatsNewDialog(version: string, items: string[], onClose: () => void = () => undefined): void {
   const title = element("h2", { id: "whats-new-title" }, `What's new in tiili ${version}`);
-  const list = element("ul", { className: "update-notes update-items", tabIndex: 0 },
-    ...items.slice(0, WHATS_NEW_LIMIT).map((item) => element("li", {}, item)));
   const url = releasePageUrl(version);
   const allChanges = element("a", { className: "update-all-changes", href: url }, "See all changes");
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
+  const openLink = (href: string) => {
+    status.textContent = "";
+    openUrl(href).catch((error: unknown) => {
+      status.textContent = `Couldn't open the link: ${error instanceof Error ? error.message : String(error)}`;
+    });
+  };
+  const list = element("ul", { className: "update-notes update-items", tabIndex: 0 },
+    ...whatsNewPanelItems(items).map((runs) => element("li", {}, ...runs.map((run) => renderInline(run, openLink)))));
   const close = element("button", { type: "button", className: "settings-save" }, "Close");
 
   const dialog = element("dialog", { className: "settings update-dialog whats-new" },
