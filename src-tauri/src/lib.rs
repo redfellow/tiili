@@ -737,6 +737,7 @@ pub fn run() {
             settings::settings_open,
             app_icon::app_icon_set,
             updates::update_install_kind,
+            updates::relaunch_after_update,
             notes::heynote_load,
             notes::heynote_write,
             notes::heynote_remove,
