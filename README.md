@@ -44,6 +44,10 @@ brick: each terminal is a brick, the window is the wall.
 - **Small and native.** Tauri 2 and xterm.js, around 10 MB, no Electron. It reopens where you left the window, and
   its icon follows light and dark mode. No accounts, no sync, no telemetry. tiili checks GitHub once a day for a new
   version: one anonymous request, which you can turn off in Settings.
+- **A new window on any desktop.** New Window is in the Dock menu on macOS, the taskbar jump list on Windows and
+  the launcher's right-click menu on Linux, so a window opens on the desktop you are on. Starting tiili again
+  brings its last window to the front instead of a second copy: see
+  [New Window from the Dock or taskbar](docs/packaging.md#new-window-from-the-dock-or-taskbar).
 
 ## Install
 
