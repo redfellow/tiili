@@ -23,7 +23,8 @@ const FLUSH_TIMEOUT: Duration = Duration::from_millis(1500);
 /// place when there is no session file yet.
 const OLD_STATE_FILE: &str = ".window-state.json";
 /// Size of a window without a usable saved place; the same as `tauri.conf.json`.
-const DEFAULT_WINDOW_SIZE: tauri::LogicalSize<f64> = tauri::LogicalSize::new(900.0, 600.0);
+pub(crate) const DEFAULT_WINDOW_SIZE: tauri::LogicalSize<f64> =
+    tauri::LogicalSize::new(900.0, 600.0);
 
 /// A window's saved state handed to its frontend once, with its panes' saved scrollback by saved pane id.
 #[derive(Clone, Debug, Serialize)]

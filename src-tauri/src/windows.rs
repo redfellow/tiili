@@ -1,6 +1,6 @@
-//! tiili's windows: the main window from `tauri.conf.json` and the extra ones New Window opens, which shells each
-//! window started and which window was focused last. The pure parts (labels, cascade, start-up URL, the session
-//! map) carry no Tauri types, so they test without a window.
+//! tiili's windows: the main window from `tauri.conf.json` and the extra ones New Window opens (from a pane, the
+//! Shell menu or the app icon), which shells each window started and which window was focused last. The pure parts
+//! (labels, cascade, start-up URL, the session map) carry no Tauri types, so they test without a window.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -295,13 +295,13 @@ pub fn focused_label(app: &AppHandle) -> Option<String> {
 }
 
 /// Opens a full tiili window labelled `label` loading `url`, the same size as `window` (the one that asked) and
-/// cascaded from it.
+/// cascaded from it, and returns it.
 fn open_window(
     app: &AppHandle,
     window: &WebviewWindow,
     label: String,
     url: String,
-) -> Result<(), String> {
+) -> Result<WebviewWindow, String> {
     let text = |e: tauri::Error| format!("Could not open a new window: {e}");
     let scale = window.scale_factor().map_err(text)?;
     let size = window.inner_size().map_err(text)?.to_logical::<f64>(scale);
@@ -313,8 +313,70 @@ fn open_window(
     let builder = window_builder(app, label, url)
         .inner_size(size.width, size.height)
         .position(x, y);
-    reveal_later(&builder.build().map_err(text)?);
-    Ok(())
+    let built = builder.build().map_err(text)?;
+    reveal_later(&built);
+    Ok(built)
+}
+
+/// Opens a new tiili window for the Dock menu, the jump list or the desktop action, whose first pane starts in the
+/// home folder, and focuses it once its page has shown it. It is cascaded from the last focused window, or centred
+/// at the default size when there is none. The window is built on the async runtime, because building one from the
+/// main thread's event handlers deadlocks on Windows; an error is logged.
+pub fn open_from_launcher(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        match open_launcher_window(&app) {
+            Ok(window) => focus_when_shown(window),
+            Err(error) => eprintln!("tiili: {error}"),
+        }
+    });
+}
+
+/// The window [`open_from_launcher`] opens.
+fn open_launcher_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    let label = app.state::<WindowLabels>().next();
+    let url = start_url(None, None);
+    let from = focused_label(app)
+        .filter(|label| !crate::settings::is_settings_window(label))
+        .and_then(|label| app.get_webview_window(&label));
+    if let Some(from) = from {
+        return open_window(app, &from, label, url);
+    }
+    let size = crate::session_app::DEFAULT_WINDOW_SIZE;
+    let built = window_builder(app, label, url)
+        .inner_size(size.width, size.height)
+        .center()
+        .build()
+        .map_err(|e| format!("Could not open a new window: {e}"))?;
+    reveal_later(&built);
+    Ok(built)
+}
+
+/// Focuses `window`, which opened hidden, once its page (or [`reveal_later`]) has shown it, so it is shown on the
+/// current desktop before tiili comes to the front: macOS then has no reason to switch to another window's Space.
+fn focus_when_shown(window: WebviewWindow) {
+    const POLL: std::time::Duration = std::time::Duration::from_millis(20);
+    std::thread::spawn(move || {
+        let deadline =
+            std::time::Instant::now() + REVEAL_FALLBACK + std::time::Duration::from_secs(1);
+        while !window.is_visible().unwrap_or(false) {
+            if std::time::Instant::now() >= deadline {
+                return;
+            }
+            std::thread::sleep(POLL);
+        }
+        let _ = window.set_focus();
+    });
+}
+
+/// Brings the last focused tiili window to the front (else the main window, else any), for a plain second launch.
+pub fn focus_last(app: &AppHandle) {
+    let Some(window) = focused_label(app).and_then(|label| app.get_webview_window(&label)) else {
+        return;
+    };
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 /// A builder for a full tiili window `label` loading `url`, hidden until its page has painted and with the same
@@ -346,7 +408,7 @@ pub async fn window_new(
     move_token: Option<String>,
 ) -> Result<(), String> {
     let url = start_url(cwd.as_deref(), move_token.as_deref());
-    open_window(&app, &window, labels.next(), url)
+    open_window(&app, &window, labels.next(), url).map(|_| ())
 }
 
 /// The other open windows, in open order, named by their focused pane's chip text.
