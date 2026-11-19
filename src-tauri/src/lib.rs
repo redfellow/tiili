@@ -592,15 +592,21 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        // First, as the plugin requires: a second launch hands its command line to this tiili and exits before it
-        // opens a window or restores the session.
-        .plugin(tauri_plugin_single_instance::init(
-            |app, argv, _cwd| match launch::launch_action(&argv) {
+    let builder = tauri::Builder::default();
+    // First, as the plugin requires: a second launch hands its command line to this tiili and exits before it opens a
+    // window or restores the session. A dev run (`npm run tauri dev`) shares the installed tiili's identifier, so it
+    // leaves the plugin out: otherwise it would hand off to the installed tiili and never open.
+    let builder = if tauri::is_dev() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            match launch::launch_action(&argv) {
                 launch::LaunchAction::Focus => windows::focus_last(app),
                 launch::LaunchAction::NewWindow => windows::open_from_launcher(app),
-            },
-        ))
+            }
+        }))
+    };
+    builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

@@ -190,7 +190,8 @@ it, and starts its first pane in the home folder.
 
 Only one tiili runs at a time. Starting it again while it runs hands the command line to the running tiili and
 exits without restoring the session a second time: `--new-window` opens a new window, and anything else brings the
-last focused window to the front.
+last focused window to the front. A development run (`npm run tauri dev`) is left out of this hand-off: it
+starts its own tiili even while the installed one runs, though both use the identifier `app.tiili`.
 
 Middle-click opens no new window anywhere. The macOS Dock passes no middle click to apps, and on Windows and Linux
 a middle-click starts tiili again, which brings the last focused window to the front.

@@ -63,4 +63,40 @@ mod tests {
             assert_eq!(launch_action(argv), *expected, "{name}");
         }
     }
+
+    /// The `key=value` lines of the .desktop group `[group]`.
+    fn desktop_group<'a>(entry: &'a str, group: &str) -> Vec<(&'a str, &'a str)> {
+        let header = format!("[{group}]");
+        entry
+            .lines()
+            .skip_while(|line| line.trim() != header)
+            .skip(1)
+            .take_while(|line| !line.starts_with('['))
+            .filter_map(|line| line.split_once('='))
+            .collect()
+    }
+
+    /// Linux desktop action: the .deb's and AppImage's desktop entry offers New Window, which starts tiili with the
+    /// flag the running tiili opens a window for.
+    #[test]
+    fn linux_desktop_action_starts_tiili_with_new_window() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(
+            config["bundle"]["linux"]["deb"]["desktopTemplate"],
+            "linux/tiili.desktop"
+        );
+        let entry = include_str!("../linux/tiili.desktop");
+        assert!(desktop_group(entry, "Desktop Entry").contains(&("Actions", "new-window;")));
+        let action = desktop_group(entry, "Desktop Action new-window");
+        assert!(action.contains(&("Name", "New Window")));
+        let exec = action
+            .iter()
+            .find(|(key, _)| *key == "Exec")
+            .map(|(_, value)| *value)
+            .expect("the action has an Exec line");
+        assert_eq!(exec, "{{exec}} --new-window");
+        let argv: Vec<&str> = exec.split_whitespace().collect();
+        assert_eq!(launch_action(&argv), LaunchAction::NewWindow);
+    }
 }

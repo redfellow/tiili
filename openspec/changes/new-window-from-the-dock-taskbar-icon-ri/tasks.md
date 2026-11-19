@@ -7,6 +7,7 @@
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib cli::tests::commands_flags_and_bare_words_run_the_cli`
+  - proof: `grep -E 'if tauri::is_dev\(\)' src-tauri/src/lib.rs`
 
 ## 2. Platform entry points
 
@@ -15,7 +16,7 @@
 - [x] 2.2 Windows jump-list task "New Window" (`--new-window`) written at setup, cfg windows, errors logged
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 - [x] 2.3 Linux `.desktop` template `src-tauri/linux/tiili.desktop` with the `new-window` action, wired via `bundle.linux.deb.desktopTemplate` in `src-tauri/tauri.conf.json`
-  - proof: `grep -E '^Actions=new-window;$' src-tauri/linux/tiili.desktop`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib launch::tests::linux_desktop_action_starts_tiili_with_new_window`
   - proof: `grep -E 'desktopTemplate' src-tauri/tauri.conf.json`
 
 ## 3. Docs and spec

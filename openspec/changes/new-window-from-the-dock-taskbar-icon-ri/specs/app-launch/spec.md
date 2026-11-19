@@ -6,7 +6,7 @@ How tiili is launched and relaunched from the OS: one running tiili per user, an
 
 ### Requirement: One running tiili
 
-When tiili is launched while it already runs, the new process SHALL hand its arguments to the running tiili and exit without opening a window or restoring the session. With no `--new-window` argument the running tiili SHALL bring its last focused window to the front.
+When tiili is launched while it already runs, the new process SHALL hand its arguments to the running tiili and exit without opening a window or restoring the session. With no `--new-window` argument the running tiili SHALL bring its last focused window to the front. A development run (`npm run tauri dev`) SHALL NOT take part in this hand-off: it shares the installed tiili's identifier, so it starts as a tiili of its own even while the installed one runs.
 
 #### Scenario: Plain relaunch focuses
 - **WHEN** tiili runs and is started again with no arguments
@@ -15,6 +15,10 @@ When tiili is launched while it already runs, the new process SHALL hand its arg
 #### Scenario: Relaunch with new-window
 - **WHEN** tiili runs and is started again with `--new-window`
 - **THEN** the running tiili opens one new window on the current desktop and focuses it
+
+#### Scenario: Dev run beside the installed tiili
+- **WHEN** the installed tiili runs and a development build is started with `npm run tauri dev`
+- **THEN** the development build opens its own window and the installed tiili is left as it was
 
 ### Requirement: New Window from the app icon
 
