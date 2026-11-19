@@ -6,3 +6,10 @@ x-harvaaja-card: 1e3b729a-ffd6-4f15-93a5-2998f7c62daa
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: The spec already requires Install now to restart tiili; a duplicate
+    Dock instance is a bug against that existing requirement.
+  citations:
+    - "openspec/specs/app-updates/spec.md: Requirement: Install update prompt"
+  revision: 39d99dcc-2ce5-4bb8-adcd-7a8d96774031
