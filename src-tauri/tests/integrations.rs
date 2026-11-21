@@ -217,6 +217,15 @@ fn status_comes_from_disk_and_the_search_path() {
             (false, false),
             (false, true),
         ),
+        (
+            "Turn off without the tool",
+            &[],
+            true,
+            true,
+            omp_ok,
+            (true, false),
+            (true, false),
+        ),
     ];
     for &(name, tools, skill, folder, reply, omp, claude) in cases {
         let scratch = Scratch::new(&name.replace(' ', "-"));
@@ -348,24 +357,53 @@ fn changes_that_cannot_be_made_say_why() {
     assert!(!omp_dir(&scratch.app_data()).exists());
 }
 
-/// Turn off: unticking the skill removes `~/.claude/skills/tiili-tiles` and leaves other skills alone.
+/// Turn off / Turn off without the tool: unticking the skill removes `~/.claude/skills/tiili-tiles` and leaves
+/// other skills alone, whether or not `claude` is on PATH.
 #[test]
 fn turn_off_removes_the_skill_and_leaves_other_skills() {
-    let scratch = Scratch::new("skill-off");
-    let runner = FakeOmp::new(omp_ok);
-    let env = scratch.env(vec![scratch.bin("bin", &["claude"])], &runner);
-    let skills = scratch.home().join(".claude").join("skills");
-    let other = skills.join("other").join("SKILL.md");
-    fs::create_dir_all(other.parent().unwrap()).unwrap();
-    fs::write(&other, "mine").unwrap();
-    claude_skill::install(&scratch.home()).unwrap();
+    let cases: &[(&str, &[&str])] = &[
+        ("claude on PATH", &["claude"]),
+        ("Turn off without the tool", &[]),
+    ];
+    for &(name, tools) in cases {
+        let scratch = Scratch::new(&format!("skill-off-{}", name.replace(' ', "-")));
+        let runner = FakeOmp::new(omp_ok);
+        let env = scratch.env(vec![scratch.bin("bin", tools)], &runner);
+        let skills = scratch.home().join(".claude").join("skills");
+        let other = skills.join("other").join("SKILL.md");
+        fs::create_dir_all(other.parent().unwrap()).unwrap();
+        fs::write(&other, "mine").unwrap();
+        claude_skill::install(&scratch.home()).unwrap();
 
-    let outcomes = apply(&env, &[on(CLAUDE_SKILL, false)]);
-    assert!(outcomes[0].ok, "{outcomes:?}");
-    assert!(!skills.join("tiili-tiles").exists());
-    assert_eq!(fs::read_to_string(&other).unwrap(), "mine");
-    // Removing it again is not an error.
-    assert!(apply(&env, &[on(CLAUDE_SKILL, false)])[0].ok);
+        let outcomes = apply(&env, &[on(CLAUDE_SKILL, false)]);
+        assert!(outcomes[0].ok, "{name}: {outcomes:?}");
+        assert!(!skills.join("tiili-tiles").exists(), "{name}");
+        assert_eq!(fs::read_to_string(&other).unwrap(), "mine", "{name}");
+        // Removing it again is not an error.
+        assert!(apply(&env, &[on(CLAUDE_SKILL, false)])[0].ok, "{name}");
+    }
+}
+
+/// Turn off without the tool: with omp gone from PATH, turning the omp integration off fails with an error and a
+/// fix, runs nothing and keeps its folder, so omp is not left linked to a missing one.
+#[test]
+fn turn_off_without_the_tool_keeps_the_omp_folder_and_says_how() {
+    let scratch = Scratch::new("omp-off-missing");
+    let runner = FakeOmp::new(omp_ok);
+    let env = scratch.env(vec![scratch.bin("bin", &[])], &runner);
+    let dir = omp_dir(&scratch.app_data());
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("package.json"), "{}").unwrap();
+
+    let outcomes = apply(&env, &[on(OMP_SUBAGENT_PANES, false)]);
+    let Outcome { ok, error, fix, .. } = &outcomes[0];
+    assert!(!ok && error.is_some(), "{outcomes:?}");
+    assert!(
+        fix.as_deref().unwrap().contains(&dir.display().to_string()),
+        "{fix:?}"
+    );
+    assert!(runner.args().is_empty());
+    assert!(dir.join("package.json").is_file());
 }
 
 /// A tool only the login shell's PATH has is found, and runs from there with the login shell's folders first.

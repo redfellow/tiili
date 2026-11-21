@@ -385,7 +385,7 @@ impl Renderer {
     }
 
     /// The closing line for a transcript that ended or an agent that finished.
-    fn finished(&self) -> String {
+    pub fn finished(&self) -> String {
         format!(
             "{}{}",
             self.paint("32", "— finished —"),
@@ -394,7 +394,7 @@ impl Renderer {
     }
 
     /// The closing line for an agent whose process went away without ending its transcript.
-    fn gone(&self) -> String {
+    pub fn gone(&self) -> String {
         self.paint(
             "2",
             "— the agent's process is gone —  press any key to close",

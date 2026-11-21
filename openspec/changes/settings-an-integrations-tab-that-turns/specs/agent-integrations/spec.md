@@ -12,7 +12,7 @@ tiili SHALL install or uninstall an integration only when the user saves the Int
 - **THEN** no integration is installed
 
 ### Requirement: Integration status from disk
-Each integration's checkbox SHALL show whether it is installed on disk when the dialog opens. When its tool (`omp` or `claude`) is not on PATH, its row SHALL say so and its checkbox SHALL not be tickable.
+Each integration's checkbox SHALL show whether it is installed on disk when the dialog opens. When its tool (`omp` or `claude`) is not on PATH, its row SHALL say so and what to install, and its checkbox SHALL not be tickable; an installed one SHALL still be untickable, so it can be turned off.
 
 #### Scenario: Installed outside the app
 - **WHEN** `~/.claude/skills/tiili-tiles/SKILL.md` exists and the dialog opens
@@ -20,7 +20,11 @@ Each integration's checkbox SHALL show whether it is installed on disk when the 
 
 #### Scenario: Tool missing
 - **WHEN** `omp` is not on PATH
-- **THEN** the Oh My Pi row says omp is not on PATH and its box cannot be ticked
+- **THEN** the Oh My Pi row says omp is not on PATH and to install Oh My Pi, and its box cannot be ticked
+
+#### Scenario: Turn off without the tool
+- **WHEN** the skill is installed, `claude` is not on PATH, and the user unticks the skill and saves
+- **THEN** the `~/.claude/skills/tiili-tiles` folder is removed; with `omp` off PATH, unticking Oh My Pi subagent panes instead keeps its folder and shows an error and a fix
 
 ### Requirement: Applying integrations
 Save SHALL install each newly ticked integration and uninstall each newly unticked one. When one fails, the dialog SHALL stay open showing that row's error and a fix to try, and integrations that succeeded SHALL stay applied.

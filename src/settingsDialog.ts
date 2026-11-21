@@ -825,7 +825,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       integrationNote.textContent = "";
     } catch (error) {
       if (load !== integrationLoads) return;
-      integrationNote.textContent = `Couldn't read the integrations: ${String(error)}`;
+      integrationNote.textContent =
+        `Couldn't read the integrations: ${String(error)}. Close Settings and open them again to retry.`;
     }
     renderIntegrations();
   };

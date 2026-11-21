@@ -49,8 +49,10 @@ pub struct Integration {
     pub id: &'static str,
     pub name: &'static str,
     pub description: &'static str,
-    /// The agent's command, which must be on the search path for the integration to be turned on or off.
+    /// The agent's command, which must be on the search path for the integration to be turned on.
     pub tool: &'static str,
+    /// The agent's name, for telling the user what to install.
+    pub agent: &'static str,
 }
 
 pub const OMP_SUBAGENT_PANES: &str = "omp-subagent-panes";
@@ -64,12 +66,14 @@ pub const INTEGRATIONS: &[Integration] = &[
         description: "When omp runs in a tiili pane, each subagent it starts gets a pane of its own beside it that \
                       shows the subagent's work as it happens.",
         tool: "omp",
+        agent: "Oh My Pi",
     },
     Integration {
         id: CLAUDE_SKILL,
         name: "Claude Code tiili-tiles skill",
         description: "Teaches Claude Code to open and arrange tiili panes with the tiili command.",
         tool: "claude",
+        agent: "Claude Code",
     },
 ];
 
@@ -237,9 +241,10 @@ pub struct Status {
     pub location: String,
     /// Whether it is installed now.
     pub installed: bool,
-    /// Whether it can be turned on or off: its tool is on the search path and its folder is known.
+    /// Whether it can be turned on: its tool is on the search path and its folder is known. One that is installed
+    /// can be turned off either way.
     pub available: bool,
-    /// Why it is not available.
+    /// Why it is not available, and what to do about it.
     pub reason: Option<String>,
 }
 
@@ -271,11 +276,15 @@ pub fn status(env: &Env) -> Vec<Status> {
             };
             let reason = if location.is_none() {
                 Some(
-                    "Your home folder is not known: HOME (or USERPROFILE on Windows) is not set."
+                    "Your home folder is not known: HOME (or USERPROFILE on Windows) is not set. Set it and \
+                     restart tiili."
                         .to_string(),
                 )
             } else if tool.is_none() {
-                Some(format!("{} is not on PATH.", integration.tool))
+                Some(format!(
+                    "{} is not on PATH. Install {}, then reopen Settings.",
+                    integration.tool, integration.agent
+                ))
             } else {
                 None
             };
@@ -425,10 +434,18 @@ fn install_omp(env: &Env) -> Result<(), Failure> {
     run_omp(env, &omp, &["plugin", "link", &dir_arg])
 }
 
+/// Unlinks the extension from omp, then removes its folder. Without omp on the search path nothing is removed, so
+/// omp is not left linked to a missing folder.
 fn uninstall_omp(env: &Env) -> Result<(), Failure> {
-    let omp = find_omp(env)?;
-    run_omp(env, &omp, &["plugin", "uninstall", OMP_PLUGIN])?;
     let dir = env.omp_dir();
+    let omp = env.find("omp").ok_or_else(|| Failure {
+        error: "omp is not on PATH, so tiili cannot unlink the extension from it.".to_string(),
+        fix: format!(
+            "Put omp back on PATH and reopen Settings, or delete {} if you no longer use Oh My Pi.",
+            dir.display()
+        ),
+    })?;
+    run_omp(env, &omp, &["plugin", "uninstall", OMP_PLUGIN])?;
     match fs::remove_dir_all(&dir) {
         Err(err) if err.kind() != io::ErrorKind::NotFound => Err(Failure {
             error: format!(
@@ -441,6 +458,7 @@ fn uninstall_omp(env: &Env) -> Result<(), Failure> {
     }
 }
 
+/// Installs or removes the skill; neither needs `claude`, so a skill whose agent is gone can still be removed.
 fn change_skill(env: &Env, on: bool) -> Result<(), Failure> {
     let home = env.home.as_deref().ok_or_else(|| Failure {
         error: "Your home folder is not known: HOME (or USERPROFILE on Windows) is not set."

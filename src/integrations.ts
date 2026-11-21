@@ -6,9 +6,9 @@ export interface IntegrationStatus {
   /** The folder it installs to. */
   location: string;
   installed: boolean;
-  /** Whether it can be turned on or off: its tool (omp, claude) is on PATH. */
+  /** Whether it can be turned on: its tool (omp, claude) is on PATH. One that is installed can be turned off either way. */
   available: boolean;
-  /** Why it is not available. */
+  /** Why it is not available, and what to do about it. */
   reason: string | null;
 }
 
@@ -43,20 +43,29 @@ export interface IntegrationRowView {
   fix: string | null;
 }
 
-/** The changes Save makes: each row that can be changed whose box (`ticked`, by id) differs from what is installed. */
+/** Whether row `row`'s box can be changed: it can be turned on, or it is installed and so can be turned off. */
+function changeable(row: IntegrationStatus): boolean {
+  return row.available || row.installed;
+}
+
+/**
+ * The changes Save makes: each row whose box (`ticked`, by id) differs from what is installed, where that change can
+ * be made (turning off always can; turning on needs the row available).
+ */
 export function integrationChanges(
   rows: readonly IntegrationStatus[],
   ticked: ReadonlyMap<string, boolean>,
 ): IntegrationChange[] {
   return rows.flatMap((row) => {
     const on = ticked.get(row.id);
-    return row.available && on !== undefined && on !== row.installed ? [{ id: row.id, on }] : [];
+    return on !== undefined && on !== row.installed && (row.available || !on) ? [{ id: row.id, on }] : [];
   });
 }
 
 /**
- * Row `row` as shown: its box ticked as in `ticked` (else as installed) unless it cannot be changed, and the error and
- * fix of `outcome` when that failed.
+ * Row `row` as shown: its box ticked as in `ticked` (else as installed) unless it cannot be changed, the reason when it
+ * cannot be turned on, and the error and fix of `outcome` when that failed. An installed row whose tool is missing can
+ * still be unticked, and ticked back.
  */
 export function integrationRowView(
   row: IntegrationStatus,
@@ -65,8 +74,8 @@ export function integrationRowView(
 ): IntegrationRowView {
   const failed = outcome !== undefined && !outcome.ok;
   return {
-    checked: row.available ? (ticked ?? row.installed) : row.installed,
-    disabled: !row.available,
+    checked: changeable(row) ? (ticked ?? row.installed) : row.installed,
+    disabled: !changeable(row),
     reason: row.available ? null : row.reason,
     error: failed ? outcome.error : null,
     fix: failed ? outcome.fix : null,

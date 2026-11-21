@@ -16,11 +16,13 @@ const status = (id: string, installed: boolean, available = true): IntegrationSt
   location: `/somewhere/${id}`,
   installed,
   available,
-  reason: available ? null : `${id} is not on PATH.`,
+  reason: available ? null : `${id} is not on PATH. Install ${id}, then reopen Settings.`,
 });
 
 describe("integration changes", () => {
-  const rows = [status("omp", false), status("skill", true), status("gone", false, false)];
+  const rows = [
+    status("omp", false), status("skill", true), status("gone", false, false), status("left", true, false),
+  ];
   const cases: [string, [string, boolean][], IntegrationChange[]][] = [
     ["nothing touched: nothing changes", [], []],
     ["ticked again as installed: nothing changes", [["omp", false], ["skill", true]], []],
@@ -32,6 +34,8 @@ describe("integration changes", () => {
     ["unticking the skill turns it off", [["skill", false]], [{ id: "skill", on: false }]],
     ["Tool missing: its box never changes anything", [["gone", true]], []],
     ["an id the app does not list is ignored", [["other", true]], []],
+    ["Turn off without the tool: unticking an installed row turns it off", [["left", false]], [{ id: "left", on: false }]],
+    ["Turn off without the tool: ticking it back changes nothing", [["left", true]], []],
   ];
   it.each(cases)("%s", (_name, ticked, expected) => {
     expect(integrationChanges(rows, new Map(ticked))).toEqual(expected);
@@ -60,7 +64,14 @@ describe("integration rows", () => {
       status("omp", false, false),
       true,
       undefined,
-      { checked: false, disabled: true, reason: "omp is not on PATH.", error: null, fix: null },
+      { checked: false, disabled: true, reason: status("omp", false, false).reason, error: null, fix: null },
+    ],
+    [
+      "Turn off without the tool: an installed row says why and can be unticked",
+      status("skill", true, false),
+      false,
+      undefined,
+      { checked: false, disabled: false, reason: status("skill", true, false).reason, error: null, fix: null },
     ],
     [
       "One fails: the row shows the error and a fix",
