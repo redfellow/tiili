@@ -5,3 +5,14 @@ x-harvaaja-card: 1cbcb64a-3667-491f-aa57-023c7a0d66a7
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds a new settings tab (changes the Settings tabs requirement), a
+    new user-facing integrations capability and a new `tiili follow` command; no
+    active change covers it.
+  citations:
+    - "openspec/specs/settings/spec.md: Requirement Settings tabs, Settings tab
+      contents"
+    - "openspec/specs/agent-skills/spec.md: Requirement Installing the skill"
+    - integrations/subagent-panes/README.md
+  revision: dc57c478-6b5c-4b94-a66b-c022b0887437
