@@ -141,7 +141,8 @@ side: ask Claude to review PRs 12 and 15 (or just "the open PRs" for the three m
 git worktree and tile. It needs [`gh`](https://cli.github.com) (signed in with `gh auth login`), `claude` and
 `tiili` on your PATH, and Claude Code has to run inside a tiili pane: `tiili open` works only from one.
 
-Install it with:
+Turn it on in Settings → Integrations: tick it and save. Untick it and save to remove it. You can also install it
+with:
 
 ```sh
 tiili install-claude-skill

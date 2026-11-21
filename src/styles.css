@@ -993,6 +993,33 @@ body.settings-window {
   gap: var(--space-2);
 }
 
+/* Integrations: one block per integration, its checkbox, then what it is, where it goes and what went wrong. */
+.settings-integrations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-integration p {
+  margin: var(--space-1) 0 0;
+  padding-left: calc(13px + var(--space-2));
+}
+
+.settings-integration-about,
+.settings-integration-where,
+.settings-integration-reason {
+  color: var(--muted);
+}
+
+.settings-integration code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.settings-integration-error {
+  color: var(--ansi-1);
+}
+
 .settings input,
 .settings select,
 .settings button {
