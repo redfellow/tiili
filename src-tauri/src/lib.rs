@@ -11,6 +11,8 @@ pub mod control_server;
 pub mod cwd;
 #[cfg(target_os = "macos")]
 mod dock_menu;
+pub mod follow;
+pub mod integrations;
 pub mod intents;
 #[cfg(windows)]
 mod jump_list;
@@ -659,6 +661,7 @@ pub fn run() {
         .setup(|app| {
             app_icon::apply(app.handle());
             control_app::start(app.handle());
+            integrations::refresh_at_startup(app.handle());
             {
                 use tauri_plugin_notification::NotificationExt;
                 let handle = app.handle().clone();
@@ -735,6 +738,8 @@ pub fn run() {
             settings::settings_load,
             settings::settings_save,
             settings::settings_open,
+            integrations::integrations_status,
+            integrations::integrations_apply,
             app_icon::app_icon_set,
             updates::update_install_kind,
             updates::relaunch_after_update,

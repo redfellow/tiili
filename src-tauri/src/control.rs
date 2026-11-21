@@ -7,6 +7,8 @@
 //! `{"ok":true,"protocol":1,"done":true}` or `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
 //! failures one, [`ERRORS`].
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::pty::SessionId;
@@ -613,6 +615,8 @@ pub enum CliCommand {
     /// `tiili prompt`.
     Prompt,
     InstallClaudeSkill,
+    /// `tiili follow FILE [--title TEXT] [--pid PID] [--done MARKER]`.
+    Follow(crate::follow::Options),
     /// `tiili describe [CMD]`.
     Describe(Option<String>),
     /// `tiili help [CMD]`, `--help` or `-h`.
@@ -995,6 +999,40 @@ pub const COMMANDS: &[CommandSpec] = &[
         errors: &["usage", "install_failed"],
     },
     CommandSpec {
+        name: "follow",
+        summary: "Follow an Oh My Pi or Claude Code transcript as a readable log, without contacting the app",
+        usage: "tiili follow FILE [--title TEXT] [--pid PID] [--done MARKER]",
+        options: &[
+            OptSpec {
+                name: "--title",
+                value: Some("TEXT"),
+                summary: "the heading (default: the file's name)",
+            },
+            OptSpec {
+                name: "--pid",
+                value: Some("PID"),
+                summary: "stop following when this process is gone",
+            },
+            OptSpec {
+                name: "--done",
+                value: Some("MARKER"),
+                summary: "stop following when this file exists",
+            },
+        ],
+        positionals: &[ArgSpec {
+            name: "FILE",
+            required: true,
+            summary: "the transcript (JSONL); it is waited for until it exists",
+        }],
+        rest: None,
+        needs: &[],
+        output_text: "the transcript's task, tool calls, short results and replies, until the session ends; then it \
+            waits for a key when stdin is a terminal",
+        output_schema: None,
+        exit_codes: &[0, 2],
+        errors: &["usage"],
+    },
+    CommandSpec {
         name: "describe",
         summary: "Print this command line's contract as JSON, without contacting the app",
         usage: "tiili describe [CMD]",
@@ -1195,6 +1233,17 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
         }
         "prompt" => CliCommand::Prompt,
         "install-claude-skill" => CliCommand::InstallClaudeSkill,
+        "follow" => CliCommand::Follow(crate::follow::Options {
+            file: PathBuf::from(&positionals[0]),
+            title: option("--title"),
+            pid: match option("--pid") {
+                Some(pid) => Some(pid.parse().ok().filter(|&p: &u32| p > 0).ok_or_else(|| {
+                    CliError::Usage(format!("--pid needs a process id, not {pid}"))
+                })?),
+                None => None,
+            },
+            done: option("--done").map(PathBuf::from),
+        }),
         "describe" => CliCommand::Describe(target(positionals)?),
         "help" => CliCommand::Help(target(positionals)?),
         other => unreachable!("command {other} in COMMANDS has no parser"),

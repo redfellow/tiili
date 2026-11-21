@@ -1,5 +1,6 @@
 //! The bundled tiili-tiles Claude Code skill and `tiili install-claude-skill`, which writes it into the user's
-//! `~/.claude/skills`. The skill text is embedded so the command works from any installed build.
+//! `~/.claude/skills`; Settings → Integrations installs and removes it too (src/integrations.rs). The skill text is
+//! embedded so the command works from any installed build.
 
 use std::ffi::OsString;
 use std::fs;
@@ -30,8 +31,21 @@ pub fn install(home: &Path) -> io::Result<PathBuf> {
     Ok(path)
 }
 
+/// Removes the skill's own folder, `<home>/.claude/skills/tiili-tiles`, and nothing else; other skills stay. A skill
+/// that is not there is not an error.
+pub fn uninstall(home: &Path) -> io::Result<()> {
+    let path = skill_path(home);
+    let Some(dir) = path.parent() else {
+        return Ok(());
+    };
+    match fs::remove_dir_all(dir) {
+        Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+        _ => Ok(()),
+    }
+}
+
 /// The user's home folder from the variables `env` reads: `HOME`, or `USERPROFILE` on Windows when `HOME` is unset.
-fn home_dir(env: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+pub fn home_dir(env: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     ["HOME", "USERPROFILE"]
         .iter()
         .filter_map(|name| env(name))

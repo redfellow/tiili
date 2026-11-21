@@ -189,5 +189,7 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
     settingsWindows: undefined,
     // Nothing of the page is kept for the next load.
     session: undefined,
+    // The dev server installs nothing.
+    integrations: undefined,
   };
 }

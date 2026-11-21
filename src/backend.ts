@@ -1,5 +1,6 @@
 import type { AttentionMark } from "./attention";
 import type { NoteStore } from "./heynoteStore";
+import type { Integrations } from "./integrations";
 import type { ResolvedPath } from "./links";
 import type { PaneCommand, PaneCwd } from "./paneChip";
 import type { Restored, TabState } from "./session";
@@ -282,6 +283,8 @@ export interface Backend {
   readonly paneControl?: PaneControl;
   /** Saving the window for the next launch; absent where nothing is kept (the dev server). */
   readonly session?: SessionSaving;
+  /** Turning agent integrations on and off; absent where nothing can install them (the dev server). */
+  readonly integrations?: Integrations;
 }
 
 export type BackendKind = "tauri" | "dev";
