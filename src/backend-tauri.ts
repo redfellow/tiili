@@ -8,6 +8,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import type { AttentionMark } from "./attention";
 import type { Backend, MenuItem, MovePayload, RunningCommand, UnsavedChoice } from "./backend";
 import { noteListeners, type NotesChanged } from "./heynoteStore";
+import type { IntegrationOutcome, IntegrationStatus } from "./integrations";
 import { currentPlatform } from "./keymap";
 import type { Restored } from "./session";
 
@@ -165,6 +166,10 @@ export function tauriBackend(): Backend {
         if (running.program) result.program = running.program;
         return result;
       },
+    },
+    integrations: {
+      status: () => invoke<IntegrationStatus[]>("integrations_status"),
+      apply: (changes) => invoke<IntegrationOutcome[]>("integrations_apply", { changes }),
     },
   };
 }

@@ -13,7 +13,7 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    files: ["scripts/**/*.{mjs,ts}", "eslint-rules/**/*.{js,ts}", "eslint.config.js"],
+    files: ["scripts/**/*.{mjs,ts}", "eslint-rules/**/*.{js,ts}", "integrations/**/*.{mjs,ts}", "eslint.config.js"],
     languageOptions: { globals: { ...globals.node } },
   },
   {
