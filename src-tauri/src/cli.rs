@@ -1,7 +1,7 @@
 //! `tiili <command>`: the app's binary in command-line mode, with the commands of [`crate::control::COMMANDS`].
 //! `open`, `list`, `attention` and `close` run from inside a pane: they find the app through `TIILI_SOCKET`,
 //! `TIILI_TOKEN` and `TIILI_PANE`, send one request (see [`crate::control`]) and print the answer. `help`,
-//! `--version`, `describe`, `prompt` and `install-claude-skill` work anywhere without the app.
+//! `--version`, `describe`, `prompt`, `install-claude-skill` and `follow` work anywhere without the app.
 
 use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, Write};
@@ -120,6 +120,10 @@ fn execute(
         }
         CliCommand::Prompt => {
             let _ = write!(out, "{}", crate::intents::render_prompt());
+            return Ok(());
+        }
+        CliCommand::Follow(options) => {
+            crate::follow::run(&options, out);
             return Ok(());
         }
         CliCommand::List { json } => (Op::List, json),
@@ -258,6 +262,7 @@ mod tests {
             (&["close", "8"], true),
             (&["prompt"], true),
             (&["install-claude-skill"], true),
+            (&["follow", "a.jsonl"], true),
             (&["describe"], true),
             (&["help"], true),
             (&["--help"], true),
@@ -304,6 +309,10 @@ mod tests {
             (&["close"], socket_only, 2),
             (&["open", "--key", "", "--", "ls"], socket_only, 2),
             (&["prompt", "now"], nothing, 2),
+            (&["follow"], nothing, 2),
+            (&["follow", "a.jsonl", "b.jsonl"], nothing, 2),
+            (&["follow", "a.jsonl", "--pid", "abc"], nothing, 2),
+            (&["follow", "a.jsonl", "--title"], nothing, 2),
             (&["open", "--"], socket_only, 2),
             (&["list", "extra"], socket_only, 2),
             (&["frobnicate"], nothing, 2),

@@ -618,6 +618,57 @@
     {
       "args": [
         {
+          "kind": "option",
+          "name": "--title",
+          "required": false,
+          "summary": "the heading (default: the file's name)",
+          "value": "TEXT"
+        },
+        {
+          "kind": "option",
+          "name": "--pid",
+          "required": false,
+          "summary": "stop following when this process is gone",
+          "value": "PID"
+        },
+        {
+          "kind": "option",
+          "name": "--done",
+          "required": false,
+          "summary": "stop following when this file exists",
+          "value": "MARKER"
+        },
+        {
+          "kind": "positional",
+          "name": "FILE",
+          "required": true,
+          "summary": "the transcript (JSONL); it is waited for until it exists"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        }
+      ],
+      "exit_codes": [
+        0,
+        2
+      ],
+      "name": "follow",
+      "needs": [],
+      "output": {
+        "json": null,
+        "text": "the transcript's task, tool calls, short results and replies, until the session ends; then it waits for a key when stdin is a terminal"
+      },
+      "summary": "Follow an Oh My Pi or Claude Code transcript as a readable log, without contacting the app",
+      "usage": "tiili follow FILE [--title TEXT] [--pid PID] [--done MARKER]"
+    },
+    {
+      "args": [
+        {
           "kind": "positional",
           "name": "CMD",
           "required": false,

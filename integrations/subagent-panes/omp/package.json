@@ -1,0 +1,10 @@
+{
+  "name": "tiili-subagent-panes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Oh My Pi extension: show each subagent live in its own tiili pane beside the agent that spawned it.",
+  "type": "module",
+  "omp": {
+    "extensions": ["./index.ts"]
+  }
+}

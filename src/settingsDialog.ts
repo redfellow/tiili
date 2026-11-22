@@ -1,5 +1,8 @@
 import type { UnsavedChoice } from "./backend";
 import type { Platform } from "./keymap";
+import {
+  integrationChanges, type IntegrationOutcome, integrationRowView, type Integrations, type IntegrationStatus,
+} from "./integrations";
 import { gridFor, TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
@@ -64,6 +67,8 @@ export interface SettingsDialogOptions {
    * commands" off are saved.
    */
   clearRestored?: () => Promise<void>;
+  /** Turns agent integrations on and off from the Integrations tab. Without it (the dev server) the tab says so. */
+  integrations?: Integrations;
 }
 
 export interface SettingsDialog {
@@ -234,6 +239,11 @@ function row(label: string, ...controls: (HTMLElement | string)[]): HTMLElement 
   return element("div", { className: "settings-row" },
     element("span", { className: "settings-row-label" }, label),
     element("div", { className: "settings-row-controls" }, ...controls));
+}
+
+/** `text` with its `backticked` parts as code. */
+function withCode(text: string): (HTMLElement | string)[] {
+  return text.split("`").map((part, i) => (i % 2 === 1 ? element("code", {}, part) : part));
 }
 
 /** A checkbox with its text after it. */
@@ -548,9 +558,11 @@ function terminalRun(prompt: PromptSegment[][], command: string, output: HTMLEle
 
 /**
  * Builds the settings form: tabs for Style (Theme, Prompt, Terminal), Typography (Font) and Behaviour (Tiling, Panes,
- * Attention, App, Remote shells) at the top, a live preview under them on Style and Typography, the selected tab's body, which
- * alone scrolls, and a footer with Reset to defaults, Cancel and Save. Every change applies at once as a preview;
- * only Save writes it, and Cancel and Esc go back to the opening settings. Either one then calls `close`.
+ * Attention, App, Remote shells) and Integrations (Coding agents) at the top, a live preview under them on Style and
+ * Typography, the selected tab's body, which alone scrolls, and a footer with Reset to defaults, Cancel and Save. Every
+ * change applies at once as a preview; only Save writes it, and Cancel and Esc go back to the opening settings. Either
+ * one then calls `close`. Integrations are not previewed: Save installs the ticked ones and uninstalls the unticked
+ * ones, and stays open on the Integrations tab when one of them fails.
  */
 function createSettingsForm(options: SettingsDialogOptions, close: () => void): SettingsForm {
   const session = createSettingsSession(options.initial);
@@ -759,12 +771,78 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       snippet),
   ];
 
+  // Nothing is installed or uninstalled until Save; the boxes only record what to change.
+  const integrationNote = element("p", { className: "settings-status" });
+  integrationNote.setAttribute("role", "status");
+  const integrationList = element("div", { className: "settings-integrations" });
+  let integrationRows: IntegrationStatus[] = [];
+  /** The boxes the user changed since the rows were read, by id. */
+  const ticked = new Map<string, boolean>();
+  /** The last Save's failures, by id, shown on their rows. */
+  let outcomes = new Map<string, IntegrationOutcome>();
+  const renderIntegrations = () => {
+    integrationList.replaceChildren(...integrationRows.map((row) => {
+      const view = integrationRowView(row, ticked.get(row.id), outcomes.get(row.id));
+      const box = element("input", { type: "checkbox", checked: view.checked, disabled: view.disabled });
+      box.addEventListener("change", () => ticked.set(row.id, box.checked));
+      const id = `settings-integration-${row.id}`;
+      const lines = [
+        element("p", { className: "settings-integration-about", id: `${id}-about` }, row.description),
+        element("p", { className: "settings-integration-where" }, "Installs in ", element("code", {}, row.location)),
+      ];
+      if (view.reason) {
+        lines.push(element("p", { className: "settings-integration-reason", id: `${id}-reason` }, view.reason));
+      }
+      if (view.error) {
+        const error = element("p", { className: "settings-integration-error", id: `${id}-error` }, view.error);
+        error.setAttribute("role", "alert");
+        lines.push(error);
+      }
+      if (view.fix) {
+        lines.push(element("p", { className: "settings-integration-fix", id: `${id}-fix` }, ...withCode(view.fix)));
+      }
+      box.setAttribute("aria-describedby", lines.map((line) => line.id).filter(Boolean).join(" "));
+      return element("div", { className: "settings-integration" }, check(box, row.name), ...lines);
+    }));
+  };
+  let integrationLoads = 0;
+  /** Reads the rows from disk and PATH again, dropping the user's ticks, and shows `failures` on their rows. */
+  const loadIntegrations = async (failures: Map<string, IntegrationOutcome>) => {
+    const load = ++integrationLoads;
+    ticked.clear();
+    outcomes = failures;
+    integrationRows = [];
+    renderIntegrations();
+    if (!options.integrations) {
+      integrationNote.textContent = "Integrations can be turned on and off in the tiili app, not on the dev server.";
+      return;
+    }
+    integrationNote.textContent = "Checking what is installed…";
+    try {
+      const rows = await options.integrations.status();
+      if (load !== integrationLoads) return;
+      integrationRows = rows;
+      integrationNote.textContent = "";
+    } catch (error) {
+      if (load !== integrationLoads) return;
+      integrationNote.textContent =
+        `Couldn't read the integrations: ${String(error)}. Close Settings and open them again to retry.`;
+    }
+    renderIntegrations();
+  };
+  const integrationFields = section("Coding agents",
+    "tiili installs one only when you tick it and save, and removes it when you untick it and save. A new version " +
+    "of tiili updates the ones that are installed.",
+    integrationNote, integrationList);
+
   const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" }, ...styleFields);
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);
   const behaviour = element("div", { className: "settings-panel", id: "settings-panel-behaviour" },
     ...behaviourFields);
-  const panels = [stylePanel, typography, behaviour];
-  const tabs = ["Style", "Typography", "Behaviour"].map((name, i) => {
+  const integrationsPanel = element("div", { className: "settings-panel", id: "settings-panel-integrations" },
+    integrationFields);
+  const panels = [stylePanel, typography, behaviour, integrationsPanel];
+  const tabs = ["Style", "Typography", "Behaviour", "Integrations"].map((name, i) => {
     const tab = element("button", { type: "button", className: "settings-tab", id: `settings-tab-${i}` }, name);
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", panels[i].id);
@@ -776,15 +854,19 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     panel.setAttribute("role", "tabpanel");
     panel.setAttribute("aria-labelledby", tabs[i].id);
   });
-  const body = element("div", { className: "settings-body" }, stylePanel, typography, behaviour, status);
-  /** Shows tab `index` and its panel, with the preview on all but Behaviour; `focus` moves the keyboard to the tab. */
+  const body = element("div", { className: "settings-body" },
+    stylePanel, typography, behaviour, integrationsPanel, status);
+  /**
+   * Shows tab `index` and its panel, with the preview on Style and Typography only; `focus` moves the keyboard to the
+   * tab.
+   */
   const showTab = (index: number, focus = false) => {
     tabs.forEach((tab, i) => {
       tab.setAttribute("aria-selected", String(i === index));
       tab.tabIndex = i === index ? 0 : -1;
       panels[i].hidden = i !== index;
     });
-    preview.hidden = panels[index] === behaviour;
+    preview.hidden = panels[index] === behaviour || panels[index] === integrationsPanel;
     body.scrollTop = 0;
     if (focus) tabs[index].focus();
   };
@@ -901,7 +983,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const lock = (on: boolean) => {
     saving = on;
     // A disabled section disables its checkboxes, sliders, segment buttons, Copy and Check now.
-    for (const fields of [...styleFields, fontFields, ...behaviourFields]) fields.disabled = on;
+    for (const fields of [...styleFields, fontFields, ...behaviourFields, integrationFields]) fields.disabled = on;
     for (const control of [cursorStyle, appIcon, notify, bounce, shell]) control.setDisabled(on);
     if (on) ask(false);
     reset.disabled = save.disabled = cancel.disabled = on;
@@ -911,10 +993,38 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     }
   };
 
+  /** The integration changes Save would make. */
+  const integrationsChanged = () => integrationChanges(integrationRows, ticked).length > 0;
+
+  /**
+   * Makes the integration changes the boxes ask for; true when all of them worked. Otherwise shows the Integrations
+   * tab with each failed row's error and fix, and the rows as they now are on disk.
+   */
+  const applyIntegrations = async () => {
+    const changes = integrationChanges(integrationRows, ticked);
+    if (!options.integrations || changes.length === 0) return true;
+    let failures = new Map<string, IntegrationOutcome>();
+    let failed: boolean;
+    try {
+      const made = await options.integrations.apply(changes);
+      failures = new Map(made.filter((outcome) => !outcome.ok).map((outcome) => [outcome.id, outcome]));
+      failed = failures.size > 0;
+    } catch (error) {
+      report(error);
+      failed = true;
+    }
+    if (!failed) return true;
+    showTab(panels.indexOf(integrationsPanel));
+    await loadIntegrations(failures);
+    return false;
+  };
+
   /** Back to the settings from when the form opened, unsaved; false while saving, when nothing changes. */
   const discard = async () => {
     if (saving) return false;
     ask(false);
+    ticked.clear();
+    renderIntegrations();
     const draft = session.draft;
     const saved = session.cancel();
     if (!same(draft, saved)) await apply(saved);
@@ -926,7 +1036,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     if (await discard()) close();
   };
 
-  /** Save: write the previewed settings and close; on failure stay open with the error. */
+  /**
+   * Save: write the previewed settings, make the integration changes and close; on failure stay open with the error,
+   * on the Integrations tab when an integration failed.
+   */
   const commit = async () => {
     if (saving) return;
     // A scrollback still being typed when Save is clicked is saved too.
@@ -939,7 +1052,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       session.commit(written);
       if (turnedOff) await options.clearRestored?.().catch(() => {});
       status.textContent = "";
-      close();
+      if (await applyIntegrations()) close();
     } catch (error) {
       report(error);
     } finally {
@@ -956,7 +1069,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     if (saving || asking) return false;
     // A scrollback still being typed counts, as it does for Save.
     changed();
-    if (!dirty(session)) return discard();
+    if (!dirty(session) && !integrationsChanged()) return discard();
     asking = true;
     let choice: UnsavedChoice;
     try {
@@ -1014,6 +1127,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       showSnippet();
       ask(false);
       showTab(0);
+      void loadIntegrations(new Map());
       // The installed fonts are listed in the background; the list refills when they are known.
       void installedMonospaceFonts().then((names) => {
         osFonts = names;
