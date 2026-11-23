@@ -21,11 +21,13 @@ context: |
 rules:
   specs:
     - >-
-      Keep every requirement's text (the lines between its "### Requirement:" heading and its first scenario)
-      at or under 500 characters, MODIFIED blocks included: the main spec fails strict validation after
-      archive above that, and `openspec validate <change> --strict` does not catch it for MODIFIED.
-      When a MODIFIED requirement would grow past 500, put the new detail in a scenario or a new ADDED
-      requirement instead.
+      Keep every requirement's text (the lines between its "### Requirement:"
+      heading and its first scenario) at or under 500 characters, MODIFIED
+      blocks included: the main spec fails strict validation after archive above
+      that, and `openspec validate <change> --strict` does not catch it for
+      MODIFIED. When a MODIFIED requirement would grow past 500, put the new
+      detail in a scenario or a new ADDED requirement instead.
+skillsScope: project
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
