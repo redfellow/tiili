@@ -60,8 +60,8 @@ const HYSTERESIS = 2 * Math.log(1.15);
  * Grid mode's column count for `n` panes in `area`: each count c gives panes of area.cols / c by area.rows /
  * ceil(n / c) cells, scored by how far their shape is from 80×24 (|ln(aspect / (80 / 24))|) plus 0.15 per empty
  * cell; the lowest score wins. Counts that make panes under 60 columns wide are left out unless every count does.
- * `area.prev`, when it is still a candidate, is kept unless the best count scores better by more than 2·ln(1.15): the area is 15% past the boundary.
- * An area with no size gives ceil(sqrt(n)).
+ * `area.prev`, when it is still a candidate, is kept unless the best count scores better by more than 2·ln(1.15):
+ * the area is 15% past the boundary. An area with no size gives ceil(sqrt(n)).
  */
 export function chooseGridColumns(n: number, area: GridArea): number {
   if (n <= 1 || !(area.cols > 0) || !(area.rows > 0)) return Math.max(1, Math.ceil(Math.sqrt(n)));
