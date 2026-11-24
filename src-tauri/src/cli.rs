@@ -1,7 +1,8 @@
 //! `tiili <command>`: the app's binary in command-line mode, with the commands of [`crate::control::COMMANDS`].
 //! `open`, `list`, `attention` and `close` run from inside a pane: they find the app through `TIILI_SOCKET`,
 //! `TIILI_TOKEN` and `TIILI_PANE`, send one request (see [`crate::control`]) and print the answer. `help`,
-//! `--version`, `describe`, `prompt`, `install-claude-skill` and `follow` work anywhere without the app.
+//! `--version`, `describe`, `prompt`, `install-claude-skill` and `follow` work anywhere without the app;
+//! `claude-hook` reaches for the app only from inside a pane.
 
 use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, Write};
@@ -126,6 +127,7 @@ fn execute(
             crate::follow::run(&options, out);
             return Ok(());
         }
+        CliCommand::ClaudeHook { pid } => return claude_hook(pid, env, cwd),
         CliCommand::List { json } => (Op::List, json),
         CliCommand::Attention { message, clear } => (Op::Attention { message, clear }, false),
         CliCommand::Close(target) => (Op::Close { target }, false),
@@ -181,6 +183,39 @@ fn execute(
         (Reply::Done, _) => Ok(()),
     };
     Ok(())
+}
+
+/// Runs `tiili claude-hook`: reads the hook's JSON on stdin and opens the subagent's pane or marks it done (see
+/// [`crate::claude_hook`]). Outside a pane, or with subagent panes turned off, it does nothing. It prints nothing, so
+/// Claude Code has no hook output to show.
+fn claude_hook(
+    pid: Option<u32>,
+    env: &dyn Fn(&str) -> Option<OsString>,
+    cwd: Option<&Path>,
+) -> Result<(), CliError> {
+    use crate::claude_hook::{
+        mark_started, mark_stopped, marker_dir, open_args, parse, watchable_pid, Hook, PANES_VAR,
+    };
+    let in_pane = env(SOCKET_VAR).is_some_and(|socket| !socket.is_empty());
+    if !in_pane || env(PANES_VAR).is_some_and(|value| value == "0") {
+        return Ok(());
+    }
+    let mut input = String::new();
+    let _ = io::Read::read_to_string(&mut io::stdin(), &mut input);
+    let hook = parse(&input, &marker_dir());
+    match &hook {
+        Hook::Start { markers, .. } => {
+            // Without its marker the pane still opens; it then ends only when Claude Code is gone.
+            let _ = mark_started(markers);
+            let args = open_args(&hook, watchable_pid(pid)).expect("a start opens a pane");
+            execute(&args, env, cwd, &mut io::sink())
+        }
+        Hook::Stop(markers) => {
+            let _ = mark_stopped(markers);
+            Ok(())
+        }
+        Hook::Ignore => Ok(()),
+    }
 }
 
 /// Sends request `line` to the endpoint and reads the answer line.
@@ -263,6 +298,7 @@ mod tests {
             (&["prompt"], true),
             (&["install-claude-skill"], true),
             (&["follow", "a.jsonl"], true),
+            (&["claude-hook"], true),
             (&["describe"], true),
             (&["help"], true),
             (&["--help"], true),
@@ -278,6 +314,30 @@ mod tests {
         ];
         for (argv, cli) in cases {
             assert_eq!(is_cli(&args(argv)), *cli, "{argv:?}");
+        }
+    }
+
+    /// Claude Code runs its subagent hooks in every session: outside a tiili pane, or with subagent panes turned
+    /// off, `tiili claude-hook` does nothing, prints nothing and succeeds.
+    #[test]
+    fn claude_hook_outside_a_pane_or_turned_off_does_nothing() {
+        let nothing = |_: &str| None;
+        let off = |name: &str| match name {
+            SOCKET_VAR => Some(OsString::from("/nowhere")),
+            crate::claude_hook::PANES_VAR => Some(OsString::from("0")),
+            _ => None,
+        };
+        type Env = fn(&str) -> Option<OsString>;
+        for (name, env) in [("outside", nothing as Env), ("turned off", off as Env)] {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let code = run(
+                &args(&["claude-hook", "--pid", "1"]),
+                &env,
+                None,
+                &mut out,
+                &mut err,
+            );
+            assert_eq!((code, out.len(), err.len()), (0, 0, 0), "{name}");
         }
     }
 

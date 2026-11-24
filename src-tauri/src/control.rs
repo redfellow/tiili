@@ -617,6 +617,10 @@ pub enum CliCommand {
     InstallClaudeSkill,
     /// `tiili follow FILE [--title TEXT] [--pid PID] [--done MARKER]`.
     Follow(crate::follow::Options),
+    /// `tiili claude-hook [--pid PID]`.
+    ClaudeHook {
+        pid: Option<u32>,
+    },
     /// `tiili describe [CMD]`.
     Describe(Option<String>),
     /// `tiili help [CMD]`, `--help` or `-h`.
@@ -1026,11 +1030,37 @@ pub const COMMANDS: &[CommandSpec] = &[
         }],
         rest: None,
         needs: &[],
-        output_text: "the transcript's task, tool calls, short results and replies, until the session ends; then it \
-            waits for a key when stdin is a terminal",
+        output_text: "the transcript's task, tool calls, short results and replies, until the session ends; then, \
+            when stdin is a terminal, it exits 3 seconds later or on a key press",
         output_schema: None,
         exit_codes: &[0, 2],
         errors: &["usage"],
+    },
+    CommandSpec {
+        name: "claude-hook",
+        summary: "Claude Code's subagent hook: open a pane that follows each subagent, from inside a pane",
+        usage: "tiili claude-hook [--pid PID]",
+        options: &[OptSpec {
+            name: "--pid",
+            value: Some("PID"),
+            summary: "Claude Code's process: the pane stops following when it is gone",
+        }],
+        positionals: &[],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "nothing; it reads a SubagentStart or SubagentStop hook's JSON on stdin, and does nothing \
+            outside a pane or with TIILI_SUBAGENT_PANES=0",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "open_failed",
+            "bad_reply",
+        ],
     },
     CommandSpec {
         name: "describe",
@@ -1244,6 +1274,14 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
             },
             done: option("--done").map(PathBuf::from),
         }),
+        "claude-hook" => CliCommand::ClaudeHook {
+            pid: match option("--pid") {
+                Some(pid) => Some(pid.parse().map_err(|_| {
+                    CliError::Usage(format!("--pid needs a process id, not {pid}"))
+                })?),
+                None => None,
+            },
+        },
         "describe" => CliCommand::Describe(target(positionals)?),
         "help" => CliCommand::Help(target(positionals)?),
         other => unreachable!("command {other} in COMMANDS has no parser"),
@@ -1955,6 +1993,16 @@ mod tests {
                 Ok(CliCommand::InstallClaudeSkill),
             ),
             (args(&["install-claude-skill", "now"]), Err(())),
+            (
+                args(&["claude-hook"]),
+                Ok(CliCommand::ClaudeHook { pid: None }),
+            ),
+            (
+                args(&["claude-hook", "--pid", "42"]),
+                Ok(CliCommand::ClaudeHook { pid: Some(42) }),
+            ),
+            (args(&["claude-hook", "--pid", "x"]), Err(())),
+            (args(&["claude-hook", "now"]), Err(())),
             (args(&["describe"]), Ok(CliCommand::Describe(None))),
             (
                 args(&["describe", "open"]),
