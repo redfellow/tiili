@@ -11,15 +11,21 @@
 
 ## 2. Window wiring
 
-- [ ] 2.1 In `src/tab.ts`/`src/panes.ts` measure the tab area in cells, set it before add/remove/restore/mode change, and re-flow on a ResizeObserver debounced 250 ms only when the grid changes.
+- [x] 2.1 In `src/tab.ts`/`src/panes.ts` measure the tab area in cells, set it before add/remove/restore/mode change, and re-flow on a ResizeObserver debounced 250 ms only when the grid changes.
   - proof: `npx eslint src/tab.ts src/panes.ts`
-- [ ] 2.2 `tabPlan` in `src/session.ts` validates saved sizes against saved Grid `cols`/`rows` and returns that shape; panes restore it. Add a case to `src/session.test.ts` for a saved 1×3 Grid with custom sizes.
+  - proof: `npx vitest run src/tabs.test.ts`
+  - proof: `npx eslint src/tabs.test.ts`
+- [x] 2.2 `tabPlan` in `src/session.ts` validates saved sizes against saved Grid `cols`/`rows` and returns that shape; panes restore it. Add a case to `src/session.test.ts` for a saved 1×3 Grid with custom sizes.
   Tests to update: src/session.test.ts
   - proof: `npx vitest run src/session.test.ts`
   - proof: `npx eslint src/session.ts src/session.test.ts`
-- [ ] 2.3 Draw the Grid tile picture in `src/settingsDialog.ts` for the window's shape in cells.
+  - proof: `npx vitest run src/tabs.test.ts`
+- [x] 2.3 Draw the Grid tile picture in `src/settingsDialog.ts` for the window's shape in cells. The settings window's URL carries the opening window's inner size (`settings_window_url` in `src-tauri/src/settings.rs`); without it (the in-window dialogue) `window.innerWidth/innerHeight` is used.
   - proof: `npx eslint src/settingsDialog.ts`
   - proof: `npm run typecheck`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib settings::`
+  - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
+  - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D warnings`
 
 ## Manual checks after merge (The user)
 

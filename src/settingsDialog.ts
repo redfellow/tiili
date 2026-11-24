@@ -178,10 +178,52 @@ const TILING_LABELS: Record<TilingMode, string> = {
   rows: "Stacked",
 };
 
-/** A tiny picture of how seven panes tile in `mode`, drawn as bricks. */
-function tilingIcon(mode: TilingMode): HTMLElement {
-  const { cols, rows, cells } = gridFor(7, mode);
-  const [width, height, gap] = [30, 18, 1];
+/** A tiling picture fits this box, in px. */
+const TILING_ICON_BOX = { width: 30, height: 18 };
+/** The line box of a font with no measured metrics, in ems before the line height. */
+const NORMAL_LINE_BOX = 1.2;
+
+/** The window whose shape the Grid tile's picture follows: its inner size in px, and its terminal cell in px. */
+interface PictureWindow {
+  width: number;
+  height: number;
+  cell: { width: number; height: number };
+}
+
+/**
+ * The terminal window the settings belong to: the inner size its settings window's URL carries (`width`,
+ * `height`), else this window's (the in-window dialogue), with a cell of `font` measured on a canvas; a cell half
+ * as wide as its line is high when the font's metrics are not known.
+ */
+function pictureWindow(font: Settings["font"]): PictureWindow {
+  const params = new URLSearchParams(window.location.search);
+  const sized = Number(params.get("width")) > 0 && Number(params.get("height")) > 0;
+  const width = sized ? Number(params.get("width")) : window.innerWidth;
+  const height = sized ? Number(params.get("height")) : window.innerHeight;
+  const context = document.createElement("canvas").getContext("2d");
+  if (context) {
+    context.font = `${font.size}px ${fontFamilyList(font.family)}`;
+    const metrics = context.measureText("W");
+    const line = (metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent) * font.lineHeight;
+    if (metrics.width > 0 && line > 0) return { width, height, cell: { width: metrics.width, height: line } };
+  }
+  const line = font.size * NORMAL_LINE_BOX * font.lineHeight;
+  return { width, height, cell: { width: line / 2, height: line } };
+}
+
+/**
+ * A tiny picture of how seven panes tile in `mode`, drawn as bricks. With `shape`, Grid's picture is Grid mode's
+ * choice for that window's size in cells, drawn in a box of the window's shape.
+ */
+function tilingIcon(mode: TilingMode, shape?: PictureWindow): HTMLElement {
+  const fitted = mode === "grid" && shape && shape.width > 0 && shape.height > 0 ? shape : undefined;
+  const area = fitted && { cols: fitted.width / fitted.cell.width, rows: fitted.height / fitted.cell.height };
+  const { cols, rows, cells } = gridFor(7, mode, area);
+  const aspect = fitted ? fitted.width / fitted.height : TILING_ICON_BOX.width / TILING_ICON_BOX.height;
+  const wide = aspect >= TILING_ICON_BOX.width / TILING_ICON_BOX.height;
+  const width = wide ? TILING_ICON_BOX.width : TILING_ICON_BOX.height * aspect;
+  const height = wide ? TILING_ICON_BOX.width / aspect : TILING_ICON_BOX.height;
+  const gap = 1;
   const rects = cells.map((cell) => {
     const w = (width - (cols - 1) * gap) / cols;
     const x = cell.col * cell.colSpan * (w + gap);
@@ -193,7 +235,8 @@ function tilingIcon(mode: TilingMode): HTMLElement {
   const icon = element("span", { className: "settings-layout-icon" });
   icon.setAttribute("aria-hidden", "true");
   icon.innerHTML =
-    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="currentColor">${rects.join("")}</svg>`;
+    `<svg viewBox="0 0 ${width.toFixed(2)} ${height.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" ` +
+    `fill="currentColor">${rects.join("")}</svg>`;
   return icon;
 }
 
@@ -585,8 +628,10 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     family.show(selected);
   };
   const tilingItems = TILING_MODES.map((id) => ({ id, name: TILING_LABELS[id] }));
+  // The Grid picture follows the shape of the window the settings belong to, as it is when they open.
+  const gridPicture = pictureWindow(options.initial.font);
   const tiling = cardGrid("Tiling", "settings-tiling-cards", tilingItems, changed, locked, (card, item) => {
-    card.append(tilingIcon(item.id as TilingMode), element("span", { className: "settings-card-name" }, item.name));
+    card.append(tilingIcon(item.id as TilingMode, gridPicture), element("span", { className: "settings-card-name" }, item.name));
     if (item.id === DEFAULT_SETTINGS.tiling.layout) card.append(defaultTag());
   });
   const responsiveOn = element("input", { type: "checkbox", name: "responsiveEnabled" });
