@@ -1,5 +1,5 @@
 // @harvaaja-test-tier: fast
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tab, type Pane, type TabHooks } from "./tab";
 import { badgeCount, insertBeside, neighbourIndex, reorder, stepIndex, tabLabel, tabOf } from "./tabs";
 
@@ -60,6 +60,73 @@ describe("Pane close icon", () => {
     expect(first && t.remove(first)).toBe(false);
     expect(t.current()?.id).toBe(2);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("Grid fits the tab's area", () => {
+  // Before any terminal is laid out the area is measured in 8.5 × 17 px cells.
+  const landscape = { clientWidth: 1700, clientHeight: 986 }; // 200 × 58 cells
+  const portrait = { clientWidth: 833, clientHeight: 1190 }; // 98 × 70 cells
+  const nearWide = { clientWidth: 1487.5, clientHeight: 850 }; // 175 × 50 cells: side by side scores a little better
+
+  /** A Grid tab of `count` panes in a container of `size`, and a way to report a resize of it. */
+  function fittedTab(count: number, size: { clientWidth: number; clientHeight: number }) {
+    const container = { ...size };
+    const observers: (() => void)[] = [];
+    vi.stubGlobal("document", { createElement: () => container });
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    });
+    const t = new Tab({ append() {} } as unknown as HTMLElement, "grid", hooks);
+    for (let id = 1; id <= count; id++) t.add(fakePane(id));
+    const resize = (next: { clientWidth: number; clientHeight: number }) => {
+      Object.assign(container, next);
+      observers.forEach((callback) => callback());
+    };
+    return { t, resize };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("Portrait windows get rows: 2 panes open one above the other", () => {
+    const { t } = fittedTab(2, portrait);
+    expect([t.layout.cols, t.layout.rows]).toEqual([1, 2]);
+  });
+
+  it("Settled resize re-flows: side by side panes stack once the resize has settled, not during it", () => {
+    vi.useFakeTimers();
+    const { t, resize } = fittedTab(2, landscape);
+    expect([t.layout.cols, t.layout.rows]).toEqual([2, 1]);
+    resize(portrait);
+    vi.advanceTimersByTime(200);
+    resize(portrait);
+    vi.advanceTimersByTime(200);
+    expect([t.layout.cols, t.layout.rows]).toEqual([2, 1]);
+    vi.advanceTimersByTime(50);
+    expect([t.layout.cols, t.layout.rows]).toEqual([1, 2]);
+  });
+
+  it("Restore keeps divider sizes: a restored 1×2 Grid stays through a settled measure just past the threshold", () => {
+    vi.useFakeTimers();
+    const { t, resize } = fittedTab(2, nearWide);
+    expect([t.layout.cols, t.layout.rows]).toEqual([2, 1]);
+    t.restoreGrid(1, 2, { colSizes: [1], rowSizes: [0.3, 0.7] });
+    resize(nearWide);
+    vi.advanceTimersByTime(250);
+    expect([t.layout.cols, t.layout.rows, t.layout.rowSizes]).toEqual([1, 2, [0.3, 0.7]]);
+  });
+
+  it("a restored shape that does not lay out the panes is ignored", () => {
+    const { t } = fittedTab(2, landscape);
+    t.restoreGrid(1, 3, { colSizes: [1], rowSizes: [0.2, 0.3, 0.5] });
+    expect([t.layout.cols, t.layout.rows]).toEqual([2, 1]);
   });
 });
 
