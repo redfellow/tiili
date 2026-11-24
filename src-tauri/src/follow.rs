@@ -4,7 +4,8 @@
 //!
 //! It waits for FILE to appear (agents write it lazily), then prints each entry as it lands. It stops following when
 //! the transcript says the session ended (Oh My Pi's `session_exit` entry), when MARKER exists, or when process PID is
-//! gone, and then waits for a key so the pane stays open to read: tiili closes a pane when its command exits.
+//! gone, and then exits after [`CLOSE_AFTER`] (sooner on a key press), which closes the pane: tiili closes a pane when
+//! its command exits.
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Seek, SeekFrom, Write};
@@ -16,6 +17,8 @@ use serde_json::Value;
 
 /// How often the transcript, the marker and the process are checked.
 pub const POLL: Duration = Duration::from_millis(250);
+/// How long the closing line stays up before the command exits and its pane closes.
+pub const CLOSE_AFTER: Duration = Duration::from_secs(3);
 /// How many lines of a tool result are shown.
 const RESULT_LINES: usize = 3;
 /// How many lines of the agent's thinking are shown.
@@ -389,7 +392,7 @@ impl Renderer {
         format!(
             "{}{}",
             self.paint("32", "— finished —"),
-            self.paint("2", "  press any key to close")
+            self.paint("2", &format!("  {}", closing_hint()))
         )
     }
 
@@ -397,9 +400,14 @@ impl Renderer {
     pub fn gone(&self) -> String {
         self.paint(
             "2",
-            "— the agent's process is gone —  press any key to close",
+            &format!("— the agent's process is gone —  {}", closing_hint()),
         )
     }
+}
+
+/// What the closing line says about the pane closing.
+fn closing_hint() -> String {
+    format!("closing in {} s", CLOSE_AFTER.as_secs())
 }
 
 /// How following ended.
@@ -550,8 +558,8 @@ fn drain(
     Ok(false)
 }
 
-/// Runs `tiili follow` in the terminal: Ctrl-C or Ctrl-D closes it at any time; once following ends it waits for a
-/// key, unless no one can press one because stdin is not a terminal.
+/// Runs `tiili follow` in the terminal: Ctrl-C or Ctrl-D closes it at any time; once following ends it exits after
+/// [`CLOSE_AFTER`], or sooner when a key is pressed (at once when stdin is not a terminal).
 pub fn run(options: &Options, out: &mut dyn Write) {
     let mut renderer = Renderer::new(io::stdout().is_terminal());
     let keys = io::stdin().is_terminal().then(|| {
@@ -573,8 +581,9 @@ pub fn run(options: &Options, out: &mut dyn Write) {
         }
     };
     let ending = follow(options, out, &mut renderer, &process_alive, &mut wait);
+    // With stdin not a terminal no one is reading the pane, so it ends at once.
     if let (Ending::Finished | Ending::Gone, Some((_, keys))) = (ending, &keys) {
-        let _ = keys.recv();
+        let _ = keys.recv_timeout(CLOSE_AFTER);
     }
 }
 
