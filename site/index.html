@@ -75,24 +75,16 @@
   .cta-note a { color: var(--muted); }
   .cta-note a:hover { color: var(--fg); }
 
-  /* Mortar wall behind the video */
+  /* Mortar wall behind the animation */
   .stage { position: relative; margin-top: clamp(var(--space-7), 7vw, 80px); padding: clamp(var(--space-5), 5vw, var(--space-8)) 0; overflow: hidden; }
   .stage::before { content: ""; position: absolute; inset: 0; background: var(--sunken); }
   .stage::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--fg) 5%, var(--sunken));
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='136' height='60'%3E%3Cg fill='%23000'%3E%3Crect x='2' y='2' width='64' height='26' rx='3'/%3E%3Crect x='70' y='2' width='64' height='26' rx='3'/%3E%3Crect x='-32' y='32' width='64' height='26' rx='3'/%3E%3Crect x='36' y='32' width='64' height='26' rx='3'/%3E%3Crect x='104' y='32' width='64' height='26' rx='3'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 136px 60px repeat;
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='136' height='60'%3E%3Cg fill='%23000'%3E%3Crect x='2' y='2' width='64' height='26' rx='3'/%3E%3Crect x='70' y='2' width='64' height='26' rx='3'/%3E%3Crect x='-32' y='32' width='64' height='26' rx='3'/%3E%3Crect x='36' y='32' width='64' height='26' rx='3'/%3E%3Crect x='104' y='32' width='64' height='26' rx='3'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 136px 60px repeat; }
   .stage .wrap { position: relative; z-index: 1; }
-  /* tokens-allow: the recording's own dark ground, the same in either theme */
-  .screen { position: relative; margin: 0 auto; max-width: 960px; border-radius: var(--radius-window); overflow: hidden; background: #111617;
-    /* tokens-allow: white light and the recording's ground for the shade, the same in either theme */
-    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 24px 60px -20px rgba(17,22,23,.45), 0 0 0 1px rgba(17,22,23,.12); aspect-ratio: 1834 / 1226; }
-  .screen video, .screen img { width: 100%; height: 100%; object-fit: cover; }
-  .replay { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 var(--space-3);
-    /* tokens-allow: sits on the recording, so it keeps the recording's dark colours in either theme */
-    border-radius: var(--radius-control); border: 0; background: rgba(17,22,23,.72); color: #EFE7DE; font: 500 12.5px/1 var(--font-mono);
-    cursor: pointer; opacity: 0; transition: opacity .2s; }
-  .screen:hover .replay, .replay:focus-visible, .screen.ended .replay { opacity: 1; }
-  .replay svg { width: 12px; height: 12px; }
+  /* The animation has no ground of its own: it sits straight on the wall and takes the page's colours. */
+  .screen { position: relative; margin: 0 auto; aspect-ratio: 1280 / 920; }
+  .screen iframe { display: block; width: 100%; height: 100%; border: 0; }
   .caption { text-align: center; margin: var(--space-4) 0 0; font-size: var(--text-small); color: var(--muted); }
 
   /* ---------- Sections ---------- */
@@ -279,13 +271,10 @@
     <div class="stage">
       <div class="wrap">
         <div class="screen" id="screen">
-          <video id="demo" src="media/tiili-splash.mp4" poster="media/tiili-splash-poster.jpg" muted playsinline preload="metadata"
-            aria-label="tiili starting up: bricks fly in to form the wordmark, then the first terminal opens"></video>
-          <button class="replay" id="replay" type="button" aria-label="Play the startup again">
-            <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M3 1.5v9l7.5-4.5z"/></svg><span>Replay</span>
-          </button>
+          <iframe id="demo" src="media/tiili-bricklaying.html" loading="lazy"
+            title="Animation: bricks drop into a tiili window one by one, each becomes a terminal pane, and the grid settles around every new one"></iframe>
         </div>
-        <p class="caption">tiili starting up on macOS. The wall comes down and the first shell takes the whole window.</p>
+        <p class="caption">Ten shells, opened one at a time. Each lands as a brick and the grid settles around it.</p>
       </div>
     </div>
   </section>
@@ -515,20 +504,6 @@ chmod +x tiili_*_amd64.AppImage && ./tiili_*_amd64.AppImage</pre>
   const onScroll = () => header.classList.toggle('scrolled', scrollY > 8);
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-  /* Video: plays the startup once when it comes into view; replay on demand. Stays still for reduced motion. */
-  const video = document.getElementById('demo');
-  const screen = document.getElementById('screen');
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const play = () => { screen.classList.remove('ended'); video.currentTime = 0; video.play().catch(() => screen.classList.add('ended')); };
-  video.addEventListener('ended', () => screen.classList.add('ended'));
-  document.getElementById('replay').addEventListener('click', play);
-  if (reduce) screen.classList.add('ended');
-  else if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver(entries => {
-      if (entries.some(e => e.isIntersecting)) { io.disconnect(); video.preload = 'auto'; play(); }
-    }, { threshold: 0.4 });
-    io.observe(video);
-  }
 
   /* Shortcuts: one tab per group, so the table shows a group at a time. Without script every group shows. */
   const keys = document.getElementById('keys');
