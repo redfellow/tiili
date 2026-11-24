@@ -6,3 +6,13 @@ x-harvaaja-card: 2ee60b15-84e1-4044-ac9f-98148757a04a
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Changes the Automatic grid layout contract (Grid column count) and
+    adds resize re-flow; observable behaviour in pane-tiling.
+  citations:
+    - "openspec/specs/pane-tiling/spec.md#Requirement: Automatic grid layout"
+    - "openspec/specs/pane-tiling/spec.md#Requirement: Grid re-flow"
+    - "openspec/specs/pane-layout/spec.md#Requirement: Re-flow keeps applicable
+      manual sizes"
+  revision: c91cbd46-1d7a-414c-89ce-cb593521b47e
