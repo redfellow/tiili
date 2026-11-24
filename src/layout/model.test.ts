@@ -8,6 +8,7 @@ import {
   removePane,
   reset,
   resizeTrack,
+  setArea,
   setMode,
   swap,
   type Axis,
@@ -117,6 +118,37 @@ describe("re-flow", () => {
     let state = emptyLayout("rows");
     for (let id = 1; id <= 3; id++) state = addPane(state, id);
     expect([state.cols, state.rows]).toEqual([1, 3]);
+  });
+
+  // Pane areas in cells: a portrait window about 790 px wide, a landscape one, and areas near the 2-pane threshold.
+  const portrait = { cols: 98, rows: 70 };
+  const landscape = { cols: 200, rows: 58 };
+  const nearWide = { cols: 175, rows: 50 };
+  const nearTall = { cols: 160, rows: 50 };
+  /** Panes 1..n opened in `area`, then the first column and row dividers dragged where they exist. */
+  const fitted = (n: number, area: { cols: number; rows: number }, mode: Parameters<typeof setMode>[1] = "grid") => {
+    let state = setArea(emptyLayout(mode), area);
+    for (let id = 1; id <= n; id++) state = addPane(state, id);
+    return resizeTrack(resizeTrack(state, "col", 0, 0.2, 0.05), "row", 0, 0.1, 0.05);
+  };
+
+  // [name, start, change, expected cols, rows, column sizes, row sizes]
+  const areaCases: [string, () => LayoutState, (s: LayoutState) => LayoutState, number, number, number[], number[]][] = [
+    ["Portrait windows get rows: 2 panes open one above the other", () => fitted(1, portrait), (s) => addPane(s, 9), 1, 2, [1], [0.5, 0.5]],
+    ["Portrait windows get rows: 3 panes open one above the other", () => fitted(2, portrait), (s) => addPane(s, 9), 1, 3, [1], [1 / 3, 1 / 3, 1 / 3]],
+    ["Grid sizes: 3 panes in a landscape window are 2×2", () => fitted(2, landscape), (s) => addPane(s, 9), 2, 2, [0.7, 0.3], [0.5, 0.5]],
+    ["Settled resize re-flows: side by side panes stack in a portrait window", () => fitted(2, landscape), (s) => setArea(s, portrait), 1, 2, [1], [0.5, 0.5]],
+    ["Settled resize re-flows: a resize that keeps the grid keeps both axes' sizes", () => fitted(4, landscape), (s) => setArea(s, { cols: 180, rows: 60 }), 2, 2, [0.7, 0.3], [0.6, 0.4]],
+    ["Hysteresis: stacked panes stay stacked just past the threshold", () => fitted(2, portrait), (s) => setArea(s, nearWide), 1, 2, [1], [0.6, 0.4]],
+    ["Hysteresis: a pane opening chooses afresh", () => fitted(4, landscape), (s) => addPane(s, 9), 3, 2, [1 / 3, 1 / 3, 1 / 3], [0.6, 0.4]],
+    ["Hysteresis: a change to Grid mode chooses afresh", () => fitted(2, nearTall, "columns"), (s) => setMode(s, "grid"), 1, 2, [1], [0.5, 0.5]],
+    ["Tiling mode sizes: Side by side ignores a portrait window", () => fitted(2, landscape, "columns"), (s) => setArea(s, portrait), 2, 1, [0.7, 0.3], [1]],
+  ];
+  it.each(areaCases)("%s", (_name, start, change, cols, rows, colSizes, rowSizes) => {
+    const next = change(start());
+    expect([next.cols, next.rows]).toEqual([cols, rows]);
+    expect(next.colSizes).toEqual(sizes(colSizes));
+    expect(next.rowSizes).toEqual(sizes(rowSizes));
   });
 
   it("Close keeps the order of the remaining panes", () => {

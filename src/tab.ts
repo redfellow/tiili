@@ -1,7 +1,17 @@
 import type { AttentionGate } from "./attention";
 import type { HeynoteFrame } from "./heynotePane";
 import type { TilingMode } from "./layout";
-import { addPane, changedPanes, emptyLayout, removePane, swap, type LayoutState, type PaneId } from "./layout/model";
+import {
+  addPane,
+  changedPanes,
+  emptyLayout,
+  removePane,
+  setArea,
+  setMode,
+  swap,
+  type LayoutState,
+  type PaneId,
+} from "./layout/model";
 import { TileView } from "./layout/view";
 import { zenColumns, zenWidthPx } from "./layout/zen";
 import type { PaneTerminal } from "./terminal";
@@ -11,6 +21,10 @@ const MIN_COLS = 20;
 const MIN_ROWS = 4;
 /** Cell size used for the minimum before any terminal has been laid out. */
 const FALLBACK_CELL = { width: 8, height: 17 };
+/** Cell size Grid mode measures the pane area in before any terminal has been laid out: a 1:2 cell. */
+const AREA_FALLBACK_CELL = { width: FALLBACK_CELL.height / 2, height: FALLBACK_CELL.height };
+/** How long after the last size change of the tab's area Grid mode chooses its layout again. */
+const SETTLE_MS = 250;
 /** The width xterm keeps beside the text for its scrollbar, which the Zen width adds to its columns. */
 const SCROLLBAR_WIDTH = 8;
 
@@ -79,6 +93,8 @@ export class Tab {
   readonly container: HTMLElement;
   private readonly view: TileView;
   private hidden = false;
+  private readonly resizes: ResizeObserver | undefined;
+  private settle: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     parent: HTMLElement,
@@ -135,6 +151,14 @@ export class Tab {
       dropOutside: (from, under) => this.hooks.dropOutside(this, from, under),
       dragOutside: (under) => this.hooks.dragOutside(under),
     });
+    // Grid mode fits the window's shape once a resize has settled, not on every frame of it.
+    if (typeof ResizeObserver === "function") {
+      this.resizes = new ResizeObserver(() => {
+        clearTimeout(this.settle);
+        this.settle = setTimeout(() => this.fit(), SETTLE_MS);
+      });
+      this.resizes.observe(this.container);
+    }
   }
 
   /** Whether the tab is shown in its window. */
@@ -175,7 +199,7 @@ export class Tab {
    */
   add(pane: Pane, showAlone = false): void {
     this.panes.push(pane);
-    this.layout = addPane(this.layout, pane.id);
+    this.layout = addPane(this.measured(), pane.id);
     if (showAlone && this.zen !== undefined) this.setZen(pane.id);
     this.render();
     if (this.holds(pane)) pane.terminal?.holdSize();
@@ -190,7 +214,7 @@ export class Tab {
     if (index < 0) return false;
     const wasFocused = index === this.focused;
     this.panes.splice(index, 1);
-    this.layout = removePane(this.layout, pane.id);
+    this.layout = removePane(this.measured(), pane.id);
     // With one pane left Zen ends; when the Zen pane goes, the pane that takes the focus is shown alone.
     if (this.panes.length <= 1) this.setZen(undefined);
     else if (this.zen === pane.id) {
@@ -202,6 +226,53 @@ export class Tab {
     else if (wasFocused) this.markFocused(Math.min(index, this.panes.length - 1));
     else if (index < this.focused) this.markFocused(this.focused - 1);
     return wasFocused;
+  }
+
+  /** Tiles the panes in `mode`, fitted to the tab's area as it is now. */
+  setMode(mode: TilingMode): void {
+    this.relayout(setMode(this.measured(), mode));
+  }
+
+  /**
+   * Takes on a restored grid of `cols` × `rows` with `sizes` (equal sizes without them), when it lays out the
+   * tab's panes; Grid mode keeps it until a settled measure of the area finds another layout clearly better.
+   */
+  restoreGrid(cols: number, rows: number, sizes?: { colSizes: number[]; rowSizes: number[] }): void {
+    if (cols < 1 || rows !== Math.ceil(this.layout.order.length / cols)) return;
+    if (!sizes && cols === this.layout.cols && rows === this.layout.rows) return;
+    const even = (count: number) => Array.from({ length: count }, () => 1 / count);
+    this.relayout({
+      ...this.measured(),
+      cols,
+      rows,
+      colSizes: sizes?.colSizes ?? (cols === this.layout.cols ? this.layout.colSizes : even(cols)),
+      rowSizes: sizes?.rowSizes ?? (rows === this.layout.rows ? this.layout.rowSizes : even(rows)),
+    });
+  }
+
+  /** The tab's area in character cells of its terminal font, or undefined while it is not laid out (hidden). */
+  private measureArea(): { cols: number; rows: number } | undefined {
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    if (!(width > 0) || !(height > 0)) return undefined;
+    const pane = this.current() ?? this.panes[0];
+    const cell = pane?.terminal?.cellSize() ?? AREA_FALLBACK_CELL;
+    return { cols: width / cell.width, rows: height / cell.height };
+  }
+
+  /** The layout with the tab's area as it is now; the last measured area while the tab is hidden. */
+  private measured(): LayoutState {
+    const area = this.measureArea();
+    return area ? { ...this.layout, area } : this.layout;
+  }
+
+  /** Fits Grid mode to the tab's settled area: the panes re-flow only when the grid changes. */
+  private fit(): void {
+    const area = this.measureArea();
+    if (!area) return;
+    const next = setArea(this.layout, area);
+    if (next.cols !== this.layout.cols || next.rows !== this.layout.rows) this.relayout(next);
+    else this.layout = next;
   }
 
   /** True when `pane` is kept at its size: the tab is hidden, or Zen shows another pane alone. */
@@ -323,6 +394,8 @@ export class Tab {
 
   /** Takes the tab out of its window. */
   dispose(): void {
+    this.resizes?.disconnect();
+    clearTimeout(this.settle);
     this.container.remove();
   }
 
