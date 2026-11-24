@@ -7,6 +7,7 @@ import {
   type IntegrationRowView,
   integrationRowView,
   type IntegrationStatus,
+  withChanges,
 } from "./integrations";
 
 const status = (id: string, installed: boolean, available = true): IntegrationStatus => ({
@@ -90,5 +91,21 @@ describe("integration rows", () => {
   ];
   it.each(cases)("%s", (_name, row, ticked, outcome, expected) => {
     expect(integrationRowView(row, ticked, outcome)).toEqual(expected);
+  });
+});
+
+describe("rows after Save", () => {
+  it("installs each change as asked, so nothing is left to save and closing does not ask again", () => {
+    const rows = [status("omp", false), status("skill", false), status("other", true)];
+    const ticked = new Map([["omp", true], ["skill", true]]);
+    const made = integrationChanges(rows, ticked);
+    const after = withChanges(rows, made);
+    expect(after.map((row) => [row.id, row.installed])).toEqual([["omp", true], ["skill", true], ["other", true]]);
+    expect(integrationChanges(after, new Map())).toEqual([]);
+  });
+
+  it("uninstalls a row turned off and leaves the rest as they were", () => {
+    const rows = [status("omp", true), status("skill", true)];
+    expect(withChanges(rows, [{ id: "omp", on: false }])).toEqual([status("omp", false), status("skill", true)]);
   });
 });
