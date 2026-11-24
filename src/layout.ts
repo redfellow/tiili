@@ -49,14 +49,18 @@ const TARGET_ASPECT = 80 / 24;
 const MIN_PANE_COLS = 60;
 /** What each empty grid cell adds to a layout's score. */
 const EMPTY_CELL_PENALTY = 0.15;
-/** How much better another column count must score before Grid leaves its current one: the shape is 15% past. */
-const HYSTERESIS = Math.log(1.15);
+/**
+ * How much better another column count must score before Grid leaves its current one. Near the boundary between two
+ * counts their scores move apart by 2·ln(f) when the area's shape is a factor f past it, so this leaves the current
+ * count once the shape is 15% past the boundary.
+ */
+const HYSTERESIS = 2 * Math.log(1.15);
 
 /**
  * Grid mode's column count for `n` panes in `area`: each count c gives panes of area.cols / c by area.rows /
  * ceil(n / c) cells, scored by how far their shape is from 80×24 (|ln(aspect / (80 / 24))|) plus 0.15 per empty
  * cell; the lowest score wins. Counts that make panes under 60 columns wide are left out unless every count does.
- * `area.prev`, when it is still a candidate, is kept unless the best count scores better by more than ln(1.15).
+ * `area.prev`, when it is still a candidate, is kept unless the best count scores better by more than 2·ln(1.15): the area is 15% past the boundary.
  * An area with no size gives ceil(sqrt(n)).
  */
 export function chooseGridColumns(n: number, area: GridArea): number {

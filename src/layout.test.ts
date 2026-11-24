@@ -93,14 +93,14 @@ describe("gridFor", () => {
   });
 
   // [name, area with the current column count, columns] for 2 panes; one beside the other scores best above an
-  // area of 10:3 cells, and the current layout stays until the score is ln(1.15) better.
+  // area of 10:3 cells, and the current layout stays until the area is 15% past that: above 23:6, below 29:10.
   const hysteresis: [string, { cols: number; rows: number; prev?: number }, number][] = [
-    ["Hysteresis: stacked panes stay stacked just past the threshold", { cols: 175, rows: 50, prev: 1 }, 1],
-    ["Hysteresis: without a current layout the same area puts them side by side", { cols: 175, rows: 50 }, 2],
-    ["Hysteresis: clearly past the threshold they go side by side", { cols: 180, rows: 50, prev: 1 }, 2],
-    ["Hysteresis: side by side panes stay side by side just past the threshold", { cols: 160, rows: 50, prev: 2 }, 2],
-    ["Hysteresis: without a current layout the same area stacks them", { cols: 160, rows: 50 }, 1],
-    ["Hysteresis: clearly past the threshold they stack", { cols: 155, rows: 50, prev: 2 }, 1],
+    ["Hysteresis: stacked panes stay stacked just past the threshold", { cols: 190, rows: 50, prev: 1 }, 1],
+    ["Hysteresis: without a current layout the same area puts them side by side", { cols: 190, rows: 50 }, 2],
+    ["Hysteresis: clearly past the threshold they go side by side", { cols: 195, rows: 50, prev: 1 }, 2],
+    ["Hysteresis: side by side panes stay side by side just past the threshold", { cols: 147, rows: 50, prev: 2 }, 2],
+    ["Hysteresis: without a current layout the same area stacks them", { cols: 147, rows: 50 }, 1],
+    ["Hysteresis: clearly past the threshold they stack", { cols: 142, rows: 50, prev: 2 }, 1],
     ["Hysteresis: a current layout whose panes are too narrow is not kept", { cols: 98, rows: 20, prev: 2 }, 1],
   ];
   it.each(hysteresis)("%s", (_name, area, cols) => {
