@@ -73,6 +73,20 @@ describe("restorePlan", () => {
     expect(plan?.sizes).toEqual(sizes);
   });
 
+  it.each([
+    ["Restore keeps divider sizes: a saved 1×3 Grid reopens 1×3 with its sizes",
+      grid([1, 2, 3], { cols: 1, rows: 3, colSizes: [1], rowSizes: [0.5, 0.3, 0.2] }),
+      [1, 3], { colSizes: [1], rowSizes: [0.5, 0.3, 0.2] }],
+    ["a saved Grid shape that does not fit the panes gives the automatic grid",
+      grid([1, 2, 3], { cols: 1, rows: 2, colSizes: [1], rowSizes: [0.5, 0.5] }), [2, 2], undefined],
+    ["a mode other than Grid takes its own shape, not the saved one",
+      grid([1, 2, 3], { mode: "wide", cols: 1, rows: 3, colSizes: [1], rowSizes: [0.5, 0.3, 0.2] }), [3, 1], undefined],
+  ])("%s", (_name, layout, shape, sizes) => {
+    const plan = restorePlan(restored([terminal(1), terminal(2), terminal(3)], {}, layout), true);
+    expect([plan?.cols, plan?.rows]).toEqual(shape);
+    expect(plan?.sizes).toEqual(sizes);
+  });
+
   it("a window with no pane gives no plan, so one fresh window opens", () => {
     expect(restorePlan(restored([]), true)).toBeUndefined();
   });

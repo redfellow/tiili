@@ -105,6 +105,12 @@ export interface PaneRestore {
 export interface WindowRestore {
   panes: PaneRestore[];
   mode?: TilingMode;
+  /**
+   * The grid's columns and rows: in Grid mode the saved shape when it still fits the panes (Grid chose it for the
+   * window's shape then), else the grid for the pane count and mode.
+   */
+  cols: number;
+  rows: number;
   /** The column and row sizes, when they still fit the panes' grid. */
   sizes?: { colSizes: number[]; rowSizes: number[] };
   /** Index into `panes`. */
@@ -172,8 +178,9 @@ export function restorePlans(restored: Restored, withScrollback: boolean): Windo
 }
 
 /**
- * How saved tab `tab` reopens, or `undefined` when it has no pane. Panes keep their saved grid order, and
- * the track sizes their saved values when they still match the grid. A terminal pane's preface holds, with
+ * How saved tab `tab` reopens, or `undefined` when it has no pane. Panes keep their saved grid order, a Grid mode
+ * tab its saved columns and rows when they still fit the panes, and the track sizes their saved values when they
+ * still match the grid. A terminal pane's preface holds, with
  * `withScrollback`, its saved scrollback and the dim divider; then a dim note when its folder no longer exists, and
  * a dim reminder of what ran: the connected host for a remote pane, else the command line or the program's name.
  * The command line, with `withScrollback`, also becomes the newest history entry. Nothing is ever re-run.
@@ -187,13 +194,24 @@ function tabPlan(tab: SavedTab, restored: Restored, withScrollback: boolean): Wi
   const byId = new Map(tab.panes.map((pane) => [pane.id, pane]));
   const saved = order.map((id) => byId.get(id)).filter((pane): pane is SavedPane => pane !== undefined);
   const mode = TILING_MODES.includes(layout.mode as TilingMode) ? (layout.mode as TilingMode) : undefined;
-  const grid = gridFor(saved.length, mode);
-  const sizes = isNumberList(layout.colSizes, grid.cols) && isNumberList(layout.rowSizes, grid.rows) &&
+  const { cols, rows } = savedGridShape(layout, saved.length, mode) ?? gridFor(saved.length, mode);
+  const sizes = isNumberList(layout.colSizes, cols) && isNumberList(layout.rowSizes, rows) &&
     sumsToOne(layout.colSizes) && sumsToOne(layout.rowSizes)
     ? { colSizes: layout.colSizes, rowSizes: layout.rowSizes }
     : undefined;
   const focused = Math.max(0, saved.findIndex((pane) => pane.id === tab.focused));
-  return { panes: saved.map((pane) => paneRestore(restored, pane, withScrollback)), mode, sizes, focused };
+  return { panes: saved.map((pane) => paneRestore(restored, pane, withScrollback)), mode, cols, rows, sizes, focused };
+}
+
+/**
+ * The columns and rows Grid mode chose for the window's shape when `layout` was saved, when they still lay out `n`
+ * panes: whole numbers with every row but the last full. `undefined` in another mode or for a shape that does not fit.
+ */
+function savedGridShape(layout: Partial<LayoutState>, n: number, mode: TilingMode | undefined): { cols: number; rows: number } | undefined {
+  if ((mode ?? "grid") !== "grid") return undefined;
+  const { cols, rows } = layout;
+  if (typeof cols !== "number" || typeof rows !== "number" || !Number.isInteger(cols)) return undefined;
+  return cols >= 1 && cols <= n && rows === Math.ceil(n / cols) ? { cols, rows } : undefined;
 }
 
 /** `path` with the `home` folder written `~`; home itself when `path` is null. */

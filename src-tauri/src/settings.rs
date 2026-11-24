@@ -175,6 +175,24 @@ pub fn settings_window_place(owner: Rect, screen: Rect, size: (f64, f64)) -> Rec
     }
 }
 
+/// The settings window's page for tiili window `owner`: it names the owner, and the owner's inner size in logical
+/// pixels (`width`, `height`, rounded) so the Grid tile's picture can follow that window's shape.
+pub fn settings_window_url(owner: &str, inner: (f64, f64)) -> String {
+    format!(
+        "index.html?settings={owner}&width={}&height={}",
+        inner.0.round(),
+        inner.1.round()
+    )
+}
+
+/// The calling window's inner size in logical pixels: the area its panes tile.
+fn inner_size(window: &WebviewWindow) -> tauri::Result<(f64, f64)> {
+    let size = window
+        .inner_size()?
+        .to_logical::<f64>(window.scale_factor()?);
+    Ok((size.width, size.height))
+}
+
 /// The calling window's place and the work area of the screen it is on, in logical pixels.
 fn owner_and_screen(window: &WebviewWindow) -> tauri::Result<(Rect, Option<Rect>)> {
     let scale = window.scale_factor()?;
@@ -221,7 +239,7 @@ pub async fn settings_open(app: AppHandle, window: WebviewWindow) -> Result<(), 
         Some(screen) => settings_window_place(owner, screen, SETTINGS_WINDOW_SIZE),
         None => settings_window_place(owner, owner, SETTINGS_WINDOW_SIZE),
     };
-    let url = format!("index.html?settings={}", window.label());
+    let url = settings_window_url(window.label(), inner_size(&window).map_err(text)?);
     let opened = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
         .title("Settings")
         .inner_size(place.width, place.height)
@@ -325,6 +343,27 @@ mod tests {
             if let Some(owner) = owner {
                 assert_eq!(settings_window_label(owner), label, "{name}");
             }
+        }
+    }
+
+    #[test]
+    fn settings_picture_follows_the_window_its_url_carries_the_owner_and_its_inner_size() {
+        let cases = [
+            (
+                "portrait window",
+                "main",
+                (790.0, 1180.0),
+                "index.html?settings=main&width=790&height=1180",
+            ),
+            (
+                "fractional logical size is rounded",
+                "window-2",
+                (1439.6, 874.2),
+                "index.html?settings=window-2&width=1440&height=874",
+            ),
+        ];
+        for (name, owner, inner, expected) in cases {
+            assert_eq!(settings_window_url(owner, inner), expected, "{name}");
         }
     }
 
