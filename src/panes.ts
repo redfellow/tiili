@@ -867,7 +867,7 @@ export class Panes {
     const opening = plan.panes.map((pane) =>
       pane.kind === "heynote" ? this.openHeynote(tab) : this.openPane(tab, pane.cwd, undefined, undefined, pane),
     );
-    if (plan.sizes) tab.relayout({ ...tab.layout, ...plan.sizes });
+    tab.restoreGrid(plan.cols, plan.rows, plan.sizes);
     this.focusTab(tab, plan.focused);
     const results = await Promise.allSettled(opening);
     // A pane whose shell could not start says so in its terminal; the others stay.
@@ -1011,7 +1011,7 @@ export class Panes {
   async applySettings(settings: Settings, themeChanged: boolean): Promise<void> {
     this.styleRoot(settings);
     for (const tab of this.tabs) {
-      if ((tab.layout.mode ?? "grid") !== settings.tiling.layout) tab.relayout(setMode(tab.layout, settings.tiling.layout));
+      if ((tab.layout.mode ?? "grid") !== settings.tiling.layout) tab.setMode(settings.tiling.layout);
     }
     // Each pane keeps its zoom offset on top of the new font size.
     await Promise.all(

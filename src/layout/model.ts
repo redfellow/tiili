@@ -16,6 +16,8 @@ export interface LayoutState {
   rows: number;
   colSizes: number[];
   rowSizes: number[];
+  /** The pane area's size in character cells, which Grid mode fits its columns to; ceil(sqrt(n)) columns without it. */
+  area?: { cols: number; rows: number };
 }
 
 /** Where a pane sits, as fractions of the whole grid. */
@@ -39,12 +41,27 @@ export function emptyLayout(mode: TilingMode = "grid"): LayoutState {
 
 /** The same panes tiled in `mode`; tracks whose count stays the same keep their sizes. */
 export function setMode(state: LayoutState, mode: TilingMode): LayoutState {
-  return reflow({ ...state, mode }, state.order);
+  return reflow({ ...state, mode }, state.order, (state.mode ?? "grid") === mode);
 }
 
-/** `order` laid out on the automatic grid, keeping `prev`'s sizes for each axis whose track count is unchanged. */
-function reflow(prev: LayoutState, order: PaneId[]): LayoutState {
-  const { cols, rows } = gridFor(order.length, prev.mode);
+/**
+ * The same panes fitted to pane area `area` (in cells): Grid mode chooses its columns again, keeping its current
+ * ones unless another count is clearly better; the other modes do not change. Tracks keep their sizes when their
+ * count stays the same.
+ */
+export function setArea(state: LayoutState, area: { cols: number; rows: number }): LayoutState {
+  return reflow({ ...state, area }, state.order, true);
+}
+
+/**
+ * `order` laid out on the automatic grid, keeping `prev`'s sizes for each axis whose track count is unchanged. With
+ * `steady` and the same panes, Grid mode keeps `prev`'s column count unless another is clearly better (hysteresis);
+ * a pane opening or closing, or another mode, chooses afresh.
+ */
+function reflow(prev: LayoutState, order: PaneId[], steady = false): LayoutState {
+  const keep = steady && order.length === prev.order.length && prev.cols > 0 ? prev.cols : undefined;
+  const area = prev.area ? { ...prev.area, prev: keep } : undefined;
+  const { cols, rows } = gridFor(order.length, prev.mode, area);
   return {
     mode: prev.mode,
     order,
@@ -52,6 +69,7 @@ function reflow(prev: LayoutState, order: PaneId[]): LayoutState {
     rows,
     colSizes: cols === prev.cols ? prev.colSizes : equal(cols),
     rowSizes: rows === prev.rows ? prev.rowSizes : equal(rows),
+    ...(prev.area ? { area: prev.area } : {}),
   };
 }
 

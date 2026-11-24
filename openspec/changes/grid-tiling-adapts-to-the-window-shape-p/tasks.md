@@ -1,10 +1,10 @@
 ## 1. Layout choice
 
-- [ ] 1.1 Add the optional cell-size argument (with previous column count for hysteresis) to `gridFor` in `src/layout.ts`; Grid scores c = 1..n as in design.md; no size keeps `ceil(sqrt(n))`. Add table-driven portrait and landscape cases for n = 2, 3, 4, 5, 7 and a hysteresis case to `src/layout.test.ts`.
+- [x] 1.1 Add the optional cell-size argument (with previous column count for hysteresis) to `gridFor` in `src/layout.ts`; Grid scores c = 1..n as in design.md; no size keeps `ceil(sqrt(n))`. Add table-driven portrait and landscape cases for n = 2, 3, 4, 5, 7 and a hysteresis case to `src/layout.test.ts`.
   Tests to update: src/layout.test.ts
   - proof: `npx vitest run src/layout.test.ts`
   - proof: `npx eslint src/layout.ts src/layout.test.ts`
-- [ ] 1.2 Carry the pane area in `LayoutState` and add `setArea` in `src/layout/model.ts`; `reflow` passes area and previous cols. Add portrait/landscape and size-keeping cases to `src/layout/model.test.ts`.
+- [x] 1.2 Carry the pane area in `LayoutState` and add `setArea` in `src/layout/model.ts`; `reflow` passes area and previous cols. Add portrait/landscape and size-keeping cases to `src/layout/model.test.ts`.
   Tests to update: src/layout/model.test.ts
   - proof: `npx vitest run src/layout/model.test.ts`
   - proof: `npx eslint src/layout/model.ts src/layout/model.test.ts`
