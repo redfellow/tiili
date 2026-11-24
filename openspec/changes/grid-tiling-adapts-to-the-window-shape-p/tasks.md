@@ -20,8 +20,9 @@
   - proof: `npx vitest run src/session.test.ts`
   - proof: `npx eslint src/session.ts src/session.test.ts`
   - proof: `npx vitest run src/tabs.test.ts`
-- [x] 2.3 Draw the Grid tile picture in `src/settingsDialog.ts` for the window's shape in cells. The settings window's URL carries the opening window's inner size (`settings_window_url` in `src-tauri/src/settings.rs`); without it (the in-window dialogue) `window.innerWidth/innerHeight` is used.
-  - proof: `npx eslint src/settingsDialog.ts`
+- [x] 2.3 Draw the Grid tile picture in `src/settingsDialog.ts` for the window's shape in cells. The settings window's URL carries the opening window's inner size (`settings_window_url` in `src-tauri/src/settings.rs`); without it (the in-window dialogue) `window.innerWidth/innerHeight` is used. The picture's grid and box come from `src/tilingPicture.ts`.
+  - proof: `npx eslint src/settingsDialog.ts src/tilingPicture.ts src/tilingPicture.test.ts`
+  - proof: `npx vitest run src/tilingPicture.test.ts`
   - proof: `npm run typecheck`
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib settings::`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`

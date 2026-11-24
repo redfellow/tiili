@@ -3,7 +3,7 @@ import type { Platform } from "./keymap";
 import {
   integrationChanges, type IntegrationOutcome, integrationRowView, type Integrations, type IntegrationStatus,
 } from "./integrations";
-import { gridFor, TILING_MODES, type TilingMode } from "./layout";
+import { TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
   APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY,
@@ -14,6 +14,7 @@ import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
 import { REMOTE_SNIPPETS, type RemoteShell } from "./remoteSnippets";
 import { createSettingsSession, dirty, same, turnsOffRestore, whileTyping } from "./settingsSession";
 import { THEMES, type Theme } from "./themes";
+import { fallbackCell, pictureWindowSize, type PictureWindow, tilingPicture } from "./tilingPicture";
 import { APP_PR, APP_VERSION, settingsVersionLabel, VERSION_LABEL } from "./version";
 
 /** Fonts shipped with the app, listed under "Bundled". */
@@ -178,28 +179,12 @@ const TILING_LABELS: Record<TilingMode, string> = {
   rows: "Stacked",
 };
 
-/** A tiling picture fits this box, in px. */
-const TILING_ICON_BOX = { width: 30, height: 18 };
-/** The line box of a font with no measured metrics, in ems before the line height. */
-const NORMAL_LINE_BOX = 1.2;
-
-/** The window whose shape the Grid tile's picture follows: its inner size in px, and its terminal cell in px. */
-interface PictureWindow {
-  width: number;
-  height: number;
-  cell: { width: number; height: number };
-}
-
 /**
- * The terminal window the settings belong to: the inner size its settings window's URL carries (`width`,
- * `height`), else this window's (the in-window dialogue), with a cell of `font` measured on a canvas; a cell half
- * as wide as its line is high when the font's metrics are not known.
+ * The terminal window the settings belong to: the inner size its settings window's URL carries, else this window's
+ * (the in-window dialogue), with a cell of `font` measured on a canvas, or a fallback cell when that can't be.
  */
 function pictureWindow(font: Settings["font"]): PictureWindow {
-  const params = new URLSearchParams(window.location.search);
-  const sized = Number(params.get("width")) > 0 && Number(params.get("height")) > 0;
-  const width = sized ? Number(params.get("width")) : window.innerWidth;
-  const height = sized ? Number(params.get("height")) : window.innerHeight;
+  const { width, height } = pictureWindowSize(window.location.search, { width: window.innerWidth, height: window.innerHeight });
   const context = document.createElement("canvas").getContext("2d");
   if (context) {
     context.font = `${font.size}px ${fontFamilyList(font.family)}`;
@@ -207,22 +192,15 @@ function pictureWindow(font: Settings["font"]): PictureWindow {
     const line = (metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent) * font.lineHeight;
     if (metrics.width > 0 && line > 0) return { width, height, cell: { width: metrics.width, height: line } };
   }
-  const line = font.size * NORMAL_LINE_BOX * font.lineHeight;
-  return { width, height, cell: { width: line / 2, height: line } };
+  return { width, height, cell: fallbackCell(font.size, font.lineHeight) };
 }
 
 /**
- * A tiny picture of how seven panes tile in `mode`, drawn as bricks. With `shape`, Grid's picture is Grid mode's
- * choice for that window's size in cells, drawn in a box of the window's shape.
+ * A tiny picture of how seven panes tile in `mode`, drawn as bricks. With `shape`, Grid's picture follows that
+ * window's shape (see {@link tilingPicture}).
  */
 function tilingIcon(mode: TilingMode, shape?: PictureWindow): HTMLElement {
-  const fitted = mode === "grid" && shape && shape.width > 0 && shape.height > 0 ? shape : undefined;
-  const area = fitted && { cols: fitted.width / fitted.cell.width, rows: fitted.height / fitted.cell.height };
-  const { cols, rows, cells } = gridFor(7, mode, area);
-  const aspect = fitted ? fitted.width / fitted.height : TILING_ICON_BOX.width / TILING_ICON_BOX.height;
-  const wide = aspect >= TILING_ICON_BOX.width / TILING_ICON_BOX.height;
-  const width = wide ? TILING_ICON_BOX.width : TILING_ICON_BOX.height * aspect;
-  const height = wide ? TILING_ICON_BOX.width / aspect : TILING_ICON_BOX.height;
+  const { grid: { cols, rows, cells }, width, height } = tilingPicture(mode, shape);
   const gap = 1;
   const rects = cells.map((cell) => {
     const w = (width - (cols - 1) * gap) / cols;
