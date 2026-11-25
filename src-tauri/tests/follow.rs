@@ -211,7 +211,8 @@ const EXIT: &str = r#"{"type":"custom","customType":"session_exit","data":{"reas
 
 /// Subagent ends: the transcript appears after a wait, grows a line at a time (one written in two halves), and
 /// following stops at its `session_exit` record, at the done marker or when the process is gone, after printing
-/// what came before and a closing line saying the subagent finished (or that its process is gone).
+/// what came before and a closing line saying the subagent finished (or that its process is gone) and that the pane
+/// is about to close.
 #[test]
 fn subagent_ends_following_stops_after_printing_the_transcript() {
     let half = TASK.len() / 2;
@@ -294,6 +295,8 @@ fn subagent_ends_following_stops_after_printing_the_transcript() {
             _ => Renderer::new(false).finished(),
         };
         assert_eq!(out.lines().last(), Some(closing.as_str()), "{name}: {out}");
+        // The pane closes on its own, so the closing line says when.
+        assert!(closing.ends_with("closing in 3 s"), "{name}: {closing}");
     }
 }
 

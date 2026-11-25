@@ -4,8 +4,8 @@
 //
 // omp rebinds every extension factory to each subagent session, so `session_start` fires once per subagent with
 // `ctx.agent.kind === "sub"`; its `ctx.sessionManager.getSessionFile()` is the transcript omp appends to. The pane
-// runs `tiili follow` on it, which stops at omp's `session_exit` entry (or when this omp process is gone) and keeps
-// the pane open until a key is pressed.
+// runs `tiili follow` on it, which stops at omp's `session_exit` entry (or when this omp process is gone) and then
+// closes the pane a few seconds later.
 //
 // Outside tiili (no TIILI_SOCKET) it does nothing. Set TIILI_SUBAGENT_PANES=0 to turn it off inside tiili.
 

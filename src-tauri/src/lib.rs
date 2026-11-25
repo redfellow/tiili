@@ -2,6 +2,7 @@ pub mod app_icon;
 pub mod appimage_env;
 pub mod attention;
 pub mod bridge;
+pub mod claude_hook;
 pub mod claude_skill;
 pub mod cli;
 pub mod command;
