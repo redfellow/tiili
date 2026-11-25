@@ -14,3 +14,7 @@ The mp4 and its poster stay on disk. The poster is still the `og:image`.
 
 - The animation's canvas colours are hard-coded and the brand-token lint does not cover `site/media/`. If the
   palette changes, the animation will not follow it. Left as is, see the proposal's Assumptions.
+- The animation's controls (playback bar, click and key controls, pane spotlight, overlaid scene text) ship as PR
+  #246 has them and are now specified as such. The `Copy` toggle's label can read like "copy to clipboard"; it is
+  kept, by the user's choice, and can be renamed in a later card. Under reduced motion a replay the visitor starts
+  plays the full motion, which the spec allows.

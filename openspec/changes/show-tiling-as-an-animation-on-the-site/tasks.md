@@ -18,5 +18,10 @@
 
 - Open the site in a browser, in light and dark themes: the animation starts as the hero scrolls into view, sits on the
   mortar wall, and the page looks right on a narrow phone width.
-- With reduced motion on, the hero shows the final grid and nothing moves.
+- With reduced motion on, the hero shows the final grid and nothing moves until you press Replay or click the scene.
+- Hover the hero: the playback bar shows Pause/Play, the timeline, the clock, `Copy` and Replay; scrubbing pauses,
+  `Copy` hides the overlaid text, a click on the scene pauses, resumes or replays, and Space and `r` work after
+  clicking into the frame. Hovering a settled pane spotlights it. At a phone width the bar is gone.
+- The overlaid text reads `Servers. Logs. Editors.`, `A coding agent or ten.` and `A terminal that tiles itself.` in
+  time with the panes, and does not collide with the page's caption.
 - Close PR #246, because this change carries it.
