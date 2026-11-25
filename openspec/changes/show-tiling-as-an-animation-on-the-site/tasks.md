@@ -1,9 +1,9 @@
 ## 1. Hero animation
 
-- [ ] 1.1 Add `site/media/tiili-bricklaying.html` from `origin/site-bricklaying-animation` (PR #246), unchanged
+- [x] 1.1 Add `site/media/tiili-bricklaying.html` from `origin/site-bricklaying-animation` (PR #246), unchanged
   - proof: `git diff --exit-code origin/site-bricklaying-animation -- site/media/tiili-bricklaying.html`
   - proof: `test "$(grep -cE '(src|href)="(https?:)?//' site/media/tiili-bricklaying.html)" = 0`
-- [ ] 1.2 Replace the hero `<video>`, Replay button, their CSS and the play-on-view script in `site/index.html` with
+- [x] 1.2 Replace the hero `<video>`, Replay button, their CSS and the play-on-view script in `site/index.html` with
   the PR's `<iframe>` and the new caption. Keep `site/media/tiili-splash.mp4` and `site/media/tiili-splash-poster.jpg`
   and the `og:image`
   - Tests to update: none pin the video. `scripts/docs.test.ts` reads `site/index.html` for the shortcut tables and
