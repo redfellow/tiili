@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tiili: a terminal that tiles itself</title>
+<style>
+  :root {
+    --bg: #111617; --fg: #EFE7DE; --muted: #A0978F; --line: #2A3437; --surface: #182023;
+    --accent: #A4472B; --savi: #C9764F; --accent-text: #D3865F;
+    --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  body { display: grid; place-items: center; font-family: var(--font-sans); color: var(--fg); }
+  .stage { position: relative; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; overflow: hidden;
+    container-type: inline-size; background: var(--bg); cursor: default; user-select: none; -webkit-user-select: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .copy { position: absolute; left: 15.625%; right: 4%; margin: 0; opacity: 0; will-change: transform, opacity; pointer-events: none; }
+  .setup { top: 80.5%; font-size: max(13px, 2.5cqw); font-weight: 500; letter-spacing: -0.02em; color: var(--muted); }
+  .setup b { font-weight: 500; color: var(--fg); }
+  .landing { top: 79.2%; font-size: max(14px, 3.3cqw); line-height: 1.12; font-weight: 600; letter-spacing: -0.035em; color: var(--fg); }
+  .cur { display: inline-block; width: 0.42em; height: 0.78em; margin-left: 0.14em; background: var(--savi); border-radius: 3px; }
+  .stage.nocopy .copy { visibility: hidden; }
+  /* inside a page: no ground of its own, so the page's wall shows through */
+  .embed, .embed body, .embed .stage { background: transparent; }
+  .embed .stage { width: min(100vw, calc(100vh * 1280 / 920)); aspect-ratio: 1280 / 920; }
+  .embed .copy { left: 1.1%; right: 1.1%; }
+  .embed .setup { top: 85.8%; }
+  .embed .landing { top: 84.8%; }
+  .embed .bar { left: 1.1%; right: 1.1%; }
+
+  .bar { position: absolute; left: 15.625%; right: 15.625%; bottom: 2.2%; display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: color-mix(in srgb, var(--surface) 92%, transparent);
+    opacity: 0; transition: opacity .25s ease; font: 500 11.5px var(--font-mono); color: var(--muted); }
+  .stage:hover .bar, .bar:focus-within, .stage.paused .bar { opacity: 1; }
+  .bar button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 3px;
+    height: 24px; padding: 0 8px; cursor: pointer; }
+  .bar button:hover { border-color: var(--savi); }
+  .bar button:focus-visible, .bar input:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+  .bar button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .bar input[type=range] { flex: 1; min-width: 40px; accent-color: var(--savi); height: 24px; margin: 0; }
+  .bar output { min-width: 5.5ch; text-align: right; font-variant-numeric: tabular-nums; }
+  /* too little room under the window on a phone: tap the scene to pause or replay */
+  @media (max-width: 560px) { .bar { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .bar { transition: none; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="c" role="img" aria-label="Clay bricks drop one at a time into an empty tiili window. Each brick grows into a terminal pane and the panes settle into a grid on their own: one, two, two by two, three by three. A tenth brick lands on the full wall and every pane shifts to make room for it."></canvas>
+  <p class="copy setup" id="s1"><b>Servers.</b> <b>Logs.</b> <b>Editors.</b></p>
+  <p class="copy setup" id="s2"><b>A coding agent or ten.</b></p>
+  <p class="copy landing" id="land">A terminal that tiles itself.<span class="cur" id="cur" aria-hidden="true"></span></p>
+  <div class="bar" role="group" aria-label="Playback">
+    <button id="play" type="button" aria-label="Pause">Pause</button>
+    <input id="scrub" type="range" min="0" max="13" step="0.01" value="0" aria-label="Timeline">
+    <output id="clock">00.00 s</output>
+    <button id="copyBtn" class="opt" type="button" aria-pressed="true">Copy</button>
+    <button id="replay" type="button">Replay</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const embedded = window.parent !== window;
+// inside a page the window spans the whole frame, so the frame is taller than 16:9 to keep the window's shape
+const W = 1280, H = embedded ? 920 : 720, D = 13;
+const stage = document.getElementById('stage');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Embedded in a page of the same site, the scene drops its own wall and takes the page's text colours and colour scheme.
+let host = null;
+try { if (window.parent !== window && window.parent.document) host = window.parent.document.documentElement; } catch { host = null; }
+if (embedded) document.documentElement.classList.add('embed');
+function followHost() {
+  if (!host) return;
+  const theirs = window.parent.getComputedStyle(host), mine = document.documentElement.style;
+  mine.colorScheme = theirs.colorScheme;
+  for (const name of ['--fg', '--muted', '--line', '--surface']) { const v = theirs.getPropertyValue(name).trim(); if (v) mine.setProperty(name, v); }
+}
+if (host) {
+  followHost();
+  new MutationObserver(followHost).observe(host, { attributes: true });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followHost);
+}
+
+/* ---------- helpers ---------- */
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const smooth = (a, b, v) => { const x = clamp((v - a) / (b - a)); return x * x * (3 - 2 * x); };
+const outCubic = x => 1 - Math.pow(1 - clamp(x), 3);
+const outBack = (x, s = 1.4) => { x = clamp(x) - 1; return 1 + x * x * ((s + 1) * x + s); };
+const rnd = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const hex = h => { if (h[0] !== '#') return h.match(/\d+/g).map(Number); return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
+const mixc = (a, b, p) => { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], p))).join(',')})`; };
+const lerpR = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p), w: lerp(a.w, b.w, p), h: lerp(a.h, b.h, p) });
+const rr = (r, rad) => { ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, rad); };
+
+/* ---------- tiili tokens (dark) ---------- */
+const C = { bg: '#111617', wallBrick: '#171D1F', gap: '#0B0F10', term: '#182023', fg: '#D9D3CA', dim: '#6E7876', muted: '#A0978F',
+  tiili: '#A4472B', klinkkeri: '#6B2A1E', savi: '#C9764F', koivu: '#D9A43A', green: '#8DB596', agent: '#D3865F' };
+const TINT = { api: ['#A4472B', '#FFFFFF'], web: ['#C9764F', '#2A2321'], docs: ['#D9A43A', '#2A2321'], infra: ['#6E7F4E', '#FFFFFF'], mobile: ['#6F97B3', '#16222B'] };
+const MONO = '"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+
+/* ---------- geometry ---------- */
+const WIN = embedded ? { x: 14, y: 12, w: 1252, h: 744 } : { x: 200, y: 26, w: 880, h: 522 };
+const INNER = { x: WIN.x + 7, y: WIN.y + 7, w: WIN.w - 14, h: WIN.h - 14 };
+const AREA = { x: INNER.x + 4, y: INNER.y + 26, w: INNER.w - 8, h: INNER.h - 30 };
+const GAP = 4, BW = 118, BH = 44;
+
+function layout(n) {
+  const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols), out = [];
+  const h = (AREA.h - GAP * (rows - 1)) / rows;
+  for (let r = 0, i = 0; r < rows; r++) {
+    const k = Math.min(cols, n - i), w = (AREA.w - GAP * (k - 1)) / k;
+    for (let c = 0; c < k; c++, i++) out.push({ x: AREA.x + c * (w + GAP), y: AREA.y + r * (h + GAP), w, h });
+  }
+  return out;
+}
+const N = 10;
+const L = [null]; for (let n = 1; n <= N; n++) L.push(layout(n));
+
+/* ---------- cast ---------- */
+const agentOut = [
+  ['● Reading src/layout.ts', '● Editing 2 files', '● Running tests', '✓ 48 passed'],
+  ['● Planning the change', '● Reading main.tf', '● Editing 1 file', '✓ plan is clean'],
+  ['● Reading App.tsx', '● Running the build', '● Editing 3 files', '✓ build passed'],
+  ['● Reading routes.ts', '● Writing a test', '● Running tests', '✓ 112 passed'],
+  ['● Reading wall.ts', '● Editing 1 file', '● Checking types', '✓ no errors'],
+  ['● Reading the diff', '● Running tests', '● Editing 2 files', '✓ 31 passed'],
+];
+const PANES = [
+  { repo: 'api', proc: 'node', cmd: 'npm run dev', step: .5, loop: true, out: ['▸ api listening on :3000', 'GET /health 200 4ms', 'GET /panes 200 11ms', 'POST /layout 201 23ms', 'GET /repos 200 7ms', 'GET /panes 200 9ms'] },
+  { repo: 'api', proc: 'tail', cmd: 'tail -f log/dev.log', step: .62, loop: true, out: ['[info] worker 2 ready', '[info] cache warm, 412 keys', '[warn] slow query 212ms', '[info] job reflow done', '[info] worker 3 ready'] },
+  { repo: 'web', proc: 'nvim', cmd: 'nvim src/wall.ts', step: .22, out: ['  1  export function wall(n) {', '  2    const cols = Math.ceil(', '  3      Math.sqrt(n))', '  4    return rows(n, cols)', '  5  }'] },
+  { repo: 'web', proc: 'zsh', cmd: 'git status', step: .3, out: ['On branch main', 'nothing to commit'] },
+  { repo: 'docs', proc: 'agent', cmd: 'agent "tidy the guide"', step: .8, loop: true, out: agentOut[0] },
+  { repo: 'infra', proc: 'agent', cmd: 'agent "plan the deploy"', step: .95, loop: true, out: agentOut[1] },
+  { repo: 'mobile', proc: 'agent', cmd: 'agent "fix the build"', step: .85, loop: true, out: agentOut[2] },
+  { repo: 'api', proc: 'agent', cmd: 'agent "add /tiles"', step: 1.05, loop: true, out: agentOut[3] },
+  { repo: 'web', proc: 'agent', cmd: 'agent "type the wall"', step: .9, loop: true, out: agentOut[4] },
+  { repo: 'mobile', proc: 'agent', cmd: 'agent "review the PR"', step: 1, loop: true, out: agentOut[5] },
+];
+// launch and impact time of each brick; the tenth lingers before it falls
+const T = [[.5, 1.15], [2.5, 3.05], [3.5, 4.0], [4.4, 4.9], [6.1, 6.55], [6.5, 6.95], [6.9, 7.35], [7.3, 7.75], [7.7, 8.15], [8.55, 9.7]];
+const IMPACT = T.map(v => v[1]);
+const land = j => { const c = L[j + 1][j]; return { x: c.x + c.w / 2, y: c.y + c.h }; };
+// each reflow spreads out from the point of contact
+const STAG = []; for (let k = 2; k <= N; k++) { const p = land(k - 1); STAG[k] = L[k - 1].map(r => Math.hypot(r.x + r.w / 2 - p.x, r.y + r.h / 2 - p.y) / 1000 * .22); }
+
+// where pane j sits at time t, and how far it is lifted off the wall while it travels
+function paneTarget(j, t) {
+  let r = L[j + 1][j], lift = 0;
+  for (let k = j + 2; k <= N; k++) {
+    const big = k === N, a = (t - IMPACT[k - 1] - STAG[k][j] * (big ? .6 : 1)) / (big ? .75 : .6);
+    if (a <= 0) continue;
+    const from = L[k - 1][j], to = L[k][j], moved = Math.hypot(to.x - from.x, to.y - from.y) > 40;
+    r = lerpR(r, to, big ? outBack(a, .8) : outCubic(a));
+    if (a < 1 && moved) lift = Math.max(lift, Math.sin(Math.PI * a) * (big ? 1 : .5));
+  }
+  return { x: r.x, y: r.y, w: r.w, h: r.h, lift };
+}
+
+// terminal text size relative to the smallest, by number of panes: one step per added column
+const ZOOM = n => [0, 1.36, 1.2, 1.2, 1.2, 1.09, 1.09, 1.09, 1.09, 1.09, 1][n];
+function fontScale(t) {
+  let z = ZOOM(1);
+  for (let k = 2; k <= N; k++) z = lerp(z, ZOOM(k), smooth(0, .7, t - IMPACT[k - 1]));
+  return z;
+}
+
+/* ---------- interaction state (eased outside the timeline) ---------- */
+const pointer = { x: -1, y: -1, inside: false };
+const focus = new Array(N).fill(0);
+let hoverDim = 0;
+
+/* ---------- drawing ---------- */
+function drawWall() {
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.wallBrick;
+  const bw = 100, bh = 40, g = 6;
+  for (let row = 0, y = -8; y < H; row++, y += bh + g)
+    for (let x = (row % 2 ? -bw / 2 : 0) - 20; x < W; x += bw + g) { ctx.beginPath(); ctx.roundRect(x, y, bw, bh, 3); ctx.fill(); }
+  const v = ctx.createRadialGradient(W / 2, H * .4, 200, W / 2, H * .4, 820);
+  v.addColorStop(0, 'rgba(17,22,23,0)'); v.addColorStop(1, 'rgba(17,22,23,.92)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  const f = ctx.createLinearGradient(0, 540, 0, H);
+  f.addColorStop(0, 'rgba(17,22,23,0)'); f.addColorStop(.35, 'rgba(17,22,23,.9)');
+  ctx.fillStyle = f; ctx.fillRect(0, 540, W, H - 540);
+}
+
+function drawWindow(t) {
+  ctx.save();
+  ctx.shadowColor = embedded ? 'rgba(0,0,0,.4)' : 'rgba(0,0,0,.55)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 14;
+  const g = ctx.createLinearGradient(WIN.x, WIN.y, WIN.x + WIN.w, WIN.y + WIN.h);
+  g.addColorStop(0, C.koivu); g.addColorStop(.3, C.savi); g.addColorStop(.62, C.tiili); g.addColorStop(1, '#861B22');
+  ctx.fillStyle = g; rr(WIN, 15); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = C.gap; rr(INNER, 10); ctx.fill();
+  // mortar catches the light of each landing
+  ctx.save(); rr(INNER, 10); ctx.clip();
+  for (let j = 1; j < N; j++) {
+    const a = t - IMPACT[j]; if (a < 0 || a > 2) continue;
+    const big = j === N - 1, p = land(j), amt = Math.exp(-a * (big ? 2.2 : 3.6)) * (big ? 1 : .5);
+    const reach = lerp(120, big ? 1100 : 620, outCubic(a / .5));
+    const m = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, reach);
+    m.addColorStop(0, `rgba(233,150,96,${amt})`); m.addColorStop(.6, `rgba(201,118,79,${amt * .55})`); m.addColorStop(1, 'rgba(201,118,79,0)');
+    ctx.fillStyle = m; ctx.fillRect(INNER.x, INNER.y, INNER.w, INNER.h);
+  }
+  ctx.restore();
+  [['#EC6A5E', 0], ['#F4BF4F', 1], ['#61C554', 2]].forEach(([c, i]) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(INNER.x + 17 + i * 18, INNER.y + 14, 5.5, 0, 7); ctx.fill(); });
+}
+
+function drawBrick(cx, cy, w, h, angle, alpha = 1) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle); ctx.globalAlpha *= alpha;
+  const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+  g.addColorStop(0, '#D98A62'); g.addColorStop(.12, C.savi); g.addColorStop(.5, C.tiili); g.addColorStop(1, '#8A3820');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.17)'; ctx.beginPath(); ctx.roundRect(-w * .33, -h * .24, w * .66, h * .48, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,220,190,.28)'; ctx.fillRect(-w * .33, h * .24 - 1, w * .66, 1);
+  ctx.restore();
+}
+
+function paneLines(j, clock) {
+  const p = PANES[j], typed = Math.floor(clamp(clock, 0, 99) * 30);
+  const lines = ['$ ' + p.cmd.slice(0, typed)];
+  const after = clock - p.cmd.length / 30 - .25;
+  if (after > 0) {
+    const count = Math.floor(after / p.step) + 1, n = p.loop ? count : Math.min(count, p.out.length);
+    for (let m = Math.max(0, n - 14); m < n; m++) lines.push(p.out[m % p.out.length]);
+  }
+  return lines;
+}
+
+function drawPane(j, r, age, t, amb, blink) {
+  const p = PANES[j], [tint, on] = TINT[p.repo];
+  const cool = smooth(.12, .85, age), show = smooth(.5, 1.05, age);
+  const face = mixc(C.term, tint, .1);
+  if (r.lift > .01) { ctx.save(); ctx.shadowColor = `rgba(0,0,0,${.6 * r.lift})`; ctx.shadowBlur = 26 * r.lift; ctx.shadowOffsetY = 10 * r.lift; ctx.fillStyle = face; rr(r, 3); ctx.fill(); ctx.restore(); }
+  ctx.save(); rr(r, 3); ctx.clip();
+  if (cool < 1) {
+    const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    g.addColorStop(0, mixc(C.savi, face, cool)); g.addColorStop(.5, mixc(C.tiili, face, cool)); g.addColorStop(1, mixc('#8A3820', face, cool));
+    ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+    const fa = (1 - smooth(0, .5, age)) * .17;
+    if (fa > .004) { ctx.fillStyle = `rgba(0,0,0,${fa})`; ctx.beginPath(); ctx.roundRect(r.x + r.w * .17, r.y + r.h * .26, r.w * .66, r.h * .48, 3); ctx.fill(); }
+    ctx.fillStyle = `rgba(255,214,180,${(1 - cool) * .5})`; ctx.fillRect(r.x, r.y, r.w, 2);
+  } else { ctx.fillStyle = face; ctx.fillRect(r.x, r.y, r.w, r.h); }
+
+  if (show > 0) {
+    // the terminal font shrinks a step as the grid gains a column, eased with the reflow
+    const z = fontScale(t);
+    ctx.save(); ctx.translate(r.x, r.y); ctx.scale(z, z);
+    ctx.globalAlpha = show; ctx.textBaseline = 'middle';
+    ctx.font = `600 10px ${MONO}`;
+    const cw = ctx.measureText(p.repo).width + 12;
+    ctx.fillStyle = tint; ctx.beginPath(); ctx.roundRect(10 / z, 9 / z, cw, 16, 3); ctx.fill();
+    ctx.fillStyle = on; ctx.fillText(p.repo, 10 / z + 6, 9 / z + 8.5);
+    ctx.font = `500 10px ${MONO}`; ctx.fillStyle = C.dim; ctx.fillText(p.proc, 10 / z + 8 + cw, 9 / z + 8.5);
+
+    const top = 9 / z + 31, left = 10 / z;
+    const all = paneLines(j, age - .75 + amb), max = Math.max(1, Math.floor((r.h / z - top - 2) / 15));
+    const lines = all.slice(-max);
+    ctx.font = `500 11px ${MONO}`;
+    let lx = left, ly = top;
+    lines.forEach((s, i) => {
+      ctx.fillStyle = s[0] === '$' ? C.fg : s[0] === '✓' ? C.green : s[0] === '●' ? C.agent : C.muted;
+      ctx.fillText(s, left, top + i * 15);
+      if (i === lines.length - 1) { lx = left + ctx.measureText(s).width + 4; ly = top + i * 15; }
+    });
+    const f = focus[j];
+    if (f > .5) { if (blink) { ctx.fillStyle = C.savi; ctx.beginPath(); ctx.roundRect(lx, ly - 6.5, 6.5, 13, 2); ctx.fill(); } }
+    else { ctx.strokeStyle = C.dim; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(lx + .5, ly - 6, 5.5, 12, 2); ctx.stroke(); }
+    ctx.restore();
+  }
+  // focus: the brick line on top; everything else dims a little
+  const dimAll = Math.max(smooth(10.5, 11.3, t), hoverDim);
+  const shade = dimAll * (1 - focus[j]) * .36;
+  if (shade > .003) { ctx.fillStyle = `rgba(11,15,16,${shade})`; ctx.fillRect(r.x, r.y, r.w, r.h); }
+  if (focus[j] > .01 && cool >= 1) { ctx.fillStyle = `rgba(201,118,79,${focus[j] * dimAll})`; ctx.fillRect(r.x, r.y, r.w, 2.5); }
+  ctx.restore();
+}
+
+function drawDust(j, a) {
+  if (a < 0 || a > 1.1) return;
+  const big = j === N - 1, p = land(j), n = big ? 34 : 14;
+  for (let i = 0; i < n; i++) {
+    const s = j * 97 + i, dir = rnd(s) < .5 ? -1 : 1;
+    const vx = dir * lerp(40, big ? 420 : 230, rnd(s + 1)), vy = -lerp(20, big ? 260 : 150, rnd(s + 2));
+    const life = lerp(.45, 1.05, rnd(s + 3)), u = a / life; if (u >= 1) continue;
+    const drag = 1 - Math.exp(-a * 3.2);
+    const x = p.x + dir * BW * .45 * rnd(s + 4) + vx * drag / 3.2, y = p.y - 3 + vy * drag / 3.2 + 220 * a * a;
+    const size = lerp(1.2, big ? 4.2 : 3, rnd(s + 5)) * (1 - u * .5);
+    ctx.fillStyle = `rgba(${rnd(s + 6) < .5 ? '201,118,79' : '232,222,205'},${(1 - u) * (1 - u) * .85})`;
+    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+  }
+}
+
+function draw(t, amb, blink) {
+  ctx.setTransform(canvas.width / W, 0, 0, canvas.width / W, 0, 0);
+  if (embedded) ctx.clearRect(0, 0, W, H); else drawWall();
+
+  // the tenth brick shakes the whole window when it lands
+  const sa = t - IMPACT[N - 1];
+  const shake = sa > 0 && sa < 1 ? 5 * Math.exp(-sa * 7) * Math.sin(sa * 46) : 0;
+  ctx.save(); ctx.translate(0, shake);
+  drawWindow(t);
+
+  ctx.save(); rr(INNER, 10); ctx.clip();
+  // panes that have landed
+  const live = [];
+  for (let j = 0; j < N; j++) {
+    const age = t - IMPACT[j]; if (age < 0) continue;
+    const p = land(j), target = paneTarget(j, t), g = outCubic(age / .55);
+    const start = { x: p.x - BW * .56, y: p.y - BH * .8, w: BW * 1.12, h: BH * .8 };
+    const r = lerpR(start, target, g); r.lift = target.lift;
+    live.push({ j, r, age });
+  }
+  live.sort((a, b) => a.r.lift - b.r.lift || a.j - b.j);   // travelling panes pass over the ones at rest
+  for (const { j, r, age } of live) drawPane(j, r, age, t, amb, blink);
+  // bricks still in the air, with the shadow each throws on the floor it will hit
+  for (let j = 0; j < N; j++) {
+    const [t0, t1] = T[j]; if (t < t0 || t >= t1) continue;
+    const u = (t - t0) / (t1 - t0), big = j === N - 1, fall = big ? Math.pow(u, 3.2) : u * u;
+    const p = land(j), dx = (rnd(j + 40) - .5) * 70, y0 = INNER.y - 70;
+    const cx = p.x + dx * (1 - fall), cy = lerp(y0, p.y - BH / 2, fall), ang = (rnd(j + 60) - .5) * .7 * (1 - fall);
+    const sh = smooth(.25, 1, fall);
+    ctx.fillStyle = `rgba(0,0,0,${sh * .5})`; ctx.beginPath(); ctx.ellipse(p.x, p.y - 2, BW * lerp(.9, .55, sh), lerp(12, 5, sh), 0, 0, 7); ctx.fill();
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = lerp(26, 4, fall);
+    drawBrick(cx, cy, BW, BH, ang); ctx.restore();
+  }
+  // contact glow and dust
+  ctx.globalCompositeOperation = 'lighter';
+  for (let j = 0; j < N; j++) {
+    const a = t - IMPACT[j]; if (a < 0 || a > .7) continue;
+    const p = land(j), big = j === N - 1, amt = Math.exp(-a * 7) * (big ? .7 : .4);
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, big ? 260 : 150);
+    g.addColorStop(0, `rgba(255,170,110,${amt})`); g.addColorStop(1, 'rgba(255,170,110,0)');
+    ctx.fillStyle = g; ctx.fillRect(INNER.x, INNER.y, INNER.w, INNER.h);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  for (let j = 0; j < N; j++) drawDust(j, t - IMPACT[j]);
+  ctx.restore();
+  ctx.restore();
+}
+
+/* ---------- copy on the same timeline ---------- */
+const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), landEl = document.getElementById('land'), cur = document.getElementById('cur');
+const words = [...s1.querySelectorAll('b')];
+function copy(t, blink) {
+  // each word of the first line arrives with the pane it names
+  const o1 = 1 - smooth(5.25, 5.65, t);
+  s1.style.opacity = o1;
+  s1.style.transform = `translateY(${-smooth(5.25, 5.65, t) * .6}cqw)`;
+  [1.5, 3.2, 4.15].forEach((at, i) => { const a = smooth(at, at + .45, t); words[i].style.opacity = a; words[i].style.display = 'inline-block'; words[i].style.transform = `translateY(${(1 - a) * .7}cqw)`; });
+  const in2 = smooth(5.85, 6.3, t), out2 = smooth(10.05, 10.45, t);
+  s2.style.opacity = in2 * (1 - out2);
+  s2.style.transform = `translateY(${((1 - in2) * .7 - out2 * .6)}cqw)`;
+  const inL = smooth(10.7, 11.45, t);
+  landEl.style.opacity = inL;
+  landEl.style.transform = `translateY(${(1 - outCubic((t - 10.7) / .9)) * 1.1}cqw)`;
+  // the cursor is the last brick to land
+  const cu = clamp((t - 11.35) / .32), drop = cu * cu, settle = t - 11.67;
+  const squash = settle > 0 && settle < .25 ? 1 - .28 * Math.exp(-settle * 18) : 1;
+  cur.style.opacity = cu > 0 ? (settle > .6 && !blink ? .25 : 1) : 0;
+  cur.style.transform = `translateY(${-(1 - drop) * 2.4}em) scaleY(${squash})`;
+  cur.style.transformOrigin = '50% 100%';
+}
+
+/* ---------- playback ---------- */
+const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), clock = document.getElementById('clock');
+let time = 0, amb = 0, playing = true, last = performance.now(), raf = 0;
+
+function hoverPane() {
+  if (!pointer.inside) return -1;
+  for (let j = 0; j < N; j++) {
+    if (time - IMPACT[j] < .6) continue;
+    const r = paneTarget(j, time);
+    if (pointer.x >= r.x && pointer.x <= r.x + r.w && pointer.y >= r.y && pointer.y <= r.y + r.h) return j;
+  }
+  return -1;
+}
+function render(dt) {
+  const still = reduced.matches;
+  const hov = hoverPane(), target = hov >= 0 ? hov : N - 1;
+  const k = still ? 1 : 1 - Math.exp(-dt * 11);
+  hoverDim += ((hov >= 0 ? 1 : 0) - hoverDim) * (still ? 1 : 1 - Math.exp(-dt * 6));
+  for (let j = 0; j < N; j++) focus[j] += ((j === target && (hov >= 0 || time > 10.5) ? 1 : 0) - focus[j]) * k;
+  const blink = still || (performance.now() % 1100) < 620;
+  draw(time, amb, blink);
+  copy(time, blink);
+  scrub.value = time; clock.textContent = time.toFixed(2).padStart(5, '0') + ' s';
+}
+function setPlaying(v) {
+  playing = v; stage.classList.toggle('paused', !v && time < D);
+  playBtn.textContent = v && time < D ? 'Pause' : 'Play'; playBtn.setAttribute('aria-label', playBtn.textContent);
+}
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (playing && time < D) { time = Math.min(D, time + dt); if (time >= D) setPlaying(true); }
+  else if (time >= D && !reduced.matches) amb += dt;   // the hold keeps living on its own clock
+  render(dt);
+  raf = requestAnimationFrame(frame);
+}
+function seek(v) { time = clamp(v, 0, D); amb = 0; }
+function replay() { seek(0); setPlaying(true); }
+
+playBtn.addEventListener('click', () => { if (time >= D) replay(); else setPlaying(!playing); });
+document.getElementById('replay').addEventListener('click', replay);
+scrub.addEventListener('input', () => { seek(+scrub.value); setPlaying(false); });
+document.getElementById('copyBtn').addEventListener('click', e => {
+  const on = stage.classList.toggle('nocopy'); e.currentTarget.setAttribute('aria-pressed', String(!on));
+});
+canvas.addEventListener('click', () => { if (time >= D) replay(); else setPlaying(!playing); });
+addEventListener('keydown', e => {
+  if (e.target.closest('input,button')) return;
+  if (e.code === 'Space') { e.preventDefault(); playBtn.click(); }
+  if (e.key === 'r') replay();
+});
+stage.addEventListener('pointermove', e => {
+  const b = canvas.getBoundingClientRect();
+  pointer.x = (e.clientX - b.left) / b.width * W; pointer.y = (e.clientY - b.top) / b.height * H; pointer.inside = true;
+});
+stage.addEventListener('pointerleave', () => { pointer.inside = false; });
+
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1), w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+  if (canvas.width !== w) { canvas.width = w; canvas.height = Math.round(w * H / W); }
+}
+new ResizeObserver(() => { resize(); render(0); }).observe(canvas);
+reduced.addEventListener('change', () => { if (reduced.matches) { seek(D); setPlaying(true); } });
+
+// a hook for checking frames: window.tiili.seek(9.7)
+window.tiili = { seek: v => { seek(v); setPlaying(false); render(1); }, replay, get time() { return time; }, duration: D, cues: { firstBrick: 1.15, wallFull: 8.15, tenthLands: 9.7, landing: 10.7 } };
+
+resize();
+setPlaying(true);
+// wait for the scene to be on screen before the first brick drops; embedded in a page, that is the page's viewport
+if (reduced.matches) seek(D);
+else if ('IntersectionObserver' in window) {
+  playing = false;
+  const io = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting)) { io.disconnect(); if (time === 0) playing = true; }
+  }, { threshold: .4 });
+  io.observe(stage);
+}
+raf = requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
