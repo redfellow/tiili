@@ -572,6 +572,16 @@ pub fn notification_clicked(app: &AppHandle, id: Option<i32>) {
     }
 }
 
+/// Another app asked for pane `id` (`tiili --focus-pane ID`): its window comes to the front with the pane focused,
+/// as a click on its notification would; where the pane is gone, the last focused window comes forward.
+pub fn focus_pane(app: &AppHandle, id: SessionId) {
+    if app.state::<WindowSessions>().owner(id).is_some() {
+        focus_session(app, id);
+    } else {
+        crate::windows::focus_last(app);
+    }
+}
+
 /// Brings session `id`'s window to the front and has it focus the session's pane; its mark clears.
 fn focus_session(app: &AppHandle, id: SessionId) {
     let owner = app.state::<WindowSessions>().owner(id);
