@@ -5,3 +5,14 @@ x-harvaaja-card: d8e4c487-47b8-4cf7-aee5-128098f9cfd7
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: The site hero is visible to visitors and no capability covers the
+    project website's content (docs-sync covers only generated tables and doc
+    checks), so the hero animation gets a small new capability.
+  citations:
+    - site/index.html:259-291
+    - openspec/specs/docs-sync/spec.md
+    - openspec/specs/brand-tokens/spec.md
+    - "PR #246 (site-bricklaying-animation)"
+  revision: dd4df696-5777-48ae-ac3e-f8c8a76c29b0
