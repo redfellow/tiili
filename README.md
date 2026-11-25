@@ -151,6 +151,10 @@ tiili install-claude-skill
 or copy [`integrations/claude/skills/tiili-tiles/SKILL.md`](integrations/claude/skills/tiili-tiles/SKILL.md) to
 `~/.claude/skills/tiili-tiles/SKILL.md`.
 
+Settings → Integrations can also give each subagent a pane of its own beside the agent that started it, showing its
+work as it happens and closing when it is done: **Claude Code subagent panes** and **Oh My Pi subagent panes**. See
+[Subagent panes](integrations/subagent-panes/README.md).
+
 ## How it's made
 
 tiili is planned, built and reviewed by coding agents on härvääjä, a board that runs each idea as a card through an [OpenSpec](https://github.com/Fission-AI/OpenSpec) change: plan,

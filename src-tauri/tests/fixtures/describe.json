@@ -661,10 +661,84 @@
       "needs": [],
       "output": {
         "json": null,
-        "text": "the transcript's task, tool calls, short results and replies, until the session ends; then it waits for a key when stdin is a terminal"
+        "text": "the transcript's task, tool calls, short results and replies, until the session ends; then, when stdin is a terminal, it exits 3 seconds later or on a key press"
       },
       "summary": "Follow an Oh My Pi or Claude Code transcript as a readable log, without contacting the app",
       "usage": "tiili follow FILE [--title TEXT] [--pid PID] [--done MARKER]"
+    },
+    {
+      "args": [
+        {
+          "kind": "option",
+          "name": "--pid",
+          "required": false,
+          "summary": "Claude Code's process: the pane stops following when it is gone",
+          "value": "PID"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "open_failed",
+          "exit": 1,
+          "suggestion": "check that the command is on PATH and the folder exists",
+          "summary": "the app could not open the pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "claude-hook",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "nothing; it reads a SubagentStart or SubagentStop hook's JSON on stdin, and does nothing outside a pane or with TIILI_SUBAGENT_PANES=0"
+      },
+      "summary": "Claude Code's subagent hook: open a pane that follows each subagent, from inside a pane",
+      "usage": "tiili claude-hook [--pid PID]"
     },
     {
       "args": [

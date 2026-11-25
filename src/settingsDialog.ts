@@ -2,6 +2,7 @@ import type { UnsavedChoice } from "./backend";
 import type { Platform } from "./keymap";
 import {
   integrationChanges, type IntegrationOutcome, integrationRowView, type Integrations, type IntegrationStatus,
+  withChanges,
 } from "./integrations";
 import { TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
@@ -1020,8 +1021,9 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const integrationsChanged = () => integrationChanges(integrationRows, ticked).length > 0;
 
   /**
-   * Makes the integration changes the boxes ask for; true when all of them worked. Otherwise shows the Integrations
-   * tab with each failed row's error and fix, and the rows as they now are on disk.
+   * Makes the integration changes the boxes ask for; true when all of them worked, and the rows then say they are
+   * installed as ticked. Otherwise shows the Integrations tab with each failed row's error and fix, and the rows as
+   * they now are on disk.
    */
   const applyIntegrations = async () => {
     const changes = integrationChanges(integrationRows, ticked);
@@ -1036,7 +1038,13 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       report(error);
       failed = true;
     }
-    if (!failed) return true;
+    if (!failed) {
+      // The boxes are now what is installed: closing must not find them changed and ask to save them again.
+      integrationRows = withChanges(integrationRows, changes);
+      ticked.clear();
+      renderIntegrations();
+      return true;
+    }
     showTab(panels.indexOf(integrationsPanel));
     await loadIntegrations(failures);
     return false;

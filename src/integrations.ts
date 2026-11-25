@@ -63,6 +63,18 @@ export function integrationChanges(
 }
 
 /**
+ * The rows once `made` have all been made: each changed row installed as its change asked, so Save leaves nothing
+ * still to change and closing does not ask about it again.
+ */
+export function withChanges(
+  rows: readonly IntegrationStatus[],
+  made: readonly IntegrationChange[],
+): IntegrationStatus[] {
+  const on = new Map(made.map((change) => [change.id, change.on]));
+  return rows.map((row) => (on.has(row.id) ? { ...row, installed: on.get(row.id)! } : row));
+}
+
+/**
  * Row `row` as shown: its box ticked as in `ticked` (else as installed) unless it cannot be changed, the reason when it
  * cannot be turned on, and the error and fix of `outcome` when that failed. An installed row whose tool is missing can
  * still be unticked, and ticked back.

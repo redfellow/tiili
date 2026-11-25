@@ -5,6 +5,8 @@
 //!   `<app data>/integrations/omp-subagent-panes` and linked with `omp plugin link`; turned off with
 //!   `omp plugin uninstall tiili-subagent-panes`, then the folder is removed.
 //! - `claude-skill`: the tiili-tiles Claude Code skill in `~/.claude/skills/tiili-tiles` (src/claude_skill.rs).
+//! - `claude-subagent-panes`: Claude Code `SubagentStart` and `SubagentStop` hooks running `tiili claude-hook`, added
+//!   to and removed from `~/.claude/settings.json` without touching the user's other settings (src/claude_hook.rs).
 //!
 //! Nothing here installs or removes an integration unless the user saves the tab with its box changed; on a new app
 //! version [`refresh_installed`] rewrites the files of those already installed. Tools are looked up and run with a
@@ -23,7 +25,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::claude_skill;
+use crate::{claude_hook, claude_skill};
 
 /// The omp extension's files, as shipped in `integrations/subagent-panes/omp/`.
 pub const OMP_FILES: &[(&str, &str)] = &[
@@ -57,6 +59,7 @@ pub struct Integration {
 
 pub const OMP_SUBAGENT_PANES: &str = "omp-subagent-panes";
 pub const CLAUDE_SKILL: &str = "claude-skill";
+pub const CLAUDE_SUBAGENT_PANES: &str = "claude-subagent-panes";
 
 /// Every integration, in the order the tab lists them.
 pub const INTEGRATIONS: &[Integration] = &[
@@ -72,6 +75,14 @@ pub const INTEGRATIONS: &[Integration] = &[
         id: CLAUDE_SKILL,
         name: "Claude Code tiili-tiles skill",
         description: "Teaches Claude Code to open and arrange tiili panes with the tiili command.",
+        tool: "claude",
+        agent: "Claude Code",
+    },
+    Integration {
+        id: CLAUDE_SUBAGENT_PANES,
+        name: "Claude Code subagent panes",
+        description: "When Claude Code runs in a tiili pane, each subagent it starts gets a pane of its own beside it \
+                      that shows the subagent's work as it happens. Adds two hooks to ~/.claude/settings.json.",
         tool: "claude",
         agent: "Claude Code",
     },
@@ -265,6 +276,11 @@ pub fn status(env: &Env) -> Vec<Status> {
                             .unwrap_or(true);
                     (Some(dir), installed)
                 }
+                CLAUDE_SUBAGENT_PANES => {
+                    let settings = env.home.as_deref().map(claude_hook::settings_path);
+                    let installed = env.home.as_deref().is_some_and(claude_hook::installed);
+                    (settings, installed)
+                }
                 _ => {
                     let skill = env.home.as_deref().map(claude_skill::skill_path);
                     let installed = skill.as_deref().is_some_and(Path::is_file);
@@ -354,6 +370,7 @@ pub fn apply(env: &Env, changes: &[Change]) -> Vec<Outcome> {
                 OMP_SUBAGENT_PANES if change.on => install_omp(env),
                 OMP_SUBAGENT_PANES => uninstall_omp(env),
                 CLAUDE_SKILL => change_skill(env, change.on),
+                CLAUDE_SUBAGENT_PANES => change_claude_hooks(env, change.on),
                 _ => Err(Failure {
                     error: format!("There is no integration called {}.", change.id),
                     fix: "Reopen Settings and try again.".to_string(),
@@ -482,14 +499,37 @@ fn change_skill(env: &Env, on: bool) -> Result<(), Failure> {
     }
 }
 
+/// Adds or removes the hooks; neither needs `claude`, so hooks whose agent is gone can still be removed.
+fn change_claude_hooks(env: &Env, on: bool) -> Result<(), Failure> {
+    let home = env.home.as_deref().ok_or_else(|| Failure {
+        error: "Your home folder is not known: HOME (or USERPROFILE on Windows) is not set."
+            .to_string(),
+        fix: "Set HOME (USERPROFILE on Windows) and restart tiili.".to_string(),
+    })?;
+    let path = claude_hook::settings_path(home);
+    claude_hook::set_hooks(home, on)
+        .map(drop)
+        .map_err(|err| Failure {
+            error: format!("Could not change {}: {err}", path.display()),
+            fix: if err.kind() == io::ErrorKind::InvalidData {
+                format!(
+                    "Fix {} so it is valid JSON (Claude Code cannot read it either), then save again.",
+                    path.display()
+                )
+            } else {
+                format!("Check that you can write to {}.", path.display())
+            },
+        })
+}
+
 /// Where the app version that last refreshed the integrations is kept: `<app data>/integrations/version`.
 pub fn version_stamp(app_data: &Path) -> PathBuf {
     app_data.join("integrations").join("version")
 }
 
 /// Run at startup: on the first launch of app `version` (the stamp holds another or none), rewrites the files of
-/// each integration whose files are there with this version's (the skill under `home`, the omp folder in
-/// `app_data`), then stamps `version`. It never installs one that is not there and never runs omp: a linked
+/// each integration whose files are there with this version's (the skill and the Claude Code hooks under `home`, the
+/// omp folder in `app_data`), then stamps `version`. It never installs one that is not there and never runs omp: a linked
 /// folder only needs its files replaced.
 pub fn refresh_installed(app_data: &Path, home: Option<&Path>, version: &str) -> io::Result<()> {
     let stamp = version_stamp(app_data);
@@ -498,6 +538,9 @@ pub fn refresh_installed(app_data: &Path, home: Option<&Path>, version: &str) ->
     }
     if let Some(home) = home.filter(|home| claude_skill::skill_path(home).is_file()) {
         claude_skill::install(home)?;
+    }
+    if let Some(home) = home.filter(|home| claude_hook::installed(home)) {
+        claude_hook::set_hooks(home, true)?;
     }
     let dir = omp_dir(app_data);
     if dir.join("package.json").is_file() {
