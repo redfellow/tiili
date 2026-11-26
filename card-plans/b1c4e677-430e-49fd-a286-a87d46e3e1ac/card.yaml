@@ -6,3 +6,15 @@ x-harvaaja-card: b1c4e677-430e-49fd-a286-a87d46e3e1ac
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: "Workspace tooling only: a new card check and
+    planner/builder/reviewer rules in .harvaaja/. No app behaviour changes, so
+    no capability spec applies."
+  citations:
+    - .harvaaja/checks.yaml#cargo-test-host
+    - .harvaaja/instructions/plan.md#Proofs
+    - .harvaaja/instructions/build.md#Proofs
+    - .harvaaja/review.md
+    - src-tauri/tests/control_cli.rs:284
+  revision: 6b11ecc3-9389-4c9e-8c54-b7828dfedb2e
