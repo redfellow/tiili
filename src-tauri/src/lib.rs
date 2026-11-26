@@ -606,6 +606,7 @@ pub fn run() {
             match launch::launch_action(&argv) {
                 launch::LaunchAction::Focus => windows::focus_last(app),
                 launch::LaunchAction::NewWindow => windows::open_from_launcher(app),
+                launch::LaunchAction::FocusPane(id) => attention::focus_pane(app, id),
             }
         }))
     };
