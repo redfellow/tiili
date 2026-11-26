@@ -367,10 +367,10 @@ mod listener {
                     r#"{"ok":true,"protocol":1,"panes":["#,
                     r#"{"id":2,"self":true,"window":"main","cwd":"/work/app","host":null,"repo":null,"#,
                     r#""title":null,"label":"app","running":null,"attention":null,"#,
-                    r#""tab":1,"key":null,"opened_by_you":false},"#,
+                    r#""tab":1,"key":null,"opened_by_you":false,"minimized":false},"#,
                     r#"{"id":3,"self":false,"window":"main","cwd":"/tmp","host":null,"repo":null,"#,
                     r#""title":"logs","label":"tmp","running":{"command":"npm run dev","program":null},"#,
-                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true}]}"#,
+                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true,"minimized":false}]}"#,
                     "\n"
                 ),
                 Some((2, Op::List)),
