@@ -5,3 +5,17 @@ x-harvaaja-card: 1e34b7c8-e7c5-4e61-9174-1a7fe0641035
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds new observable contracts across pane tiling (minimize button,
+    shortcut), the window top bar (badges, peek, title dodging), attention,
+    session restore and pane control (CLI). No active change covers this. The
+    user chose one change over a split.
+  citations:
+    - openspec/specs/pane-tiling/spec.md#Pane close icon
+    - openspec/specs/window-top-bar/spec.md#Window top bar
+    - openspec/specs/pane-attention/spec.md#Attention count and next pane
+    - openspec/specs/session-restore/spec.md#Programs are not re-run
+    - openspec/specs/pane-control/spec.md#Close an owned pane
+    - openspec/specs/terminal-session/spec.md#Shell exit closes its pane
+  revision: 6f4dac63-43d0-43ad-91c5-5bd183256907
