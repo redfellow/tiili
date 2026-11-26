@@ -170,6 +170,17 @@ export function zenAction(event: KeyChord, platform: Platform): "zen" | null {
 }
 
 /**
+ * Whether a key press minimizes the focused pane: ⇧⌘M on macOS, Ctrl+Shift+M on Windows and Linux. Null when it
+ * belongs to the shell. ⌘M without Shift stays macOS's window minimize, and plain Ctrl+M stays the shell's Enter.
+ */
+export function minimizeAction(event: KeyChord, platform: Platform): "minimize" | null {
+  const isM = event.key.toLowerCase() === "m" || event.code === "KeyM";
+  if (!isM || !event.shiftKey || event.altKey) return null;
+  if (platform === "macos") return event.metaKey && !event.ctrlKey ? "minimize" : null;
+  return event.ctrlKey && !event.metaKey ? "minimize" : null;
+}
+
+/**
  * Which find action a key press asks for, or null when the key belongs to the shell.
  * macOS: ⌘F find, ⌘G next, ⇧⌘G previous. Windows and Linux: Ctrl+Shift+F find, F3 next, Shift+F3 previous; plain
  * Ctrl+F stays with the shell.

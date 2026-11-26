@@ -1,13 +1,13 @@
 ## 1. Shortcut
 
-- [ ] 1.1 Add `minimizeAction` to `src/keymap.ts` (⇧⌘M on macOS; Ctrl+Shift+M on Windows and Linux, with no Alt or Meta). Add a `minimize:pane` entry under Panes in `src/shortcuts.ts`, map it in `src/shortcuts.test.ts`'s `keymapAction`, add the chords to the table cases in `src/keymap.test.ts` (including ⌘M and plain Ctrl+M returning null), and run `npm run docs` to regenerate the README and site tables
+- [x] 1.1 Add `minimizeAction` to `src/keymap.ts` (⇧⌘M on macOS; Ctrl+Shift+M on Windows and Linux, with no Alt or Meta). Add a `minimize:pane` entry under Panes in `src/shortcuts.ts`, map it in `src/shortcuts.test.ts`'s `keymapAction`, add the chords to the table cases in `src/keymap.test.ts` (including ⌘M and plain Ctrl+M returning null), and run `npm run docs` to regenerate the README and site tables
   Tests to update: src/keymap.test.ts, src/shortcuts.test.ts, scripts/docs.test.ts
   - proof: `npx vitest run src/keymap.test.ts src/shortcuts.test.ts scripts/docs.test.ts`
   - proof: `npx eslint src/keymap.ts src/shortcuts.ts src/keymap.test.ts src/shortcuts.test.ts`
 
 ## 2. Pure rules
 
-- [ ] 2.1 Add `src/minimized.ts` with these rules, and one table-driven `src/minimized.test.ts` (first line `// @harvaaja-test-tier: fast`) covering back in place, layout changed, overflow `+N` and title centred, slid or hidden:
+- [x] 2.1 Add `src/minimized.ts` with these rules, and one table-driven `src/minimized.test.ts` (first line `// @harvaaja-test-tier: fast`) covering back in place, layout changed, overflow `+N` and title centred, slid or hidden:
   - `restoreIndex(at, peers, currentIds)`: the old index while the tab's other panes are unchanged, else the end.
   - `fitBadges(widths, available, plusWidth)`: how many badges show and how many go to `+N`.
   - `titlePlacement(bar, title, badgesEnd, actionsStart)`: centred, slid to the middle of the free space, or hidden.
@@ -88,7 +88,7 @@
   - proof: `npx vitest run src/backend.test.ts src/backend-ws.test.ts`
   - proof: `npx eslint src/backend.ts src/backend-tauri.ts src/backend-ws.ts src/panes.ts`
   - proof: `npm run typecheck`
-  - proof: `openspec validate minimize-panes-into-brick-badges-in-the --strict`
+  - proof: `openspec validate minimized-panes-as-brick-badges-in-the-w --strict`
 
 ## Manual checks after merge (The user)
 
