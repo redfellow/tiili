@@ -126,6 +126,17 @@ On macOS the centred `tiili` title SHALL stay centred until the badges would rea
 - **WHEN** the free space is narrower than the title
 - **THEN** the title is hidden
 
+### Requirement: Last visible pane brings a minimized one back
+When the window's last visible pane closes, by the close shortcut, its close icon or its shell exiting, while the window has minimized panes, the most recently minimized pane SHALL be restored into the shown tab and take the focus, and the window SHALL stay open. A pane in the exited state SHALL come back read-only as on restore. The window SHALL close only when no visible or minimized pane is left.
+
+#### Scenario: Closing the last visible pane
+- **WHEN** a window shows one pane, has two minimized panes, and the user closes the visible one
+- **THEN** the pane minimized last comes back in the shown tab with the focus, and the other stays minimized
+
+#### Scenario: Nothing left
+- **WHEN** a window has one pane, none minimized, and the user closes it
+- **THEN** the window closes
+
 ### Requirement: Minimized panes and focus
 Focus by number and Zen SHALL count only visible panes and never show a minimized one. When the attention shortcut's next pane is minimized, it SHALL be restored and focused.
 

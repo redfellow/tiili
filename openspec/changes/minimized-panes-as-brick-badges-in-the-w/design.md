@@ -30,6 +30,9 @@ at a prompt; a macOS menu item for Minimize Pane.
     `peers`, else the end, then `releaseSize(true)`.
   - The pure rules (restore index, badge fit and overflow count, title placement, badge state) live in
     `src/minimized.ts`, with one table-driven test.
+- **Last visible pane.** When the window's last visible pane closes while panes are minimized, the one minimized
+  last (`bringBack`) is restored into the shown tab with the focus, so the window and the minimized shells stay;
+  the window closes only when no visible or minimized pane is left.
 - **Sessions in the order report.** `reportOrder` sends each tab's visible sessions followed by its minimized ones,
   so `tiili list`, `tab` and ownership keep working. A separate `minimized` session list goes with it to
   `pane_order_set`, which `control_app` stores and puts into `PaneInfo.minimized`.

@@ -10,7 +10,7 @@ vi.mock("./layout/view", () => ({ TileView: class { render() {} } }));
 function fakePane(id: number): Pane {
   const fake = () => ({ toggleAttribute() {}, setAttribute() {}, hidden: false }) as unknown as HTMLElement;
   const element = fake();
-  return { id, element, chip: element, zenButton: fake(), closeButton: fake(), ready: Promise.resolve(undefined), zoom: 0 };
+  return { id, element, chip: element, minimizeButton: fake(), zenButton: fake(), closeButton: fake(), ready: Promise.resolve(undefined), zoom: 0 };
 }
 
 const hooks = { rendered() {}, marked: () => false } as unknown as TabHooks;

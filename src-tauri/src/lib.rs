@@ -763,6 +763,7 @@ pub fn run() {
             attention::attention_next,
             control_app::pane_open_done,
             control_app::pane_close_done,
+            control_app::pane_minimize_done,
             control_app::pane_order_set,
             links::link_open,
             links::path_resolve,

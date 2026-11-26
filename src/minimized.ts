@@ -74,3 +74,11 @@ export function badgeLabel(state: MinimizedState, command: string | undefined, c
   if (state.kind === "stopped" && state.command) return `was running: ${state.command}`;
   return command || chip;
 }
+
+/**
+ * The minimized pane that comes back when the window's last visible pane has closed: the one minimized last, so the
+ * window stays open. Undefined while panes are still visible, or when none is minimized and the window closes.
+ */
+export function bringBack<T>(minimized: readonly T[], visible: number): T | undefined {
+  return visible === 0 ? minimized[minimized.length - 1] : undefined;
+}

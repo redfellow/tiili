@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { badgeState, fitBadges, restoreIndex, titlePlacement, type MinimizedState } from "./minimized";
+import { badgeState, bringBack, fitBadges, restoreIndex, titlePlacement, type MinimizedState } from "./minimized";
 
 const live: MinimizedState = { kind: "live" };
 
@@ -62,6 +62,13 @@ const cases: { name: string; run: () => unknown; expected: unknown }[] = [
     run: () => badgeState({ kind: "stopped", command: "npm run dev" }, false),
     expected: { kind: "stopped" },
   },
+  {
+    name: "Closing the last visible pane: the pane minimized last comes back",
+    run: () => bringBack(["first", "last"], 0),
+    expected: "last",
+  },
+  { name: "Closing the last visible pane: none comes back while others show", run: () => bringBack(["a"], 1), expected: undefined },
+  { name: "Nothing left: no pane comes back, so the window closes", run: () => bringBack([], 0), expected: undefined },
 ];
 
 describe("minimized pane rules", () => {

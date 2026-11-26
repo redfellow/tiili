@@ -34,7 +34,9 @@ export interface Pane {
   element: HTMLElement;
   /** The title chip naming the pane's repository or folder and what runs in it. */
   chip: HTMLElement;
-  /** The Zen icon at the right end of the title row. */
+  /** The Minimize icon left of the Zen icon, which minimizes this pane into a badge in the window's top bar. */
+  minimizeButton: HTMLElement;
+  /** The Zen icon right of the Minimize icon. */
   zenButton: HTMLElement;
   /** The close icon right of the Zen icon, which closes this pane. */
   closeButton: HTMLElement;
@@ -194,12 +196,14 @@ export class Tab {
   }
 
   /**
-   * Adds `pane` last in the grid. With `showAlone` and Zen on, the pane takes Zen from the pane Zen showed. A pane
-   * added to a hidden tab, or hidden by Zen, holds its size until it is shown.
+   * Adds `pane` at grid index `at`, last by default. With `showAlone` and Zen on, the pane takes Zen from the pane Zen
+   * showed. A pane added to a hidden tab, or hidden by Zen, holds its size until it is shown.
    */
-  add(pane: Pane, showAlone = false): void {
-    this.panes.push(pane);
-    this.layout = addPane(this.measured(), pane.id);
+  add(pane: Pane, showAlone = false, at = this.panes.length): void {
+    const index = Math.max(0, Math.min(at, this.panes.length));
+    this.panes.splice(index, 0, pane);
+    this.layout = { ...addPane(this.measured(), pane.id), order: this.panes.map((p) => p.id) };
+    if (index <= this.focused) this.focused++;
     if (showAlone && this.zen !== undefined) this.setZen(pane.id);
     this.render();
     if (this.holds(pane)) pane.terminal?.holdSize();
@@ -340,7 +344,7 @@ export class Tab {
   }
 
   /**
-   * Shows the Zen and close icons: both hidden with one pane; the Zen icon lit on the Zen pane, with a dot there
+   * Shows the Minimize, Zen and close icons: all hidden with one pane; the Zen icon lit on the Zen pane, with a dot there
    * while a hidden pane of this tab needs the user.
    */
   showZen(): void {
@@ -350,6 +354,7 @@ export class Tab {
     );
     for (const pane of this.panes) {
       const on = pane.id === this.zen;
+      pane.minimizeButton.hidden = single;
       pane.zenButton.hidden = single;
       pane.closeButton.hidden = single;
       pane.zenButton.toggleAttribute("data-on", on);

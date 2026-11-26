@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use tiili_lib::control::{
     parse_reply, request_line, AttentionRecord, CliError, Op, PaneInfo, Reply, RunningRecord,
 };
-use tiili_lib::control_server::{bind, respond, Handler};
+use tiili_lib::control_server::{bind, respond, Handler, OpenRequest};
 use tiili_lib::pty::SessionId;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -23,15 +23,15 @@ type Seen = Vec<(SessionId, Op)>;
 struct Recorder(Mutex<Seen>);
 
 impl Handler for Recorder {
-    fn open(
-        &self,
-        caller: SessionId,
-        cwd: Option<String>,
-        title: Option<String>,
-        command: Vec<String>,
-        path: Option<String>,
-        key: Option<String>,
-    ) -> Result<(SessionId, bool), String> {
+    fn open(&self, caller: SessionId, request: OpenRequest) -> Result<(SessionId, bool), String> {
+        let OpenRequest {
+            cwd,
+            title,
+            command,
+            path,
+            key,
+            minimized,
+        } = request;
         // The key "again" stands for one already open.
         let reused = key.as_deref() == Some("again");
         self.0.lock().unwrap().push((
@@ -42,6 +42,7 @@ impl Handler for Recorder {
                 command,
                 path,
                 key,
+                minimized,
             },
         ));
         Ok((caller + 40, reused))
@@ -83,6 +84,26 @@ impl Handler for Recorder {
         }
     }
 
+    fn minimize(
+        &self,
+
+        caller: SessionId,
+
+        target: Option<SessionId>,
+
+        minimize: bool,
+    ) -> Result<(), CliError> {
+        let op = if minimize {
+            Op::Minimize { target }
+        } else {
+            Op::Restore { target }
+        };
+
+        self.0.lock().unwrap().push((caller, op));
+
+        Ok(())
+    }
+
     fn panes(&self) -> Result<Vec<PaneInfo>, String> {
         self.0.lock().unwrap().push((0, Op::Panes));
         Ok(vec![PaneInfo {
@@ -94,7 +115,7 @@ impl Handler for Recorder {
     }
 }
 
-/// The pane the recorder lists: every field of the record set, so all of it crosses the wire.
+/// The pane the recorder lists: every field of the record set, minimized too, so all of it crosses the wire.
 fn tmp_pane(id: SessionId) -> PaneInfo {
     PaneInfo {
         id,
@@ -115,6 +136,7 @@ fn tmp_pane(id: SessionId) -> PaneInfo {
         tab: Some(1),
         key: Some("dev".into()),
         opened_by_you: true,
+        minimized: true,
     }
 }
 
@@ -184,6 +206,7 @@ fn request_with_the_right_token_reaches_the_handler_and_others_are_refused() {
         command: vec!["tail".into(), "-f".into(), "x.log".into()],
         path: Some("/opt/bin:/usr/bin".into()),
         key: None,
+        minimized: false,
     };
     let wrong = "f".repeat(64);
     // The line sent, the reply expected (an error just has to be one), and what the handler then holds.
@@ -256,6 +279,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
                     command: vec!["top".into()],
                     path: None,
                     key: None,
+                    minimized: false,
                 },
             ),
             Ok(Reply::Opened {
@@ -276,6 +300,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
                     command: vec!["npm".into()],
                     path: None,
                     key: Some("again".into()),
+                    minimized: false,
                 },
             ),
             Ok(Reply::Opened {

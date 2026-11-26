@@ -25,6 +25,12 @@
         },
         {
           "kind": "option",
+          "name": "--minimized",
+          "required": false,
+          "summary": "open the pane minimized, as a badge in the window's top bar"
+        },
+        {
+          "kind": "option",
           "name": "--json",
           "required": false,
           "summary": "print one JSON object instead of text, also when it fails"
@@ -147,7 +153,7 @@
         "text": "the new pane's id on one line; with --key, opened ID or reused ID; with --json, one JSON object"
       },
       "summary": "Open a pane in this pane's window running a command",
-      "usage": "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--json] -- CMD [ARGS...]"
+      "usage": "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--minimized] [--json] -- CMD [ARGS...]"
     },
     {
       "args": [
@@ -265,6 +271,9 @@
                       "label": {
                         "type": "string"
                       },
+                      "minimized": {
+                        "type": "boolean"
+                      },
                       "opened_by_you": {
                         "type": "boolean"
                       },
@@ -349,7 +358,8 @@
                       "attention",
                       "tab",
                       "key",
-                      "opened_by_you"
+                      "opened_by_you",
+                      "minimized"
                     ],
                     "type": "object"
                   },
@@ -391,7 +401,7 @@
             }
           ]
         },
-        "text": "one line per pane: id, folder and title separated by tabs; with --json, one JSON object"
+        "text": "one line per pane: id, folder and title separated by tabs, then minimized for a minimized pane; with --json, one JSON object"
       },
       "summary": "List the panes of this pane's window in grid order",
       "usage": "tiili list [--json]"
@@ -559,6 +569,182 @@
       },
       "summary": "Close a pane this pane opened with tiili open",
       "usage": "tiili close PANE"
+    },
+    {
+      "args": [
+        {
+          "kind": "positional",
+          "name": "PANE",
+          "required": false,
+          "summary": "the id of the pane to minimize (default: this pane)"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "not_opened_by_you",
+          "exit": 1,
+          "suggestion": "ask the user to close it",
+          "summary": "the pane to close was not opened by this pane with tiili open"
+        },
+        {
+          "code": "no_such_pane",
+          "exit": 1,
+          "suggestion": "run tiili list to see the open panes",
+          "summary": "no open pane has that id"
+        },
+        {
+          "code": "last_visible_pane",
+          "exit": 1,
+          "suggestion": "open or restore another pane in the tab first",
+          "summary": "the pane is the only one showing in its tab"
+        },
+        {
+          "code": "minimize_failed",
+          "exit": 1,
+          "suggestion": "check that the pane is still open in a tiili window",
+          "summary": "the app could not minimize or restore the pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "minimize",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "nothing"
+      },
+      "summary": "Minimize this pane, or a pane it opened with tiili open, to a badge in the window's top bar",
+      "usage": "tiili minimize [PANE]"
+    },
+    {
+      "args": [
+        {
+          "kind": "positional",
+          "name": "PANE",
+          "required": false,
+          "summary": "the id of the pane to restore (default: this pane)"
+        }
+      ],
+      "errors": [
+        {
+          "code": "usage",
+          "exit": 2,
+          "suggestion": "run tiili help to see the commands",
+          "summary": "the arguments are not a tiili command"
+        },
+        {
+          "code": "not_in_pane",
+          "exit": 3,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "TIILI_SOCKET or TIILI_PANE is not set, or TIILI_PANE is not a pane id"
+        },
+        {
+          "code": "unreachable",
+          "exit": 4,
+          "suggestion": "check that the tiili app that opened this pane is still running",
+          "summary": "the tiili app at TIILI_SOCKET could not be reached"
+        },
+        {
+          "code": "bad_token",
+          "exit": 1,
+          "suggestion": "run tiili from a pane of the running tiili app",
+          "summary": "the app refused the request: TIILI_TOKEN is missing or not this run's"
+        },
+        {
+          "code": "malformed_request",
+          "exit": 1,
+          "suggestion": "use the tiili command of the running app, so both speak the same protocol",
+          "summary": "the app could not read the request"
+        },
+        {
+          "code": "not_opened_by_you",
+          "exit": 1,
+          "suggestion": "ask the user to close it",
+          "summary": "the pane to close was not opened by this pane with tiili open"
+        },
+        {
+          "code": "no_such_pane",
+          "exit": 1,
+          "suggestion": "run tiili list to see the open panes",
+          "summary": "no open pane has that id"
+        },
+        {
+          "code": "minimize_failed",
+          "exit": 1,
+          "suggestion": "check that the pane is still open in a tiili window",
+          "summary": "the app could not minimize or restore the pane"
+        },
+        {
+          "code": "bad_reply",
+          "exit": 1,
+          "suggestion": "restart the tiili app, or update it to match this tiili command",
+          "summary": "the app sent a reply tiili could not read, or one without an error code"
+        }
+      ],
+      "exit_codes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "name": "restore",
+      "needs": [
+        "TIILI_SOCKET",
+        "TIILI_TOKEN",
+        "TIILI_PANE"
+      ],
+      "output": {
+        "json": null,
+        "text": "nothing"
+      },
+      "summary": "Bring back this pane, or a pane it opened with tiili open, from its badge into its tab's grid",
+      "usage": "tiili restore [PANE]"
     },
     {
       "args": [],

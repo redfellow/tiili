@@ -206,7 +206,7 @@ pub fn numbered_names(entries: &[WindowEntry]) -> Vec<String> {
 
 /// What moves to another window: a terminal pane's session with its scrollback and zoom offset, a Heynote pane, or
 /// a whole tab (Pop Out) with its name, its grid's track sizes (kept as the frontend sent them), its focused pane and
-/// its panes in grid order.
+/// its panes in grid order. A pane minimized in the window it leaves says so, and arrives minimized.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum MovePayload {
@@ -214,8 +214,13 @@ pub enum MovePayload {
         session: SessionId,
         scrollback: String,
         zoom: f64,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        minimized: bool,
     },
-    Heynote,
+    Heynote {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        minimized: bool,
+    },
     Tab {
         name: Option<String>,
         layout: serde_json::Value,
@@ -229,7 +234,7 @@ impl MovePayload {
     pub fn sessions(&self) -> Vec<SessionId> {
         match self {
             MovePayload::Terminal { session, .. } => vec![*session],
-            MovePayload::Heynote => Vec::new(),
+            MovePayload::Heynote { .. } => Vec::new(),
             MovePayload::Tab { panes, .. } => {
                 panes.iter().flat_map(MovePayload::sessions).collect()
             }
@@ -632,13 +637,17 @@ mod tests {
             session: 4,
             scrollback: "$ ls\r\n".into(),
             zoom: 2.0,
+            minimized: false,
         };
         let first = moves.put(terminal.clone());
-        let second = moves.put(MovePayload::Heynote);
+        let second = moves.put(MovePayload::Heynote { minimized: false });
         assert_ne!(first, second);
         assert_eq!(moves.take(&first), Some(terminal));
         assert_eq!(moves.take(&first), None);
-        assert_eq!(moves.take(&second), Some(MovePayload::Heynote));
+        assert_eq!(
+            moves.take(&second),
+            Some(MovePayload::Heynote { minimized: false })
+        );
     }
 
     #[test]
@@ -650,9 +659,26 @@ mod tests {
                     session: 3,
                     scrollback: "hi".into(),
                     zoom: -1.0,
+                    minimized: false,
                 },
             ),
-            (r#"{"kind":"heynote"}"#, MovePayload::Heynote),
+            (
+                r#"{"kind":"heynote"}"#,
+                MovePayload::Heynote { minimized: false },
+            ),
+            (
+                r#"{"kind":"terminal","session":5,"scrollback":"","zoom":0,"minimized":true}"#,
+                MovePayload::Terminal {
+                    session: 5,
+                    scrollback: String::new(),
+                    zoom: 0.0,
+                    minimized: true,
+                },
+            ),
+            (
+                r#"{"kind":"heynote","minimized":true}"#,
+                MovePayload::Heynote { minimized: true },
+            ),
             (
                 r#"{"kind":"tab","name":"build","layout":{"colSizes":[1,1],"rowSizes":[1]},"focused":1,"panes":[{"kind":"terminal","session":3,"scrollback":"","zoom":0},{"kind":"heynote"}]}"#,
                 MovePayload::Tab {
@@ -664,8 +690,9 @@ mod tests {
                             session: 3,
                             scrollback: String::new(),
                             zoom: 0.0,
+                            minimized: false,
                         },
-                        MovePayload::Heynote,
+                        MovePayload::Heynote { minimized: false },
                     ],
                 },
             ),
@@ -685,17 +712,26 @@ mod tests {
             session,
             scrollback: String::new(),
             zoom: 0.0,
+            minimized: false,
         };
         let cases = [
             ("a terminal pane", terminal(4), vec![4]),
-            ("a Heynote pane", MovePayload::Heynote, vec![]),
+            (
+                "a Heynote pane",
+                MovePayload::Heynote { minimized: false },
+                vec![],
+            ),
             (
                 "a tab of three panes",
                 MovePayload::Tab {
                     name: None,
                     layout: serde_json::Value::Null,
                     focused: 0,
-                    panes: vec![terminal(1), MovePayload::Heynote, terminal(2)],
+                    panes: vec![
+                        terminal(1),
+                        MovePayload::Heynote { minimized: false },
+                        terminal(2),
+                    ],
                 },
                 vec![1, 2],
             ),
@@ -714,6 +750,7 @@ mod tests {
             session: 7,
             scrollback: scrollback.clone(),
             zoom: 0.0,
+            minimized: false,
         };
         let json = serde_json::to_string(&payload).unwrap();
         let back = serde_json::from_str::<MovePayload>(&json).unwrap();

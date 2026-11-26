@@ -145,12 +145,21 @@ body {
   padding-left: 82px;
 }
 
+/* Centred until the tabs or badges would reach it, then slid to the middle of the free space (set from
+   minimizedBar.ts), or hidden when that space is narrower than the title. */
 .top-bar-title {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   font: 500 var(--text-terminal)/38px var(--font-sans);
   color: var(--fg);
+  transition: transform 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-bar-title {
+    transition: none;
+  }
 }
 
 .top-bar-actions {
@@ -240,13 +249,12 @@ body {
 }
 
 /* The window's tabs on the bar's left, hidden with one tab: each a brick-shaped label in its focused pane's tint,
-   the shown one raised. The centred title gives way to them. */
+   the shown one raised. The centred title moves out of their way. */
 .top-bar-tabs {
   display: flex;
   flex: 0 1 auto;
   gap: 2px;
   min-width: 0;
-  margin-right: auto;
   overflow: hidden;
 }
 
@@ -254,8 +262,155 @@ body {
   display: none;
 }
 
-.top-bar:has(> .top-bar-tabs:not([hidden])) .top-bar-title {
+/* The minimized panes' badges, after the tabs: they fill the free space up to the right-hand buttons, and those
+   that do not fit collapse into a +N badge. */
+.top-bar-badges {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin-left: var(--space-1);
+  overflow: hidden;
+}
+
+.top-bar-badge {
+  --badge-tint: var(--muted);
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: 16em;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--badge-tint);
+  border-radius: var(--radius-brick);
+  background: color-mix(in srgb, var(--badge-tint) 16%, transparent);
+  color: var(--fg);
+  font: 400 11px/16px var(--font-mono);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.top-bar-badge[hidden] {
   display: none;
+}
+
+.top-bar-badge:hover {
+  background: color-mix(in srgb, var(--badge-tint) 28%, transparent);
+}
+
+.top-bar-badge-swatch {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--badge-tint);
+}
+
+.top-bar-badge .pane-chip-brick {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+.top-bar-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Output arriving: the swatch pulses slowly. */
+.top-bar-badge[data-active] .top-bar-badge-swatch {
+  animation: badge-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-bar-badge[data-active] .top-bar-badge-swatch {
+    animation: none;
+  }
+}
+
+/* Its process exited: filled klinkkeri, with the exit code, until dismissed. */
+.top-bar-badge[data-state="exited"] {
+  border-color: var(--tiili-klinkkeri);
+  background: var(--tiili-klinkkeri);
+  color: var(--tiili-kalkki);
+}
+
+.top-bar-badge-code {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Brought back by session restore with its program no longer running: a hollow swatch. */
+.top-bar-badge[data-state="stopped"] .top-bar-badge-swatch {
+  box-sizing: border-box;
+  border: 1px solid var(--badge-tint);
+  background: none;
+}
+
+.top-bar-badge-more {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* The +N list: the badges that did not fit, one under another. */
+.top-bar-badge-list {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+/* The peek: a popover under the bar showing a minimized pane's live terminal, drawn smaller at its own size. */
+.top-bar-peek {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.top-bar-peek-info {
+  display: flex;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  color: var(--muted);
+  font: 500 var(--text-label)/16px var(--font-sans);
+  white-space: nowrap;
+}
+
+.top-bar-peek-command {
+  color: var(--fg);
+  font: 400 11px/16px var(--font-mono);
+}
+
+.top-bar-peek-frame {
+  overflow: hidden;
+  border-radius: var(--radius-brick);
+  background: var(--term-gap);
+}
+
+.top-bar-peek-frame > .pane-terminal {
+  transform-origin: 0 0;
 }
 
 .top-bar-tab {
@@ -378,6 +533,16 @@ body {
   min-width: 0;
   padding: var(--space-2);
   background: var(--term-bg);
+}
+
+/* Minimized panes wait here, off screen but laid out at the size they had in the grid, so their terminals keep
+   their size and the peek can measure them. */
+.pane-minimized-holder {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Panes without focus fade their content (title chip and terminal), never the pane's own background, and can also
@@ -792,6 +957,41 @@ html[data-pane-dragging] * {
 
 .pane-zen-toggle[data-on] {
   color: var(--accent);
+}
+
+/* The Minimize icon left of the Zen toggle: styled like the close icon, and it takes the free space before the icons
+   in the Zen toggle's place. */
+.pane-minimize-toggle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pane-minimize-toggle[hidden] {
+  display: none;
+}
+
+.pane-minimize-toggle:not([hidden]) + .pane-zen-toggle {
+  margin-left: 0;
+}
+
+.pane:not(:hover) .pane-minimize-toggle:not(:focus-visible) {
+  visibility: hidden;
+}
+
+.pane-minimize-toggle:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
 }
 
 /* The close icon right of the Zen toggle: styled like it, but shown only while the pointer is over its pane (or it
