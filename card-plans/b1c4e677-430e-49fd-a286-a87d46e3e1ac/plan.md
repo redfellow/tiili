@@ -12,13 +12,16 @@ check plus written rules, covering every host-tier test target.
 
 ## What Changes
 
-- `.harvaaja/checks.yaml`: a new check `cargo-test-host-card`, `stage: every`, `sandbox: none`, that runs every
-  test target holding a `#[ignore = "host: ..."]` test with `--include-ignored`. It finds the targets from that
-  attribute, so a new host test is picked up without editing the check. Today that is `control_cli`,
-  `control_server`, `dev_bridge`, `pty_registry`, `pty_resize_panes`, `pty_session` and `repo_tracking`
-  (`dev_bridge` is tagged `integration` on its first line, but one of its tests is a host test). The comments on
-  `cargo-test-host` stop saying no card check runs the host tests. `cargo-test-host` stays at release for the
-  whole suite.
+- `.harvaaja/checks.yaml`: a new check `cargo-test-host-card`, `stage: every`, `sandbox: none`. härvääjä lets an
+  every-round check leave the sandbox only with a `tests` block, which runs just the affected test files. Its
+  `affected` listing names every test target holding a `#[ignore = "host: ..."]` test when the card changed
+  anything under `src-tauri/` since the last run, and nothing otherwise. Its `only` command turns those files
+  into `--test <name>` flags and runs them with `--include-ignored`. The targets are found by that attribute, so a
+  new host test is picked up without editing the check. Today that is `control_cli`, `control_server`,
+  `dev_bridge`, `pty_registry`, `pty_resize_panes`, `pty_session` and `repo_tracking` (`dev_bridge` is tagged
+  `integration` on its first line, but one of its tests is a host test). Its `run` line runs the same set whole,
+  for main's batch. The comments on `cargo-test-host` stop saying no card check runs the host tests.
+  `cargo-test-host` stays at release for the whole suite.
 - `.harvaaja/instructions/plan.md`: a rule for planners. A task that edits a host-tier test file, or the code one
   covers, names `cargo test --manifest-path src-tauri/Cargo.toml --test <name>` as its proof. That proof compiles
   the target in the sandbox, and `cargo-test-host-card` runs it on the host before merge. The plan never names
@@ -35,16 +38,16 @@ These are all human-only paths, so each is a (triage) task that Reijo allows in 
 
 ## Acceptance
 
-- `cargo-test-host-card` is in `.harvaaja/checks.yaml` at `stage: every` with `sandbox: none`, and the file stays
-  valid YAML.
-- Its command finds exactly the seven targets in `src-tauri/tests/` that hold a `#[ignore = "host: ..."]` test
-  and runs them with `--include-ignored`. The discovery part was tried during planning: `cargo test ... --no-run`
-  built those seven targets.
+- `cargo-test-host-card` is in `.harvaaja/checks.yaml` at `stage: every` with `sandbox: none` and a `tests`
+  block, and härvääjä's own checks parser accepts the file (tried during planning).
+- Its `affected` listing prints the seven host targets when `src-tauri/` changed and nothing when it didn't, and
+  its `only` and `run` commands expand to `cargo test ... --test control_cli ... --test repo_tracking --
+  --include-ignored`. Both were tried during planning.
 - plan.md, build.md and review.md state the rule where planners, builders and reviewers read it.
 
 ## Manual checks after merge (The user)
 
-- On the next card after the merge, `cargo-test-host-card` shows in the card's checks, runs the seven host targets
+- On the next card after the merge that changes `src-tauri/`, `cargo-test-host-card` shows in the card's checks, runs the seven host targets
   with their ignored tests (the listener test in `control_cli` among them) and passes. Note its time per card.
 - Change an expected string in an ignored host test on a throwaway card and check that `cargo-test-host-card`
   fails on the card, before merge.
@@ -52,6 +55,7 @@ These are all human-only paths, so each is a (triage) task that Reijo allows in 
 ## Citations
 
 - `.harvaaja/checks.yaml` (`cargo-test-host`: `stage: release`, `sandbox: none`)
+- härvääjä's check schema: `sandbox: none` on a `stage: every` check needs a `tests` block (`report`, `affected` with `{since}`, `only` with `{files}`)
 - `.harvaaja/instructions/build.md` ("Card checks don't run the Rust tests: only `cargo-test-host` at release does")
 - `.harvaaja/instructions/plan.md` (Proofs)
 - `src-tauri/tests/control_cli.rs:284` (`#[ignore = "host: binds a Unix socket, ..."]`)
@@ -63,6 +67,11 @@ These are all human-only paths, so each is a (triage) task that Reijo allows in 
 - The check finds the host targets with `grep` for the `#[ignore = "host:` attribute, so the list can't go stale.
   The other options were a fixed list of `--test` flags that someone would have to update for each new host
   test, or the first-line tier tag, which misses `dev_bridge`.
+- A card that changes anything under `src-tauri/` runs all seven host targets, since which Rust code a target
+  covers can't be told from file names. The alternative was to run only the host test files the card edited,
+  which would have missed this card's very case: a change in `src/` behind an unedited test.
+- `cargo test` writes no JUnit report, so `$HV_REPORT` stays unwritten and a failure counts against the whole
+  check rather than one file. The alternative was a converter such as `cargo2junit`, a new tool to install.
 - The check is named `cargo-test-host-card`, its timeout is 1200 s like `cargo-test-host`, and it gets no
   `network:`, because `install` already fetched the crates. The alternative would have been to rename or reuse
   `cargo-test-host`.

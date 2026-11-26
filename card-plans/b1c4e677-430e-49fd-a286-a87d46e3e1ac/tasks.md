@@ -2,7 +2,7 @@
 
 ## 1. Run the host tests on every card
 
-- [ ] 1.1 (triage) Add the `cargo-test-host-card` check: `stage: every`, `sandbox: none`, running every test target that holds a `#[ignore = "host: ..."]` test with `--include-ignored`
+- [ ] 1.1 (triage) Add the `cargo-test-host-card` check: `stage: every`, `sandbox: none`, with a `tests` block that, when the card changes anything under `src-tauri/`, runs every test target holding a `#[ignore = "host: ..."]` test with `--include-ignored`
   - file: .harvaaja/checks.yaml
   - content:
 
@@ -36,18 +36,29 @@ checks:
     run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
     stage: every
     timeoutSeconds: 120
-  # The host-only Rust tests on every card, outside the sandbox: a card's proofs run in the sandbox, which refuses
-  # the Unix sockets and pseudo-terminals these tests need, so there they only compile and report ignored. The
-  # targets are every file in src-tauri/tests/ with a test marked #[ignore = "host: ..."], found by that attribute,
-  # so a new host test is picked up without editing this check.
+  # The host-only Rust tests on a card, outside the sandbox: a card's proofs run in the sandbox, which refuses the
+  # Unix sockets and pseudo-terminals these tests need, so there they only compile and report ignored. When a card
+  # changes anything under src-tauri/, every target in src-tauri/tests/ with a test marked #[ignore = "host: ..."]
+  # runs with the ignored tests included; a card that leaves src-tauri/ alone skips it. The targets are found by
+  # that attribute, so a new host test is picked up without editing this check. cargo test writes no JUnit report,
+  # so a failure counts against the whole check. The run line is the whole set, for main's batch.
   - name: cargo-test-host-card
     run: >-
       cargo test --manifest-path src-tauri/Cargo.toml
-      $(grep -l 'ignore = "host:' src-tauri/tests/*.rs | sed -E 's|.*/([^/]+)\.rs$|--test \1|')
+      $(grep -l 'ignore = "host:' src-tauri/tests/*.rs | sed -E 's|.*/([^/]+)[.]rs$|--test \1|')
       -- --include-ignored
     stage: every
     sandbox: none
     timeoutSeconds: 1200
+    tests:
+      report: junit
+      affected: >-
+        git diff --quiet {since} HEAD -- src-tauri
+        || grep -l 'ignore = "host:' src-tauri/tests/*.rs
+      only: >-
+        cargo test --manifest-path src-tauri/Cargo.toml
+        $(for f in {files}; do printf -- '--test %s ' "$(basename "$f" .rs)"; done)
+        -- --include-ignored
   # At promotion, not on each card: a card's merge into hv/main needs only fast checks (about 87 s per card here).
   # A card's proofs run a narrower clippy (--lib, plus --test <name>); this exact command is refused as a proof.
   - name: cargo-clippy
@@ -212,5 +223,5 @@ Besides tracing every behavior to the change's spec, hold the change to these. E
 
 ## Manual checks after merge (The user)
 
-- On the next card after the merge, `cargo-test-host-card` shows in the card's checks, runs the seven host targets with their ignored tests (the listener test in `control_cli` among them) and passes. Note how long it takes per card.
+- On the next card after the merge that changes `src-tauri/`, `cargo-test-host-card` shows in the card's checks, runs the seven host targets with their ignored tests (the listener test in `control_cli` among them) and passes. Note how long it takes per card.
 - Change an expected string in an ignored host test on a throwaway card and check that `cargo-test-host-card` fails on the card, before merge.
