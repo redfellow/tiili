@@ -82,6 +82,16 @@ impl Handler for Recorder {
             _ => Ok(()),
         }
     }
+
+    fn panes(&self) -> Result<Vec<PaneInfo>, String> {
+        self.0.lock().unwrap().push((0, Op::Panes));
+        Ok(vec![PaneInfo {
+            is_self: false,
+            key: None,
+            opened_by_you: false,
+            ..tmp_pane(3)
+        }])
+    }
 }
 
 /// The pane the recorder lists: every field of the record set, so all of it crosses the wire.
@@ -354,4 +364,41 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
         }
         assert_eq!(recorder.0.lock().unwrap().len(), calls, "{line}");
     }
+}
+
+/// The token-free `panes` request: read-only, answered without a token or a pane, over the real socket.
+#[test]
+#[ignore = "host: binds a Unix socket, which the sandbox refuses; the cargo-test-host release check runs it"]
+fn panes_are_listed_without_a_token() {
+    let dir = temp_dir("panes");
+    let recorder = Arc::new(Recorder::default());
+    let server = bind(&dir, TOKEN.into(), recorder.clone()).expect("binds");
+    let socket = PathBuf::from(server.endpoint());
+    match ask(&socket, r#"{"protocol":1,"op":"panes"}"#) {
+        Ok(Reply::Listed(panes)) => {
+            assert_eq!(panes.len(), 1);
+            assert_eq!(
+                (panes[0].window.as_str(), panes[0].key.as_deref()),
+                ("main", None)
+            );
+        }
+        other => panic!("not listed: {other:?}"),
+    }
+    assert_eq!(*recorder.0.lock().unwrap(), vec![(0, Op::Panes)]);
+    drop(server);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The same through `respond`, which every endpoint uses: no token needed for `panes`, still needed for `list`.
+#[test]
+fn panes_need_no_token_but_list_still_does() {
+    let recorder = Recorder::default();
+    let listed = respond(r#"{"protocol":1,"op":"panes"}"#, TOKEN, &recorder);
+    assert!(
+        matches!(parse_reply(&listed), Ok(Reply::Listed(p)) if p.len() == 1),
+        "{listed}"
+    );
+    let refused = respond(r#"{"protocol":1,"pane":3,"op":"list"}"#, TOKEN, &recorder);
+    assert!(refused.contains(r#""code":"bad_token""#), "{refused}");
+    assert_eq!(*recorder.0.lock().unwrap(), vec![(0, Op::Panes)]);
 }

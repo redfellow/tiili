@@ -6,6 +6,11 @@
 //! is one JSON line, `{"ok":true,"protocol":1,"pane":7,"reused":false}`, `{"ok":true,"protocol":1,"panes":[...]}`,
 //! `{"ok":true,"protocol":1,"done":true}` or `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
 //! failures one, [`ERRORS`].
+//!
+//! One request needs no token: `{"protocol":1,"op":"panes"}` lists every pane of every window, read-only, for other
+//! apps on this machine (a session list such as Piippu) to learn which project and window a pane is in. Only the
+//! current user can reach the endpoint at all, and that user's processes can already see as much (a process's
+//! folder, command line and environment), so it gives nothing away; everything that acts still needs the token.
 
 use std::path::PathBuf;
 
@@ -47,6 +52,8 @@ pub enum Op {
     },
     /// Close pane `target`, which the caller must have opened. (Not `pane`: that is the caller.)
     Close { target: SessionId },
+    /// List every pane of every window. Read-only, and the one request taken without a token or a `pane`.
+    Panes,
 }
 
 /// A request that passed the token check: the caller's pane and what it asks for.
@@ -308,6 +315,13 @@ pub fn parse_request(line: &str, token: &str) -> Result<Request, CliError> {
     let object = value
         .as_object()
         .ok_or_else(|| CliError::Malformed("not an object".into()))?;
+    if object.get("op").and_then(|op| op.as_str()) == Some("panes") {
+        // Read-only, so no token; there is no caller pane either.
+        return Ok(Request {
+            pane: 0,
+            op: Op::Panes,
+        });
+    }
     match object.get("token").and_then(|t| t.as_str()) {
         Some(given) if check_token(given, token) => {}
         _ => return Err(CliError::BadToken),
@@ -1565,6 +1579,32 @@ mod tests {
                 op: open(None, None, &["npm"], Some("/opt/bin:/usr/bin")),
             })
         );
+    }
+
+    #[test]
+    fn panes_is_read_without_a_token() {
+        let read = Ok(Request {
+            pane: 0,
+            op: Op::Panes,
+        });
+        for line in [
+            r#"{"protocol":1,"op":"panes"}"#.to_string(),
+            r#"{"token":"nope","pane":3,"op":"panes"}"#.to_string(),
+            format!(r#"{{"token":"{TOKEN}","op":"panes"}}"#),
+        ] {
+            assert_eq!(parse_request(&line, TOKEN), read, "{line}");
+        }
+        // Everything else still needs it.
+        for line in [
+            r#"{"op":"list","pane":3}"#,
+            r#"{"op":"close","pane":3,"target":4}"#,
+        ] {
+            assert_eq!(
+                parse_request(line, TOKEN),
+                Err(CliError::BadToken),
+                "{line}"
+            );
+        }
     }
 
     #[test]
