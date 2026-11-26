@@ -279,7 +279,7 @@ body {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   box-sizing: border-box;
   max-width: 16em;
   height: 18px;

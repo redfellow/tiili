@@ -45,6 +45,7 @@
     hides the title whenever the strip shows.
   - Wire `Panes` to update the badges whenever the minimized list, marks or chip labels change.
   - proof: `npx eslint src/minimizedBar.ts src/topBar.ts src/panes.ts`
+  - proof: `npx eslint src/styles.css`
   - proof: `npx vitest run src/minimized.test.ts`
 - [x] 4.2 Add the peek to `src/minimizedBar.ts`. It opens on a ~300 ms hover or a 500 ms long press and shows the command, repository, uptime and the pane's terminal host scaled to fit, with the PTY size unchanged. Typing goes to the pane once the user clicks in. Escape closes it without reaching the shell, and it closes when the pointer leaves unless the user clicked in. Make Move to Window carry a `minimized` flag through `movePane`/`arrive`, so the pane arrives minimized.
   - proof: `npx eslint src/minimizedBar.ts src/panes.ts`
