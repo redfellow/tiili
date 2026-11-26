@@ -5,6 +5,7 @@ import {
   clipboardAction,
   findAction,
   layoutAction,
+  minimizeAction,
   paneAction,
   settingsShortcut,
   tabAction,
@@ -27,6 +28,7 @@ function keymapAction(event: KeyChord, platform: Platform): ShortcutAction | nul
   if (attentionShortcut(event, platform)) return "attention:next";
   if (settingsShortcut(event, platform)) return "settings";
   if (zenAction(event, platform)) return "zen";
+  if (minimizeAction(event, platform)) return "minimize:pane";
   const pane = paneAction(event, platform);
   if (pane) return `pane:${pane.type}`;
   const zoom = zoomAction(event, platform);
