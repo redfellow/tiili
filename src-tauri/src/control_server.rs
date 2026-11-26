@@ -46,6 +46,10 @@ pub trait Handler: Send + Sync + 'static {
     /// Closes pane `target` when `caller` opened it; the error is the reply's (`not_opened_by_you`,
     /// `no_such_pane` or `close_failed`).
     fn close(&self, caller: SessionId, target: SessionId) -> Result<(), CliError>;
+
+    /// Every pane of every window, window by window, for the token-free `panes` request: what `list` reports,
+    /// without what only the caller's own panes have (`self`, `opened_by_you`, `key`).
+    fn panes(&self) -> Result<Vec<PaneInfo>, String>;
 }
 
 /// The reply line (without its newline) to request `line`, checked against this run's `token`.
@@ -65,6 +69,10 @@ pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
         }) => match handler.open(pane, cwd, title, command, path, key) {
             Ok((id, reused)) => opened_reply(id, reused),
             Err(error) => error_reply(&CliError::OpenFailed(error)),
+        },
+        Ok(Request { op: Op::Panes, .. }) => match handler.panes() {
+            Ok(panes) => listed_reply(&panes),
+            Err(error) => error_reply(&CliError::ListFailed(error)),
         },
         Ok(Request { pane, op: Op::List }) => match handler.list(pane) {
             Ok(panes) => listed_reply(&panes),

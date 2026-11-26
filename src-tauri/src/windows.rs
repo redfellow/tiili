@@ -110,6 +110,17 @@ impl WindowSessions {
         self.add(to, id);
     }
 
+    /// The windows that have sessions, by label.
+    pub fn labels(&self) -> Vec<String> {
+        let mut labels: Vec<String> = self
+            .0
+            .lock()
+            .map(|map| map.keys().cloned().collect())
+            .unwrap_or_default();
+        labels.sort();
+        labels
+    }
+
     /// Window `label`'s sessions, in the order they joined it.
     pub fn sessions(&self, label: &str) -> Vec<SessionId> {
         self.0

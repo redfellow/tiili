@@ -221,6 +221,10 @@ mod listener {
                 _ => Ok(()),
             }
         }
+
+        fn panes(&self) -> Result<Vec<PaneInfo>, String> {
+            Ok(Vec::new())
+        }
     }
 
     /// The panes the recorder lists for `caller`: its own, and a dev server it opened with key dev.

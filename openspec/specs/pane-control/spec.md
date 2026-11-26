@@ -7,15 +7,19 @@ Let processes running inside tiili's panes, such as scripts and coding agents, o
 
 ### Requirement: Local control endpoint
 
-While running, tiili SHALL listen on a per-user local endpoint: a Unix domain socket with 0600 permissions on macOS and Linux, a named pipe limited to the current user and local clients on Windows. It SHALL generate a random token each run and refuse every request that does not carry it.
+While running, tiili SHALL listen on a per-user local endpoint: a Unix domain socket with 0600 permissions on macOS and Linux, a named pipe limited to the current user and local clients on Windows. It SHALL generate a random token each run and refuse every request that does not carry it, except the read-only `panes` request.
 
 #### Scenario: Request with the right token
 - **WHEN** a request carries this run's token
 - **THEN** tiili carries it out
 
 #### Scenario: Request without the token is refused
-- **WHEN** a request carries no token or a different token
+- **WHEN** a request other than `panes` carries no token or a different token
 - **THEN** tiili refuses it with an error and changes nothing
+
+#### Scenario: Panes are listed without the token
+- **WHEN** a request `{"protocol":1,"op":"panes"}` arrives, with or without a token
+- **THEN** tiili answers with every pane of every window as `tiili list` reports them (id, window, cwd, host, repo, title, label, running, attention, tab), with `self` and `opened_by_you` false and no `key`, and changes nothing
 
 #### Scenario: Malformed request
 - **WHEN** a request is not a valid control message
