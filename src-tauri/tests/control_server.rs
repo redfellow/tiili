@@ -86,11 +86,8 @@ impl Handler for Recorder {
 
     fn minimize(
         &self,
-
         caller: SessionId,
-
         target: Option<SessionId>,
-
         minimize: bool,
     ) -> Result<(), CliError> {
         let op = if minimize {
@@ -98,10 +95,17 @@ impl Handler for Recorder {
         } else {
             Op::Restore { target }
         };
-
         self.0.lock().unwrap().push((caller, op));
-
-        Ok(())
+        // Pane 5 stands for one the caller did not open; pane 7 is its tab's only visible pane.
+        match (target, minimize) {
+            (Some(5), _) => Err(CliError::NotOpenedByYou(
+                "pane 5 was not opened by this pane".into(),
+            )),
+            (None, true) if caller == 7 => Err(CliError::LastVisiblePane(
+                "pane 7 is the only pane showing in its tab".into(),
+            )),
+            _ => Ok(()),
+        }
     }
 
     fn panes(&self) -> Result<Vec<PaneInfo>, String> {
@@ -388,6 +392,33 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
             );
         }
         assert_eq!(recorder.0.lock().unwrap().len(), calls, "{line}");
+    }
+}
+
+/// Minimize own pane, Restore an opened pane, Refuse another pane, Last visible pane: each `minimize` and `restore`
+/// line reaches the handler as the op it names, and the handler's refusal comes back by its code.
+#[test]
+fn minimize_and_restore_reach_the_handler_as_sent() {
+    // The caller, the op sent, and the reply expected (an error by its code).
+    let cases: Vec<(SessionId, Op, Result<Reply, &str>)> = vec![
+        (3, Op::Minimize { target: None }, Ok(Reply::Done)),
+        (3, Op::Minimize { target: Some(8) }, Ok(Reply::Done)),
+        (3, Op::Restore { target: None }, Ok(Reply::Done)),
+        (3, Op::Restore { target: Some(8) }, Ok(Reply::Done)),
+        (
+            3,
+            Op::Minimize { target: Some(5) },
+            Err("not_opened_by_you"),
+        ),
+        (3, Op::Restore { target: Some(5) }, Err("not_opened_by_you")),
+        (7, Op::Minimize { target: None }, Err("last_visible_pane")),
+    ];
+    for (caller, op, reply) in cases {
+        let recorder = Recorder::default();
+        let line = request_line(TOKEN, caller, &op);
+        let answer = respond(&line, TOKEN, &recorder);
+        assert_eq!(parse_reply(&answer).map_err(|e| e.code()), reply, "{line}");
+        assert_eq!(*recorder.0.lock().unwrap(), vec![(caller, op)], "{line}");
     }
 }
 

@@ -417,7 +417,7 @@ fn show_os(app: &AppHandle, marked: Option<SessionId>) {
         }
     }
     if let Some(level) = decision.request {
-        let owner = marked.and_then(|id| app.state::<WindowSessions>().owner(id));
+        let owner = marked.and_then(|id| app.state::<WindowSessions>().pane_window(id));
         let window = owner
             .and_then(|label| windows.get(&label))
             .or_else(|| main_windows.first().copied());
@@ -558,7 +558,7 @@ pub fn notification_clicked(app: &AppHandle, id: Option<i32>) {
             .with(|registry| registry.next())
             .flatten()
     });
-    match session.filter(|&id| app.state::<WindowSessions>().owner(id).is_some()) {
+    match session.filter(|&id| app.state::<WindowSessions>().pane_window(id).is_some()) {
         Some(id) => focus_session(app, id),
         None => {
             if let Some(window) =
@@ -575,7 +575,7 @@ pub fn notification_clicked(app: &AppHandle, id: Option<i32>) {
 /// Another app asked for pane `id` (`tiili --focus-pane ID`): its window comes to the front with the pane focused,
 /// as a click on its notification would; where the pane is gone, the last focused window comes forward.
 pub fn focus_pane(app: &AppHandle, id: SessionId) {
-    if app.state::<WindowSessions>().owner(id).is_some() {
+    if app.state::<WindowSessions>().pane_window(id).is_some() {
         focus_session(app, id);
     } else {
         crate::windows::focus_last(app);
@@ -584,7 +584,7 @@ pub fn focus_pane(app: &AppHandle, id: SessionId) {
 
 /// Brings session `id`'s window to the front and has it focus the session's pane; its mark clears.
 fn focus_session(app: &AppHandle, id: SessionId) {
-    let owner = app.state::<WindowSessions>().owner(id);
+    let owner = app.state::<WindowSessions>().pane_window(id);
     if let Some(window) = owner.and_then(|label| app.get_webview_window(&label)) {
         let _ = window.unminimize();
         let _ = window.show();

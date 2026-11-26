@@ -28,9 +28,11 @@
   - When the window's last visible pane closes while panes are minimized, restore the one `bringBack` names into
     the shown tab with the focus; close the window only when no visible or minimized pane is left.
   - proof: `npx eslint src/panes.ts src/tab.ts`
-- [x] 3.2 Pass the exit code through `openTerminal`'s `onExit` and add an optional `onOutput` hook in `src/terminal.ts`. A minimized pane's exit sets its state to exited instead of closing, and a non-zero code marks it `exited with code N` through `backend.attention.mark`. A restored exited pane has input disabled and closes from its close icon.
+  - proof: `npx vitest run src/tabs.test.ts`
+- [x] 3.2 Pass the exit code through `openTerminal`'s `onExit` and add an optional `onOutput` hook in `src/terminal.ts`. A minimized pane's exit sets its state to exited instead of closing, and a non-zero code marks it `exited with code N` through `backend.attention.mark`. A restored exited pane has input disabled and closes from its close icon. In `src-tauri/src/lib.rs` and `src-tauri/src/windows.rs`, an exited session stays in its window's `WindowSessions`, no longer live, until `pty_close`, so ⌘J and a notification click (`src-tauri/src/attention.rs`) still reach its mark's window.
   - proof: `npx eslint src/terminal.ts src/panes.ts`
   - proof: `npx vitest run src/backend-ws.test.ts`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib windows::`
 
 ## 4. Badges in the top bar
 
@@ -85,6 +87,7 @@
   Register the command in `src-tauri/src/lib.rs`.
   Tests to update: src-tauri/src/control_app.rs (in-file tests)
   - proof: `cargo test --manifest-path src-tauri/Cargo.toml --lib control_app::`
+  - proof: `cargo test --manifest-path src-tauri/Cargo.toml --test control_server`
   - proof: `cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D warnings`
   - proof: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
 - [x] 6.3 In `src/backend.ts`, `src/backend-tauri.ts` and `src/backend-ws.ts`, send the minimized sessions with `setOrder`, and add `onMinimizeRequest` and `minimized(requestId, error)`. In `Panes`, open `tiili open --minimized` panes at the caller's pane size and minimized before they show. `minimizeRequested` minimizes or restores without moving focus and answers `last_visible_pane` when the pane is the tab's only visible one. Update `src/backend.test.ts`'s `setOrder` expectation.

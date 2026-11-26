@@ -113,7 +113,6 @@ interface Requested extends PaneLaunch {
   title?: string;
 }
 
-/** A minimized pane: out of its tab's grid but kept, its shell still running, shown as a badge in the top bar. */
 /** Where a pane that opens minimized goes back to in its tab's grid, and the state its badge starts in. */
 interface MinimizedPlace {
   at?: number;
@@ -122,6 +121,7 @@ interface MinimizedPlace {
   like?: Pane;
 }
 
+/** A minimized pane: out of its tab's grid but kept, shown as a badge in the top bar; its shell runs on, or its badge shows how it exited. */
 interface Minimized {
   pane: Pane;
   /** The tab it goes back to, while that tab is still open; else the shown tab. */

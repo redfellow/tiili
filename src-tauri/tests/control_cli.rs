@@ -229,11 +229,8 @@ mod listener {
 
         fn minimize(
             &self,
-
             caller: SessionId,
-
             target: Option<SessionId>,
-
             minimize: bool,
         ) -> Result<(), CliError> {
             let op = if minimize {
@@ -241,9 +238,7 @@ mod listener {
             } else {
                 Op::Restore { target }
             };
-
             self.0.lock().unwrap().push((caller, op));
-
             Ok(())
         }
 

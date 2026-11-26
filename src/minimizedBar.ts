@@ -194,7 +194,7 @@ export function createMinimizedBar(container: HTMLElement, parts: BadgeBarParts,
       list.forEach((badge, index) => (badge.hidden = index >= shown));
       plus.hidden = hidden === 0;
       plus.textContent = `+${hidden}`;
-      plus.setAttribute("aria-label", `${hidden} more minimized panes`);
+      plus.setAttribute("aria-label", hidden === 1 ? "1 more minimized pane" : `${hidden} more minimized panes`);
     }
     placeTitle();
   };

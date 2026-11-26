@@ -172,10 +172,22 @@ fn owner_of(app: &AppHandle, id: SessionId, spawner: &str) -> String {
         .unwrap_or_else(|| spawner.to_string())
 }
 
-/// Session `id` has ended: it leaves its window, the tint counts, its sink, its flow gate (releasing its reader) and
-/// its reports.
+/// Session `id`'s pane has closed: it leaves its window, and all [`session_exited`] clears goes with it.
 fn forget_session(app: &AppHandle, id: SessionId) {
     app.state::<WindowSessions>().remove(id);
+    forget_process(app, id);
+}
+
+/// Session `id`'s process exited. Its pane may stay (a minimized pane showing its exit), so the session stays in
+/// its window, no longer live, for that pane's attention mark to lead there; `pty_close` takes it out.
+fn session_exited(app: &AppHandle, id: SessionId) {
+    app.state::<WindowSessions>().exit(id);
+    forget_process(app, id);
+}
+
+/// What ends with session `id`'s process: the tint counts, its sink, its flow gate (releasing its reader), its
+/// reports, its `tiili open` records, its attention mark and its working icon.
+fn forget_process(app: &AppHandle, id: SessionId) {
     app.state::<Tints>().forget(id);
     app.state::<SessionSinks>().remove(id);
     app.state::<FlowGates>().remove(id);
@@ -279,7 +291,7 @@ fn pty_spawn(
             Box::new(move |id, code| {
                 let to = owner_of(&app, id, &exit_label);
                 exit_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                forget_session(&app, id);
+                session_exited(&app, id);
                 let _ = app.emit_to(to.as_str(), PTY_EXIT_EVENT, PtyExit { id, code });
             }),
         )
@@ -288,7 +300,7 @@ fn pty_spawn(
     window.state::<FlowGates>().add(id, gate);
     window.state::<WindowSessions>().add(&label, id);
     if exited.load(std::sync::atomic::Ordering::SeqCst) {
-        forget_session(window.app_handle(), id);
+        session_exited(window.app_handle(), id);
     }
     Ok(id)
 }
