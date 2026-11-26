@@ -400,34 +400,15 @@ impl Handler for AppHandler {
 
     fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String> {
         let label = self.window_of(caller)?;
-        let (reports, opens, registry, owners) = (
-            self.0.state::<SessionReports>(),
-            self.0.state::<PaneOpens>(),
-            self.0.state::<SessionRegistry>(),
-            self.0.state::<PaneOwners>(),
-        );
-        let marks = self.0.state::<Attention>().marks();
-        let tabs = self.0.state::<PaneOrders>().get(&label);
-        let grid = list_order(&tabs);
-        Ok(
-            grid_order(self.0.state::<WindowSessions>().sessions(&label), &grid)
-                .into_iter()
-                .map(|id| {
-                    let (at, _) = reports.latest(id);
-                    pane_record(PaneFacts {
-                        id,
-                        caller,
-                        window: &label,
-                        at: at.as_ref(),
-                        open: opens.get(id).as_ref(),
-                        running: registry.running(id).unwrap_or_default(),
-                        mark: marks.iter().find(|m| m.session == id),
-                        tab: tab_of(&tabs, id),
-                        owner: owners.get(id),
-                    })
-                })
-                .collect(),
-        )
+        Ok(self.window_panes(&label, Some(caller)))
+    }
+
+    fn panes(&self) -> Result<Vec<PaneInfo>, String> {
+        let windows = self.0.state::<WindowSessions>().labels();
+        Ok(windows
+            .iter()
+            .flat_map(|label| self.window_panes(label, None))
+            .collect())
     }
 
     fn attention(
@@ -469,11 +450,44 @@ impl Handler for AppHandler {
     }
 }
 
+impl AppHandler {
+    /// Window `label`'s panes as `tiili list` reports them, in its order; `caller` is the pane asking, `None` for
+    /// the token-free `panes` request.
+    fn window_panes(&self, label: &str, caller: Option<SessionId>) -> Vec<PaneInfo> {
+        let (reports, opens, registry, owners) = (
+            self.0.state::<SessionReports>(),
+            self.0.state::<PaneOpens>(),
+            self.0.state::<SessionRegistry>(),
+            self.0.state::<PaneOwners>(),
+        );
+        let marks = self.0.state::<Attention>().marks();
+        let tabs = self.0.state::<PaneOrders>().get(label);
+        let grid = list_order(&tabs);
+        grid_order(self.0.state::<WindowSessions>().sessions(label), &grid)
+            .into_iter()
+            .map(|id| {
+                let (at, _) = reports.latest(id);
+                pane_record(PaneFacts {
+                    id,
+                    caller,
+                    window: label,
+                    at: at.as_ref(),
+                    open: opens.get(id).as_ref(),
+                    running: registry.running(id).unwrap_or_default(),
+                    mark: marks.iter().find(|m| m.session == id),
+                    tab: tab_of(&tabs, id),
+                    owner: owners.get(id),
+                })
+            })
+            .collect()
+    }
+}
+
 /// What the app knows about one pane of a `tiili list`.
 struct PaneFacts<'a> {
     id: SessionId,
-    /// The pane the request came from.
-    caller: SessionId,
+    /// The pane the request came from; `None` for the token-free `panes` request.
+    caller: Option<SessionId>,
     window: &'a str,
     /// The pane's latest folder report, until the first arrives `None`.
     at: Option<&'a PaneCwdEvent>,
@@ -510,7 +524,7 @@ fn pane_record(facts: PaneFacts) -> PaneInfo {
     });
     PaneInfo {
         id,
-        is_self: id == caller,
+        is_self: caller == Some(id),
         window: window.to_string(),
         cwd: at.map(|a| a.cwd.clone()).unwrap_or_default(),
         host: at.and_then(|a| a.host.clone()),
@@ -536,8 +550,9 @@ fn pane_record(facts: PaneFacts) -> PaneInfo {
             message: m.message.clone(),
         }),
         tab,
-        opened_by_you: owner.as_ref().is_some_and(|(by, _)| *by == caller),
-        key: owner.and_then(|(_, key)| key),
+        opened_by_you: owner.as_ref().is_some_and(|(by, _)| caller == Some(*by)),
+        // A key is the opener's own handle on its pane: only a token holder sees it.
+        key: owner.filter(|_| caller.is_some()).and_then(|(_, key)| key),
     }
 }
 
@@ -853,7 +868,7 @@ mod tests {
         for (owner, mine, key) in cases {
             let record = pane_record(PaneFacts {
                 id: 8,
-                caller: 3,
+                caller: Some(3),
                 window: "main",
                 at: None,
                 open: None,
@@ -866,6 +881,25 @@ mod tests {
             assert_eq!(record.key.as_deref(), *key, "{owner:?}");
             assert_eq!(record.tab, Some(2), "{owner:?}");
         }
+    }
+
+    /// The token-free `panes` request has no caller: no pane is its own or opened by it, and no key shows.
+    #[test]
+    fn panes_without_a_caller_show_no_keys() {
+        let record = pane_record(PaneFacts {
+            id: 8,
+            caller: None,
+            window: "main",
+            at: None,
+            open: None,
+            running: Running::default(),
+            mark: None,
+            tab: Some(1),
+            owner: Some((3, Some("dev".into()))),
+        });
+        assert!(!record.is_self && !record.opened_by_you);
+        assert_eq!(record.key, None);
+        assert_eq!((record.window.as_str(), record.tab), ("main", Some(1)));
     }
 
     fn at(cwd: &str, repo: Option<(&str, Option<&str>)>, host: Option<&str>) -> PaneCwdEvent {
@@ -1040,7 +1074,7 @@ mod tests {
         for (name, caller, at, open, running, mark, expected) in cases {
             let record = pane_record(PaneFacts {
                 id: 3,
-                caller,
+                caller: Some(caller),
                 window: "main",
                 at,
                 open: open.as_ref(),
