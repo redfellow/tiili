@@ -1,0 +1,17 @@
+format: 1
+slug: fix-failing-checks-cargo-fmt-cargo-clipp
+title: "Fix failing checks: cargo-fmt & cargo-clippy"
+x-harvaaja-card: 9ada0cc8-3f7b-4341-a307-f030f6b4974d
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: Formatting and a clippy-suggested equivalent rewrite in
+    src-tauri/src/launch.rs; no observable behaviour changes, existing
+    app-launch behaviour stays as specified.
+  citations:
+    - src-tauri/src/launch.rs:24-36
+    - openspec/specs/app-launch/spec.md
+  revision: 424ddc76-ba1a-45ba-bd40-274fb9d4b59e
