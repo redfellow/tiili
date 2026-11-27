@@ -568,12 +568,11 @@ impl SessionRegistry {
 
     /// Like [`spawn`](Self::spawn), starting `shell` instead of the default shell when given (see [`pane_command`]),
     /// running `command` directly instead of the shell when given (its exit ends the session as a shell's does), and
-    /// with `on_cwd` follows the shell's working directory and repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
-    /// on macOS and Linux, the shell process's working directory about once a second. An OSC 7
-    /// naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
-    /// the shell is back in front. With
-    /// `on_command` it follows what runs in the pane: titles from OSC 0 and 2 and, on macOS and
-    /// Linux, the foreground process about once a second.
+    /// with `on_cwd` follows the shell's working directory and repository: first the folder it starts in, then OSC 7
+    /// from the shell on every platform and, on macOS and Linux, the shell process's working directory about once a
+    /// second. An OSC 7 naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
+    /// the shell is back in front. With `on_command` it follows what runs in the pane: titles from OSC 0 and 2 and, on
+    /// macOS and Linux, the foreground process about once a second.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_tracked(
         &self,

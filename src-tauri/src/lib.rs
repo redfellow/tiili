@@ -309,8 +309,6 @@ fn pty_spawn(
     Ok(id)
 }
 
-/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`. The old terminal never
-/// acknowledges again, so the flow gate counts from zero: what is kept from now is acknowledged by the new window.
 /// What the Settings dialogue's Shell menu offers: the system default shell's program name and the shells installed
 /// on this machine (see [`shells::installed`]).
 #[tauri::command]
@@ -318,6 +316,8 @@ fn shells_installed() -> shells::InstalledShells {
     shells::installed_shells()
 }
 
+/// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`. The old terminal never
+/// acknowledges again, so the flow gate counts from zero: what is kept from now is acknowledged by the new window.
 #[tauri::command]
 fn pty_detach(
     sinks: State<'_, SessionSinks>,
