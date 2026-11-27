@@ -18,7 +18,8 @@ export interface PaneLaunch {
 
 /**
  * The window is asked for a pane by `tiili open`: one running `command` in `cwd` (home folder when null), its chip
- * reading `title` when given. The window answers through {@link PaneControl.done} with `requestId`.
+ * reading `title` when given, opened `minimized` as a badge when `--minimized` asked. The window answers through
+ * {@link PaneControl.done} with `requestId`.
  */
 export interface PaneOpenRequest {
   requestId: number;
@@ -28,12 +29,23 @@ export interface PaneOpenRequest {
   title: string | null;
   command: string[];
   path: string | null;
+  minimized: boolean;
 }
 
 /** The window is asked by `tiili close` to close the pane running `session`; it answers {@link PaneControl.closed}. */
 export interface PaneCloseRequest {
   requestId: number;
   session: SessionId;
+}
+
+/**
+ * The window is asked by `tiili minimize` (`minimize` true) or `tiili restore` to minimize or bring back the pane
+ * running `session`; it answers {@link PaneControl.minimized}.
+ */
+export interface PaneMinimizeRequest {
+  requestId: number;
+  session: SessionId;
+  minimize: boolean;
 }
 
 /**
@@ -52,11 +64,13 @@ export interface PaneControl {
   done(requestId: number, result: { pane: SessionId } | { error: string }): Promise<void>;
   /** Answers close request `requestId`: closed, else why it could not. */
   closed(requestId: number, error?: string): Promise<void>;
+  /** Answers minimize or restore request `requestId`: done, else why not (`last_visible_pane` for a tab's only pane). */
+  minimized(requestId: number, error?: string): Promise<void>;
   /**
    * Tells the app this window's sessions tab by tab in strip order, each in grid order (left to right, top to
-   * bottom), which `tiili list` follows.
+   * bottom) followed by the tab's minimized panes, which `tiili list` follows, and which of them are `minimized`.
    */
-  setOrder(tabs: SessionId[][]): Promise<void>;
+  setOrder(tabs: SessionId[][], minimized: SessionId[]): Promise<void>;
 }
 
 /** An item of the right-click menu: a labelled action, a separator line, or a labelled submenu of more items. */
@@ -71,10 +85,13 @@ export type MenuItem =
  */
 export type MovePayload = PaneMovePayload | TabMovePayload;
 
-/** One pane that moves: a terminal pane's session with its scrollback and zoom offset, or the Heynote pane. */
+/**
+ * One pane that moves: a terminal pane's session with its scrollback and zoom offset, or the Heynote pane; `minimized`
+ * when it was minimized in the window it left, so it arrives minimized.
+ */
 export type PaneMovePayload =
-  | { kind: "terminal"; session: SessionId; scrollback: string; zoom: number }
-  | { kind: "heynote" };
+  | { kind: "terminal"; session: SessionId; scrollback: string; zoom: number; minimized?: boolean }
+  | { kind: "heynote"; minimized?: boolean };
 
 /**
  * A whole tab that moves (Pop Out): its lasting name, its grid's track sizes, its focused pane's index and its panes
@@ -184,6 +201,7 @@ export interface AppEvents {
   "attention-focus": SessionId;
   "pane-open-request": PaneOpenRequest;
   "pane-close-request": PaneCloseRequest;
+  "pane-minimize-request": PaneMinimizeRequest;
   "pane-attention-request": PaneAttentionRequest;
   "session-flush": undefined;
 }

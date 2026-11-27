@@ -10,7 +10,7 @@ vi.mock("./layout/view", () => ({ TileView: class { render() {} } }));
 function fakePane(id: number): Pane {
   const fake = () => ({ toggleAttribute() {}, setAttribute() {}, hidden: false }) as unknown as HTMLElement;
   const element = fake();
-  return { id, element, chip: element, zenButton: fake(), closeButton: fake(), ready: Promise.resolve(undefined), zoom: 0 };
+  return { id, element, chip: element, minimizeButton: fake(), zenButton: fake(), closeButton: fake(), ready: Promise.resolve(undefined), zoom: 0 };
 }
 
 const hooks = { rendered() {}, marked: () => false } as unknown as TabHooks;
@@ -38,6 +38,22 @@ describe("Tab.add", () => {
     const t = tab(zenOn);
     t.add(fakePane(3), showAlone);
     expect(t.zen).toBe(expected);
+    vi.unstubAllGlobals();
+  });
+
+  // Pane 3 joins a tab holding panes 1 and 2, at grid index `at`, while pane `focus` has the focus.
+  it.each<[string, number, number, number[]]>([
+    ["Back in place: added before the focused pane, the focused pane keeps the focus", 1, 2, [1, 3, 2]],
+    ["Back in place: added after the focused pane, the focused pane keeps the focus", 1, 1, [1, 3, 2]],
+    ["Back in place: added first, the focused pane keeps the focus", 0, 1, [3, 1, 2]],
+    ["Back in place: an index past the end adds it last", 9, 2, [1, 2, 3]],
+  ])("%s", (_name, at, focus, order) => {
+    const t = tabWith(2);
+    t.markFocused(focus - 1);
+    t.add(fakePane(3), false, at);
+    expect(t.layout.order).toEqual(order);
+    expect(t.panes.map((p) => p.id)).toEqual(order);
+    expect(t.current()?.id).toBe(focus);
     vi.unstubAllGlobals();
   });
 });

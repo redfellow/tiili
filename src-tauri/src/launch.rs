@@ -22,14 +22,17 @@ pub enum LaunchAction {
 /// `--focus-pane=ID`), else focus the last focused window.
 pub fn launch_action<S: AsRef<str>>(argv: &[S]) -> LaunchAction {
     let args: Vec<&str> = argv.iter().map(AsRef::as_ref).collect();
-    let pane = args.iter().enumerate().find_map(|(i, arg)| match arg.strip_prefix(FOCUS_PANE_ARG) {
-        Some("") => args.get(i + 1).and_then(|id| id.parse().ok()),
-        Some(rest) => rest.strip_prefix('=').and_then(|id| id.parse().ok()),
-        None => None,
-    });
+    let pane =
+        args.iter()
+            .enumerate()
+            .find_map(|(i, arg)| match arg.strip_prefix(FOCUS_PANE_ARG) {
+                Some("") => args.get(i + 1).and_then(|id| id.parse().ok()),
+                Some(rest) => rest.strip_prefix('=').and_then(|id| id.parse().ok()),
+                None => None,
+            });
     if let Some(id) = pane {
         LaunchAction::FocusPane(id)
-    } else if args.iter().any(|arg| *arg == NEW_WINDOW_ARG) {
+    } else if args.contains(&NEW_WINDOW_ARG) {
         LaunchAction::NewWindow
     } else {
         LaunchAction::Focus
@@ -72,10 +75,26 @@ mod tests {
                 &["tiili", "--new-window=1"],
                 LaunchAction::Focus,
             ),
-            ("Piippu focusing a pane", &["tiili", "--focus-pane", "7"], LaunchAction::FocusPane(7)),
-            ("focus-pane with =", &["tiili", "--focus-pane=12"], LaunchAction::FocusPane(12)),
-            ("focus-pane without an id", &["tiili", "--focus-pane"], LaunchAction::Focus),
-            ("focus-pane with a bad id", &["tiili", "--focus-pane", "x"], LaunchAction::Focus),
+            (
+                "Piippu focusing a pane",
+                &["tiili", "--focus-pane", "7"],
+                LaunchAction::FocusPane(7),
+            ),
+            (
+                "focus-pane with =",
+                &["tiili", "--focus-pane=12"],
+                LaunchAction::FocusPane(12),
+            ),
+            (
+                "focus-pane without an id",
+                &["tiili", "--focus-pane"],
+                LaunchAction::Focus,
+            ),
+            (
+                "focus-pane with a bad id",
+                &["tiili", "--focus-pane", "x"],
+                LaunchAction::Focus,
+            ),
         ];
         for (name, argv, expected) in cases {
             assert_eq!(launch_action(argv), *expected, "{name}");

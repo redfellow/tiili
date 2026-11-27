@@ -144,8 +144,8 @@
 
 /* Koski: rapids at night, savi cursor. */
 :root[data-variant="koski"] {
-  --bg: #0F1516; --surface: #182023; --fg: #C9CFCD; --muted: #8A9492; --line: #24302F; --accent: #C9764F;
-  --on-accent: #2A2321; --focus: #C9764F; --term-bg: #182023; --term-fg: #C9CFCD; --term-dim: #6E7876; --term-gap: #0B0F10;
+  --bg: #121414; --surface: #1C1F21; --fg: #CECECA; --muted: #8F938F; --line: #282F2D; --accent: #C9764F;
+  --on-accent: #2A2321; --focus: #C9764F; --term-bg: #1C1F21; --term-fg: #CECECA; --term-dim: #727773; --term-gap: #0E0E0E;
   --ansi-0: #222B2E;  --ansi-1: #D05B3F;  --ansi-2: #8FB59A;  --ansi-3: #D9A43A;
   --ansi-4: #7FA2B8;  --ansi-5: #B97C92;  --ansi-6: #8FA6A4;  --ansi-7: #C9CFCD;
   --ansi-8: #626C6A;  --ansi-9: #C9764F;  --ansi-10: #A9CBB0;  --ansi-11: #EDC066;

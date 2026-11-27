@@ -44,6 +44,29 @@ describe("snapshotWindow", () => {
   });
 });
 
+describe("minimized panes", () => {
+  it("Dev server badge after relaunch: a minimized pane is saved apart from the grid and reopens minimized", () => {
+    const dev = { ...terminal(3, { command: "npm run dev", program: "node" }), at: 1 };
+    const tab = snapshotWindow(grid([1, 2]), [terminal(1), terminal(2)], 2, true, [dev]).tabs[0];
+    expect(tab.layout.order).toEqual([1, 2]);
+    expect(tab.minimized).toEqual([dev]);
+    expect(snapshotWindow(grid([1]), [terminal(1)], 1, false, [dev]).tabs[0].minimized?.[0].command).toBeUndefined();
+
+    const saved = restored([terminal(1), terminal(2)], { scrollback: { 3: "ready on :5173" } });
+    saved.window.tabs[0].minimized = [dev, { ...terminal(4), at: 9 }];
+    saved.window.tabs[0].minimized.push({ id: 5, kind: "heynote", zoom: 0, at: 0 });
+    const plan = restorePlans(saved, true)?.tabs[0];
+    expect(plan?.panes).toHaveLength(2);
+    expect(plan?.minimized.map((p) => [p.kind, p.at, p.command, p.history])).toEqual([
+      ["terminal", 1, "npm run dev", "npm run dev"],
+      ["terminal", 2, null, undefined],
+      ["heynote", 0, null, undefined],
+    ]);
+    expect(plan?.minimized[0].preface).toContain("ready on :5173");
+    expect(restorePlans(restored([terminal(1)]), true)?.tabs[0].minimized).toEqual([]);
+  });
+});
+
 describe("restorePlan", () => {
   it("Two windows reopen: order, sizes, tiling, focus, zoom, titles and Heynote come back", () => {
     const panes = [terminal(4, { zoom: 2, title: "api" }), { id: 7, kind: "heynote" as const, zoom: 0 },

@@ -45,7 +45,7 @@ fn open_folders(window: &session::Window) -> HashMap<u32, Option<String>> {
         .state
         .tabs
         .iter()
-        .flat_map(|tab| &tab.panes)
+        .flat_map(|tab| tab.all_panes())
         .filter(|pane| pane.kind == session::PaneKind::Terminal && pane.host.is_none())
         .filter_map(|pane| {
             let cwd = pane.cwd.as_deref()?;
@@ -152,7 +152,7 @@ fn take_scrollback(dir: &std::path::Path, window: &session::Window) -> HashMap<u
         .state
         .tabs
         .iter()
-        .flat_map(|tab| &tab.panes)
+        .flat_map(|tab| tab.all_panes())
         .filter_map(|pane| {
             let path = session::scrollback_path(dir, &window.label, pane.id);
             Some((pane.id, std::fs::read_to_string(path).ok()?))

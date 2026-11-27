@@ -151,7 +151,7 @@ mod listener {
     use std::sync::{Arc, Mutex};
 
     use tiili_lib::control::{CliError, Op, PaneInfo, RunningRecord};
-    use tiili_lib::control_server::{bind, Handler};
+    use tiili_lib::control_server::{bind, Handler, OpenRequest};
     use tiili_lib::pty::SessionId;
 
     use super::*;
@@ -168,12 +168,16 @@ mod listener {
         fn open(
             &self,
             caller: SessionId,
-            cwd: Option<String>,
-            title: Option<String>,
-            command: Vec<String>,
-            path: Option<String>,
-            key: Option<String>,
+            request: OpenRequest,
         ) -> Result<(SessionId, bool), String> {
+            let OpenRequest {
+                cwd,
+                title,
+                command,
+                path,
+                key,
+                minimized,
+            } = request;
             let failing = command.first().map(String::as_str) == Some("fail");
             // The key "again" stands for one already open.
             let reused = key.as_deref() == Some("again");
@@ -185,6 +189,7 @@ mod listener {
                     command,
                     path,
                     key,
+                    minimized,
                 },
             ));
             if failing {
@@ -220,6 +225,21 @@ mod listener {
                 )),
                 _ => Ok(()),
             }
+        }
+
+        fn minimize(
+            &self,
+            caller: SessionId,
+            target: Option<SessionId>,
+            minimize: bool,
+        ) -> Result<(), CliError> {
+            let op = if minimize {
+                Op::Minimize { target }
+            } else {
+                Op::Restore { target }
+            };
+            self.0.lock().unwrap().push((caller, op));
+            Ok(())
         }
 
         fn panes(&self) -> Result<Vec<PaneInfo>, String> {
@@ -288,6 +308,7 @@ mod listener {
             command: command.iter().map(|c| c.to_string()).collect(),
             path: Some(path.clone()),
             key: None,
+            minimized: false,
         };
         let keyed = |key: &str, command: &[&str]| match open(Some(&here), None, command) {
             Op::Open {
@@ -302,6 +323,7 @@ mod listener {
                 command,
                 path,
                 key: Some(key.to_string()),
+                minimized: false,
             },
             other => other,
         };
@@ -345,10 +367,10 @@ mod listener {
                     r#"{"ok":true,"protocol":1,"panes":["#,
                     r#"{"id":2,"self":true,"window":"main","cwd":"/work/app","host":null,"repo":null,"#,
                     r#""title":null,"label":"app","running":null,"attention":null,"#,
-                    r#""tab":1,"key":null,"opened_by_you":false},"#,
+                    r#""tab":1,"key":null,"opened_by_you":false,"minimized":false},"#,
                     r#"{"id":3,"self":false,"window":"main","cwd":"/tmp","host":null,"repo":null,"#,
                     r#""title":"logs","label":"tmp","running":{"command":"npm run dev","program":null},"#,
-                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true}]}"#,
+                    r#""attention":null,"tab":1,"key":"dev","opened_by_you":true,"minimized":false}]}"#,
                     "\n"
                 ),
                 Some((2, Op::List)),

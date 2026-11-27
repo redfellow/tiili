@@ -19,6 +19,7 @@ import {
   findAction,
   layoutAction,
   lineEditInput,
+  minimizeAction,
   paneAction,
   settingsShortcut,
   tabAction,
@@ -34,6 +35,8 @@ import {
 import { move, reset, setMode, type PaneId } from "./layout/model";
 import { EXIT_HOLD_MS, prefersReducedMotion } from "./layout/motion";
 import { openHeynote } from "./heynotePane";
+import { badgeLabel, badgeState, bringBack, restoreIndex, type MinimizedState } from "./minimized";
+import type { BadgeEntry, MinimizedBar, PeekSource } from "./minimizedBar";
 import {
   chipLabel,
   createPaneChip,
@@ -86,11 +89,19 @@ const TAB_MENU_ACTIONS: Partial<Record<TabMenuId, TabAction>> = {
 /** The attribute naming a tab strip entry's tab index, where a pane's grab strip can be dropped. */
 const TAB_INDEX = "data-tab-index";
 
+/** The answer to a `tiili minimize` of its tab's only visible pane, which the app reads as that error code. */
+const LAST_VISIBLE_PANE = "last_visible_pane";
+
 /** The Zen icon on a pane's title row: a pane between two side brackets. */
 const ZEN_ICON =
   '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" ' +
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="6" height="10" ' +
   'rx="0.5"/><path d="M2.5 5v6M13.5 5v6"/></svg>';
+
+/** The Minimize icon on a pane's title row: a bar at the bottom, where the pane goes down to. */
+const MINIMIZE_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h8"/></svg>';
 
 /** The close icon on a pane's title row: the top bar's × glyph. */
 const CLOSE_ICON =
@@ -100,6 +111,28 @@ const CLOSE_ICON =
 /** A pane `tiili open` asked for: the program it runs and the title its chip shows. */
 interface Requested extends PaneLaunch {
   title?: string;
+}
+
+/** Where a pane that opens minimized goes back to in its tab's grid, and the state its badge starts in. */
+interface MinimizedPlace {
+  at?: number;
+  state?: MinimizedState;
+  /** The pane whose size it takes, when it is not the tab's focused one. */
+  like?: Pane;
+}
+
+/** A minimized pane: out of its tab's grid but kept, shown as a badge in the top bar; its shell runs on, or its badge shows how it exited. */
+interface Minimized {
+  pane: Pane;
+  /** The tab it goes back to, while that tab is still open; else the shown tab. */
+  tab: Tab;
+  /** Its grid index when it was minimized. */
+  at: number;
+  /** The ids of the other panes in its tab when it was minimized. */
+  peers: PaneId[];
+  state: MinimizedState;
+  /** When its shell started, in epoch milliseconds, for the peek's uptime. */
+  since: number;
 }
 
 /**
@@ -122,6 +155,8 @@ export class Panes {
   private readonly tabHooks: TabHooks;
   /** The top bar's tab strip, once attached. */
   private strip: TabStrip | undefined;
+  /** The top bar's minimized-pane badges, once attached. */
+  private badges: MinimizedBar | undefined;
   /** The strip entry a dragged pane is over. */
   private tabDropTarget: HTMLElement | undefined;
   /** The latest `pane-cwd` report per session; a report can arrive before its pane knows its session id. */
@@ -140,6 +175,14 @@ export class Panes {
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   /** The state reports in flight, one after another so an older one never lands after a newer one. */
   private saving: Promise<void> = Promise.resolve();
+  /** The window's minimized panes, of any of its tabs, in the order they were minimized. */
+  private minimized: Minimized[] = [];
+  /** Holds the minimized panes' elements out of every grid; never shown. */
+  private readonly holder: HTMLElement;
+  /** When each pane's first shell started, in epoch milliseconds. */
+  private readonly started = new WeakMap<Pane, number>();
+  /** The exit code of each pane whose process exited while it was minimized; it stays read-only once restored. */
+  private readonly exits = new WeakMap<Pane, number>();
 
   private constructor(
     private readonly backend: Backend,
@@ -164,6 +207,9 @@ export class Panes {
       },
     };
     this.tabs = [new Tab(root, settings().tiling.layout, this.tabHooks)];
+    this.holder = document.createElement("div");
+    this.holder.className = "pane-minimized-holder";
+    root.append(this.holder);
     this.styleRoot(settings());
   }
 
@@ -246,6 +292,15 @@ export class Panes {
           )
           .catch((error: unknown) => console.error(error));
       });
+      await backend.onAppEvent("pane-minimize-request", (request) => {
+        let error: string | undefined;
+        try {
+          panes.minimizeRequested(request.session, request.minimize);
+        } catch (e) {
+          error = e instanceof Error ? e.message : String(e);
+        }
+        control.minimized(request.requestId, error).catch((e: unknown) => console.error(e));
+      });
       await backend.onAppEvent("pane-attention-request", (request) => panes.attentionRequested(request));
     }
     if (backend.session) {
@@ -298,6 +353,31 @@ export class Panes {
     return this.tabs.find((tab) => tab.panes.includes(pane));
   }
 
+  /** Every pane of the window, shown in a tab or minimized. */
+  private everyPane(): Pane[] {
+    return [...this.allPanes(), ...this.minimized.map((entry) => entry.pane)];
+  }
+
+  /** `pane`'s minimized entry, when it is minimized. */
+  private minimizedEntry(pane: Pane): Minimized | undefined {
+    return this.minimized.find((entry) => entry.pane === pane);
+  }
+
+  /** The tab a minimized pane goes back to: its own while it is open, else the shown tab. */
+  private homeOf(entry: Minimized): Tab {
+    return this.tabs.includes(entry.tab) ? entry.tab : this.tab;
+  }
+
+  /** Each tab's sessions, in strip order: its panes' in grid order, then its minimized panes'. */
+  private tabSessions(): number[][] {
+    return this.tabs.map((tab) => [
+      ...tab.sessions(),
+      ...this.minimized.flatMap((entry) =>
+        this.homeOf(entry) === tab && entry.pane.session !== undefined ? [entry.pane.session] : [],
+      ),
+    ]);
+  }
+
   /** Moves the focused pane or resets the grid to even sizes; in Zen the grid shows again first. */
   actLayout(action: LayoutAction): void {
     const pane = this.current();
@@ -341,6 +421,114 @@ export class Panes {
   attachStrip(strip: TabStrip): void {
     this.strip = strip;
     this.updateStrip();
+  }
+
+  /** Gives the window its top bar's badges, which show its minimized panes from now on. */
+  attachBadges(badges: MinimizedBar): void {
+    this.badges = badges;
+    this.showBadges();
+  }
+
+  /** Shows the minimized panes' badges: each labelled by its command or chip, in its tint and state. */
+  private showBadges(): void {
+    if (!this.badges) return;
+    const entries: BadgeEntry[] = this.minimized.map((entry) => {
+      const { pane, state } = entry;
+      return {
+        id: pane.id,
+        label: this.badgeText(entry),
+        tint: pane.tint,
+        state: badgeState(state, pane.session !== undefined && this.marks.has(pane.session)),
+      };
+    });
+    this.badges.update(entries);
+  }
+
+  /** What minimized `entry`'s badge reads: its command, else its chip text; `was running: …` when stopped. */
+  private badgeText({ pane, state }: Minimized): string {
+    const command = pane.session === undefined ? undefined : this.commands.get(pane.session);
+    return badgeLabel(state, command, pane.chip.textContent ?? "");
+  }
+
+  /** A badge was clicked: its pane is restored in its tab, with the focus. */
+  restoreBadge(id: PaneId): void {
+    const entry = this.minimized.find((e) => e.pane.id === id);
+    if (entry) this.restorePane(entry);
+  }
+
+  /**
+   * The right-click menu of pane `id`'s badge: Restore, Peek, Move to Tab ▸ with the window's other tabs, Move to
+   * Window ▸ when other windows are open, and Close. A moved pane stays minimized.
+   */
+  async badgeMenu(id: PaneId): Promise<MenuItem[]> {
+    const entry = this.minimized.find((e) => e.pane.id === id);
+    if (!entry) return [];
+    const report = (error: unknown) => this.report(error);
+    const items: MenuItem[] = [
+      { label: "Restore", action: () => this.restorePane(entry) },
+      { label: "Peek", action: () => this.badges?.peek(id) },
+    ];
+    const home = this.tabs.indexOf(this.homeOf(entry));
+    const labels = this.tabs.map((tab) => tabLabel(tab.name, tab.current()?.chip.textContent ?? ""));
+    const others = tabMenuEntries(labels, home).map(({ index, text }) => ({
+      label: text,
+      action: () => this.moveMinimized(entry, index),
+    }));
+    if (others.length > 0) items.push({ label: "Move to Tab", items: others });
+    const windows = (await this.backend.moves?.list().catch(() => [])) ?? [];
+    if (windows.length > 0) {
+      items.push({
+        label: "Move to Window",
+        items: menuEntries(windows).map(({ label, text }) => ({
+          label: text,
+          action: () => this.movePane(label, entry.pane).catch(report),
+        })),
+      });
+    }
+    items.push({ separator: true }, { label: "Close", action: () => this.close(entry.pane).catch(report) });
+    return items;
+  }
+
+  /** Moves minimized `entry` to tab `index`, where it stays minimized and is restored at the grid's end. */
+  private moveMinimized(entry: Minimized, index: number): void {
+    const tab = this.tabs[index];
+    if (!tab || !this.minimized.includes(entry)) return;
+    entry.tab = tab;
+    entry.peers = tab.panes.map((p) => p.id);
+    entry.at = entry.peers.length;
+    this.minimizedChanged();
+  }
+
+  /**
+   * Lends pane `id`'s terminal to its badge's peek, at the size it has in its pane; the peek hands it back, and the
+   * focused pane takes the keyboard again. Undefined when the pane is no longer minimized.
+   */
+  peekBadge(id: PaneId): PeekSource | undefined {
+    const entry = this.minimized.find((e) => e.pane.id === id);
+    const host = entry?.pane.element.querySelector<HTMLElement>(":scope > .pane-terminal");
+    if (!entry || !host) return undefined;
+    const { pane } = entry;
+    const session = pane.session;
+    const place = session === undefined ? undefined : this.places.get(session);
+    const { width, height } = host.getBoundingClientRect();
+    const next = host.nextSibling;
+    return {
+      command: this.badgeText(entry),
+      repository: place ? placeLabel(place) : "",
+      since: entry.since,
+      host,
+      width,
+      height,
+      done: () => {
+        pane.element.insertBefore(host, next && next.parentNode === pane.element ? next : null);
+        this.focusCurrent();
+      },
+    };
+  }
+
+  /** Output arrived in pane `pane`: its badge pulses while it is minimized. */
+  private onOutput(pane: Pane): void {
+    if (this.badges && this.minimizedEntry(pane)) this.badges.active(pane.id);
   }
 
   /** Adds an empty tab at strip index `at`, hidden until it is shown. */
@@ -578,29 +766,31 @@ export class Panes {
   }
 
   /**
-   * Moves the focused pane to window `target`, or to a new window when absent. A terminal pane's shell keeps
-   * running: its output is kept from the moment the scrollback is read until the target pane attaches. A Heynote
-   * pane saves its notes and reopens there. The pane lands in the target window's shown tab. Moving a window's only
-   * pane to a new window does nothing; moving it to another window closes this one.
+   * Moves `pane`, by default the focused one, to window `target`, or to a new window when absent. A terminal pane's
+   * shell keeps running: its output is kept from the moment the scrollback is read until the target pane attaches. A
+   * Heynote pane saves its notes and reopens there. The pane lands in the target window's shown tab, minimized there
+   * when it is minimized here. Moving a window's only pane to a new window does nothing; moving it to another window
+   * closes this one.
    */
-  async movePane(target: string | undefined): Promise<void> {
+  async movePane(target: string | undefined, pane: Pane | undefined = this.current()): Promise<void> {
     const moves = this.backend.moves;
-    const pane = this.current();
     if (!moves || !pane) return;
-    if (target === undefined && this.allPanes().length === 1) return;
+    if (target === undefined && this.everyPane().length === 1) return;
     const terminal = pane.terminal;
+    const entry = this.minimizedEntry(pane);
+    const minimized = entry ? { minimized: true } : {};
     // The pane arrives as a normal one, and this window shows its grid again.
     const owner = this.tabOf(pane);
     if (owner?.zen === pane.id) owner.setZen(undefined);
     if (pane.note) {
       pane.note.flush();
-      await moves.move(target, { kind: "heynote" });
+      await moves.move(target, { kind: "heynote", ...minimized });
     } else {
       const session = terminal?.session();
       if (!terminal || session === undefined) return;
       // Output from here on waits in the core, so none lands after the scrollback is read and none is lost.
       await moves.detach(session);
-      const payload: MovePayload = { kind: "terminal", session, scrollback: "", zoom: pane.zoom };
+      const payload: MovePayload = { kind: "terminal", session, scrollback: "", zoom: pane.zoom, ...minimized };
       try {
         payload.scrollback = await terminal.serialize();
         await moves.move(target, payload);
@@ -609,9 +799,12 @@ export class Panes {
         throw error;
       }
     }
-    this.remove(pane);
+    if (entry) {
+      this.dropMinimized(entry);
+      pane.element.remove();
+    } else this.remove(pane);
     terminal?.detach();
-    if (this.allPanes().length === 0) await this.closeEmptyWindow();
+    if (this.allPanes().length === 0) await this.lastPaneGone();
   }
 
   /**
@@ -681,14 +874,15 @@ export class Panes {
    * Opens what another window sent here under `token`, focused in the shown tab: the Heynote pane, or a terminal
    * pane that takes over the moved shell with its scrollback and zoom. A popped-out tab becomes a tab of its own
    * (this window's empty first tab, else a new one shown beside the shown one) with its name, grid sizes and focused
-   * pane. Resolves to false when nothing waits under `token`.
+   * pane. A pane minimized in the window it left arrives minimized, unless the shown tab has no pane to show instead.
+   * Resolves to false when nothing waits under `token`.
    */
   async arrive(token: string): Promise<boolean> {
     const payload = await this.backend.moves?.take(token);
     if (!payload) return false;
     if (payload.kind === "tab") await this.arriveTab(payload);
-    else if (payload.kind === "heynote") await this.openHeynote();
-    else await this.open(undefined, payload);
+    else if (payload.kind === "heynote") await this.openHeynote(this.tab, payload.minimized);
+    else await this.openPane(this.tab, undefined, payload, undefined, undefined, payload.minimized);
     return true;
   }
 
@@ -718,16 +912,18 @@ export class Panes {
   }
 
   /**
-   * Opens a new Heynote pane after the shown tab's others and focuses it, however many are open already. The
-   * Heynote pages keep each other in sync through the note store (see `heynote/bridge.js`), in this window and
-   * in every other tiili window, so the pane opens in the window that asked for it.
+   * Opens a new Heynote pane after the shown tab's others and focuses it, however many are open already; a
+   * `minimized` one opens minimized instead while the tab shows another pane. The Heynote pages keep each other in
+   * sync through the note store (see `heynote/bridge.js`), in this window and in every other tiili window, so the
+   * pane opens in the window that asked for it.
    */
-  async openHeynote(tab: Tab = this.tab): Promise<void> {
-    const { element, chip, zenButton, closeButton, host } = this.paneElement();
+  async openHeynote(tab: Tab = this.tab, minimized: boolean | MinimizedPlace = false): Promise<void> {
+    const { element, chip, minimizeButton, zenButton, closeButton, host } = this.paneElement();
     const pane: Pane = {
       id: this.nextId++,
       element,
       chip,
+      minimizeButton,
       zenButton,
       closeButton,
       zoom: 0,
@@ -745,14 +941,37 @@ export class Panes {
     pane.note.frame.addEventListener("load", () => {
       if (this.current() === pane) pane.note?.focus();
     });
+    if (minimized && tab.panes.length > 0) {
+      this.placeMinimized(tab, pane, minimized === true ? {} : minimized);
+      return;
+    }
     // In Zen a pane the user opens is shown alone.
     tab.add(pane, true);
     this.markFocused(tab, tab.panes.length - 1);
   }
 
   /**
+   * Puts new pane `pane` straight into tab `tab`'s minimized panes, at grid index `place.at` (the end when not
+   * given) and in `place.state`. It takes the size of `place.like`, else of the tab's focused pane, or of the shown
+   * tab's while that tab is hidden, so its terminal opens at a size it could have in the grid.
+   */
+  private placeMinimized(tab: Tab, pane: Pane, place: MinimizedPlace = {}): void {
+    const sized = (rect: DOMRect | undefined) => (rect && rect.width > 0 && rect.height > 0 ? rect : undefined);
+    const like = sized(place.like?.element.getBoundingClientRect()) ??
+      sized(tab.current()?.element.getBoundingClientRect()) ??
+      sized(this.current()?.element.getBoundingClientRect());
+    if (like) Object.assign(pane.element.style, { width: `${like.width}px`, height: `${like.height}px` });
+    this.holder.append(pane.element);
+    const peers = tab.panes.map((p) => p.id);
+    const at = Math.min(place.at ?? peers.length, peers.length);
+    this.minimized.push({ pane, tab, at, peers, state: place.state ?? { kind: "live" }, since: Date.now() });
+    this.minimizedChanged();
+  }
+
+  /**
    * Focus follows the keyboard and clicks into `pane`, in whichever tab it is by then. Its close icon closes it, by
-   * id, as ⌘W closes the focused pane, and gives the keyboard back to the focused pane.
+   * id, as ⌘W closes the focused pane, and its Minimize icon minimizes it; both give the keyboard back to the focused
+   * pane.
    */
   private listen(pane: Pane): void {
     pane.element.addEventListener("focusin", () => this.paneFocused(pane));
@@ -762,11 +981,16 @@ export class Panes {
     });
     const id = pane.id;
     pane.closeButton.addEventListener("click", () => this.closeById(id));
+    pane.minimizeButton.addEventListener("click", () => {
+      const target = this.allPanes().find((p) => p.id === id);
+      if (target) this.minimize(target);
+      this.focusCurrent();
+    });
   }
 
   /** Closes the pane `id` wherever it is, whichever pane has the focus, then refocuses the focused pane. */
   private closeById(id: PaneId): void {
-    const pane = this.allPanes().find((p) => p.id === id);
+    const pane = this.everyPane().find((p) => p.id === id);
     if (!pane) return;
     this.close(pane).catch((error: unknown) => this.report(error));
     this.focusCurrent();
@@ -779,13 +1003,15 @@ export class Panes {
   }
 
   /**
-   * A pane's element: its title row with the chip, the Zen icon and the close icon, the host its content goes in and
-   * the grab strip. The Zen icon and a double-click on the title row toggle Zen; the pane's own mousedown has focused
-   * it by then. A press on the close icon leaves the focus where it is; `listen` wires its click.
+   * A pane's element: its title row with the chip, the Minimize, Zen and close icons, the host its content goes in
+   * and the grab strip. The Zen icon and a double-click on the title row toggle Zen; the pane's own mousedown has
+   * focused it by then. A press on the Minimize or close icon leaves the focus where it is; `listen` wires their
+   * clicks.
    */
   private paneElement(): {
     element: HTMLElement;
     chip: HTMLElement;
+    minimizeButton: HTMLElement;
     zenButton: HTMLElement;
     closeButton: HTMLElement;
     host: HTMLElement;
@@ -795,6 +1021,18 @@ export class Panes {
     const title = document.createElement("div");
     title.className = "pane-title";
     const chip = createPaneChip();
+    const minimizeButton = document.createElement("button");
+    minimizeButton.type = "button";
+    minimizeButton.className = "pane-minimize-toggle";
+    minimizeButton.title = `Minimize pane ${this.platform === "macos" ? "⇧⌘M" : "Ctrl+Shift+M"}`;
+    minimizeButton.setAttribute("aria-label", "Minimize pane");
+    minimizeButton.tabIndex = -1;
+    minimizeButton.innerHTML = MINIMIZE_ICON;
+    minimizeButton.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      // Minimizing a pane does not focus it first: the focused pane keeps the focus.
+      event.stopPropagation();
+    });
     const zenButton = document.createElement("button");
     zenButton.type = "button";
     zenButton.className = "pane-zen-toggle";
@@ -817,9 +1055,10 @@ export class Panes {
       // Closing a pane does not focus it first: the focused pane keeps the focus.
       event.stopPropagation();
     });
-    title.append(chip, zenButton, closeButton);
+    title.append(chip, minimizeButton, zenButton, closeButton);
     title.addEventListener("dblclick", (event) => {
-      if (event.target instanceof Element && event.target.closest(".pane-zen-toggle, .pane-close-toggle")) return;
+      const icons = ".pane-minimize-toggle, .pane-zen-toggle, .pane-close-toggle";
+      if (event.target instanceof Element && event.target.closest(icons)) return;
       if (!this.tab.dragged()) this.toggleZen();
     });
     // Dragging the top edge onto another pane swaps the two; dragging inside the terminal still selects.
@@ -828,7 +1067,7 @@ export class Panes {
     const host = document.createElement("div");
     host.className = "pane-terminal";
     element.append(title, host, grab);
-    return { element, chip, zenButton, closeButton, host };
+    return { element, chip, minimizeButton, zenButton, closeButton, host };
   }
 
   /**
@@ -845,8 +1084,9 @@ export class Panes {
    * Reopens the window as the last session left it: each of its tabs with its name, panes in their saved order,
    * folders, zoom and titles, the Heynote panes, the tiling and track sizes, then the focus of each tab; the shown tab
    * is the one that was shown. A terminal pane shows its saved scrollback (when Restore scrollback and commands is
-   * on) and what ran in it before its new shell starts; nothing runs again. Resolves to false, opening nothing, when
-   * the window had no pane.
+   * on) and what ran in it before its new shell starts; nothing runs again. A pane that was minimized reopens the
+   * same way but minimized, its badge reading what was running. Resolves to false, opening nothing, when the window
+   * had no pane.
    */
   async restore(restored: Restored): Promise<boolean> {
     const plan = restorePlans(restored, this.settings().behaviour.restoreScrollback);
@@ -869,6 +1109,18 @@ export class Panes {
     );
     tab.restoreGrid(plan.cols, plan.rows, plan.sizes);
     this.focusTab(tab, plan.focused);
+    // Minimized ones go straight to the badges, so they never show; nothing runs in them again.
+    for (const pane of plan.minimized) {
+      const place: MinimizedPlace = { at: pane.at };
+      opening.push(
+        pane.kind === "heynote"
+          ? this.openHeynote(tab, place)
+          : this.openPane(tab, pane.cwd, undefined, undefined, pane, {
+            ...place,
+            state: { kind: "stopped", command: pane.command },
+          }),
+      );
+    }
     const results = await Promise.allSettled(opening);
     // A pane whose shell could not start says so in its terminal; the others stay.
     this.focusTab(tab, Math.min(plan.focused, tab.panes.length - 1));
@@ -885,20 +1137,21 @@ export class Panes {
 
   /**
    * Opens the pane `tiili open` asked for after the others in the caller's tab (the shown one when the caller is
-   * not found), as {@link open} does, but leaves the focus where it is and does not show that tab. Resolves to its
-   * session; rejects when the program could not start, after removing the pane.
+   * not found), as {@link open} does, but leaves the focus where it is and does not show that tab. A `minimized`
+   * request opens it at the caller's pane size straight into the tab's minimized panes, never showing in the grid.
+   * Resolves to its session; rejects when the program could not start, after removing the pane.
    */
   async openRequested(request: PaneOpenRequest): Promise<SessionId> {
-    const index = tabOf(
-      this.tabs.map((tab) => tab.sessions()),
-      request.caller,
-    );
+    const index = tabOf(this.tabSessions(), request.caller);
     const tab = (index === undefined ? undefined : this.tabs[index]) ?? this.tab;
-    const pane = await this.openPane(tab, request.cwd ?? undefined, undefined, {
+    const caller = this.everyPane().find((p) => p.session === request.caller);
+    const requested = {
       command: request.command,
       path: request.path ?? undefined,
       title: request.title ?? undefined,
-    });
+    };
+    const place = request.minimized ? { like: caller } : false;
+    const pane = await this.openPane(tab, request.cwd ?? undefined, undefined, requested, undefined, place);
     if (pane.session === undefined) throw new Error("the pane's program did not start");
     return pane.session;
   }
@@ -906,7 +1159,8 @@ export class Panes {
   /**
    * Opens a terminal pane after tab `tab`'s others in `cwd`: focused, unless it is a `requested` one, which also runs
    * that program instead of a shell. A `restored` pane takes its saved zoom and title and shows its preface first.
-   * A pane opened in a hidden tab keeps its size until the tab is shown.
+   * A pane opened in a hidden tab keeps its size until the tab is shown. A `minimized` one opens minimized while the
+   * tab shows another pane, leaving the focus where it is.
    */
   private async openPane(
     tab: Tab,
@@ -914,8 +1168,9 @@ export class Panes {
     adopt?: AdoptedSession & { zoom: number },
     requested?: Requested,
     restored?: PaneRestore,
+    minimized: boolean | MinimizedPlace = false,
   ): Promise<Pane> {
-    const { element, chip, zenButton, closeButton, host } = this.paneElement();
+    const { element, chip, minimizeButton, zenButton, closeButton, host } = this.paneElement();
     element.addEventListener("contextmenu", (event) => this.contextMenu(event));
 
     let resolve: (terminal: PaneTerminal | undefined) => void = () => {};
@@ -923,6 +1178,7 @@ export class Panes {
       id: this.nextId++,
       element,
       chip,
+      minimizeButton,
       zenButton,
       closeButton,
       zoom: adopt?.zoom ?? restored?.zoom ?? 0,
@@ -936,10 +1192,13 @@ export class Panes {
     const hadKeyboard = focused !== undefined && focused.element.contains(document.activeElement);
     // Laid out first, so the terminal opens at its pane's size. In Zen a pane the user opens is shown alone; one
     // `tiili open` asked for or a restored one joins the hidden grid.
-    tab.add(pane, !requested && !restored);
-    if (!requested) this.markFocused(tab, tab.panes.length - 1);
-    // Re-rendering the grid can take the keyboard from the focused pane's terminal.
-    else if (focused && hadKeyboard) give(focused);
+    if (minimized && tab.panes.length > 0) this.placeMinimized(tab, pane, minimized === true ? {} : minimized);
+    else {
+      tab.add(pane, !requested && !restored);
+      if (!requested) this.markFocused(tab, tab.panes.length - 1);
+      // Re-rendering the grid can take the keyboard from the focused pane's terminal.
+      else if (focused && hadKeyboard) give(focused);
+    }
 
     try {
       const opened = await openTerminal(
@@ -949,22 +1208,27 @@ export class Panes {
         cwd,
         (session) => this.onSession(pane, session),
         () => pane.zoom,
-        () => this.close(pane).catch((error) => this.report(error)),
+        (code) => this.onExit(pane, code),
         adopt,
         (signal) => this.onSignal(pane, signal),
         requested,
         restored,
+        () => this.onOutput(pane),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
       opened.find.interceptKeys((event) => this.shortcut(event));
       pane.terminal = opened;
       // Its tab may have been hidden, or Zen may show another pane, while the shell started: it keeps this size
       // until it is shown.
-      if (this.tabOf(pane)?.holds(pane)) opened.holdSize();
+      if (this.tabOf(pane)?.holds(pane) || this.minimizedEntry(pane)) opened.holdSize();
       resolve(opened);
     } catch (error) {
       resolve(undefined);
-      this.remove(pane);
+      const entry = this.minimizedEntry(pane);
+      if (entry) {
+        this.dropMinimized(entry);
+        pane.element.remove();
+      } else this.remove(pane);
       throw error;
     }
     if (this.current() === pane) give(pane);
@@ -972,19 +1236,120 @@ export class Panes {
   }
 
   /**
-   * Closes `pane` without asking. Focus moves to the pane that takes its place, else the one before. Closing a tab's
-   * last pane closes the tab; closing the window's last pane closes the window.
+   * Closes `pane`, shown or minimized, without asking. Focus moves to the pane that takes its place, else the one
+   * before. Closing a tab's last pane closes the tab; closing the window's last visible pane brings back the pane
+   * minimized last, and closes the window when none is minimized.
    */
   async close(pane: Pane): Promise<void> {
-    if (!this.tabOf(pane)) return;
+    const entry = this.minimizedEntry(pane);
+    if (!entry && !this.tabOf(pane)) return;
     pane.note?.flush();
     if (pane.session !== undefined) this.clearMark(pane.session);
-    this.remove(pane);
-    if (this.allPanes().length === 0) await this.closeEmptyWindow();
+    if (entry) this.dropMinimized(entry);
+    else this.remove(pane);
+    if (this.allPanes().length === 0) await this.lastPaneGone();
     const terminal = await pane.ready;
-    // The terminal stays on screen while its pane fades out.
-    if (!prefersReducedMotion()) await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
+    // The terminal stays on screen while its pane fades out; a minimized one is not on screen.
+    if (!entry && !prefersReducedMotion()) await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
     await terminal?.dispose();
+    if (entry) pane.element.remove();
+  }
+
+  /**
+   * The window's last visible pane went: the pane minimized last comes back into the shown tab with the focus, so
+   * the window and its minimized shells stay; with none minimized the window closes.
+   */
+  private async lastPaneGone(): Promise<void> {
+    const entry = bringBack(this.minimized, this.allPanes().length);
+    if (entry) this.restorePane(entry, true, this.tab);
+    else if (this.allPanes().length === 0) await this.closeEmptyWindow();
+  }
+
+  /**
+   * Minimizes `pane`: it leaves its tab's grid, which re-flows as if it had closed, with the focus moving as on close.
+   * Its shell keeps running and its terminal keeps its size until it is restored. A tab's only visible pane stays;
+   * returns whether `pane` was minimized.
+   */
+  minimize(pane: Pane): boolean {
+    const tab = this.tabOf(pane);
+    if (!tab || tab.panes.length <= 1) return false;
+    pane.note?.flush();
+    const at = tab.panes.indexOf(pane);
+    const peers = tab.panes.filter((p) => p !== pane).map((p) => p.id);
+    pane.terminal?.holdSize();
+    // It keeps its grid size while it waits, for the peek.
+    const { width, height } = pane.element.getBoundingClientRect();
+    if (width > 0 && height > 0) Object.assign(pane.element.style, { width: `${width}px`, height: `${height}px` });
+    // Out of the grid first, so the grid does not fade the element out and drop it.
+    this.holder.append(pane.element);
+    pane.element.toggleAttribute("data-focused", false);
+    const exit = this.exits.get(pane);
+    const state: MinimizedState = exit === undefined ? { kind: "live" } : { kind: "exited", code: exit };
+    this.minimized.push({ pane, tab, at, peers, state, since: this.started.get(pane) ?? Date.now() });
+    this.remove(pane, true);
+    this.minimizedChanged();
+    return true;
+  }
+
+  /**
+   * Restores minimized `entry` into its own tab, or `into` when given, at its old grid index while that tab's panes
+   * are unchanged since, else at the grid's end. With `focus` its tab is shown and it takes the focus. Its terminal
+   * refits once. A pane whose process exited comes back read-only, showing its final output.
+   */
+  private restorePane(entry: Minimized, focus = true, into?: Tab): void {
+    const index = this.minimized.indexOf(entry);
+    if (index < 0) return;
+    this.minimized.splice(index, 1);
+    const { pane } = entry;
+    const tab = into ?? this.homeOf(entry);
+    const ids = tab.panes.map((p) => p.id);
+    const at = tab === entry.tab ? restoreIndex(entry.at, entry.peers, ids) : ids.length;
+    if (focus && !tab.shown) this.showTab(this.tabs.indexOf(tab));
+    if (entry.state.kind === "exited" && pane.terminal) pane.terminal.term.options.disableStdin = true;
+    pane.element.style.removeProperty("width");
+    pane.element.style.removeProperty("height");
+    tab.add(pane, focus, at);
+    // Without motion the grid does not refit its terminals; this one has held its size since it was minimized.
+    if (prefersReducedMotion() && !tab.holds(pane)) pane.terminal?.releaseSize(true);
+    if (focus) {
+      this.markFocused(tab, tab.panes.indexOf(pane));
+      if (tab.shown) give(pane);
+    }
+    this.minimizedChanged();
+  }
+
+  /** Takes minimized `entry` out of the window's list, for a pane that closes or moves to another window. */
+  private dropMinimized(entry: Minimized): void {
+    this.minimized = this.minimized.filter((e) => e !== entry);
+    if (entry.pane.session !== undefined) this.forget(entry.pane.session);
+    this.minimizedChanged();
+  }
+
+  /** The minimized list changed: the badges, `tiili list` and the next launch's state follow. */
+  private minimizedChanged(): void {
+    this.showBadges();
+    this.reportOrder();
+    this.scheduleSave();
+  }
+
+  /**
+   * Pane `pane`'s process exited with `code`. A shown pane closes. A minimized one stays, its badge showing the
+   * exit, and a non-zero code marks it as needing the user.
+   */
+  private onExit(pane: Pane, code: number): void {
+    const entry = this.minimizedEntry(pane);
+    if (!entry) {
+      this.close(pane).catch((error: unknown) => this.report(error));
+      return;
+    }
+    this.exits.set(pane, code);
+    entry.state = { kind: "exited", code };
+    if (code !== 0 && pane.session !== undefined) {
+      this.backend.attention
+        ?.mark(pane.session, `exited with code ${code}`, pane.chip.textContent ?? "")
+        .catch(() => undefined);
+    }
+    this.minimizedChanged();
   }
 
   /**
@@ -1015,7 +1380,7 @@ export class Panes {
     }
     // Each pane keeps its zoom offset on top of the new font size.
     await Promise.all(
-      this.allPanes().map(async (pane) => {
+      this.everyPane().map(async (pane) => {
         const terminal = await pane.ready;
         if (!terminal) return;
         if (themeChanged) refreshTheme(terminal.term);
@@ -1029,7 +1394,7 @@ export class Panes {
   /** A `pane-cwd` report: updates the pane running that session, or keeps it until the pane hears its id. */
   private onCwd(place: PaneCwd): void {
     this.places.set(place.paneId, place);
-    const pane = this.allPanes().find((p) => p.session === place.paneId);
+    const pane = this.everyPane().find((p) => p.session === place.paneId);
     if (pane) this.showPlace(pane, place);
     this.scheduleSave();
   }
@@ -1037,10 +1402,11 @@ export class Panes {
   /** A `pane-command` report: relabels the pane running that session once its place is known. */
   private onCommand(report: PaneCommand): void {
     this.commands.set(report.paneId, report.command);
-    const pane = this.allPanes().find((p) => p.session === report.paneId);
+    const pane = this.everyPane().find((p) => p.session === report.paneId);
     if (pane && pane === this.current()) this.showTitle();
     const place = this.places.get(report.paneId);
     if (pane && place) this.showPlace(pane, place);
+    if (pane && this.minimizedEntry(pane)) this.showBadges();
     this.scheduleSave();
   }
 
@@ -1048,6 +1414,7 @@ export class Panes {
   private onSession(pane: Pane, session: number): void {
     if (pane.session !== undefined) this.forget(pane.session);
     pane.session = session;
+    if (!this.started.has(pane)) this.started.set(pane, Date.now());
     this.reportOrder();
     showPaneAttention(pane.element, pane.chip, this.marks.get(session));
     if (pane === this.current()) this.showTitle();
@@ -1073,6 +1440,7 @@ export class Panes {
     showPaneChip(pane.element, pane.chip, pane.title ?? chipLabel(placeLabel(place), command), pane.tint);
     if (pane === this.current()) this.reportName();
     this.updateStrip();
+    if (this.minimizedEntry(pane)) this.showBadges();
   }
 
   /** Tells the app this window's name, its shown tab's focused pane's chip text, for other windows' Move to Window ▸. */
@@ -1096,11 +1464,14 @@ export class Panes {
     this.backend.setTitle(title).catch(() => undefined);
   }
 
-  /** Takes `pane` out of its tab; a tab left empty closes, unless it is the window's last. */
-  private remove(pane: Pane): void {
+  /**
+   * Takes `pane` out of its tab; a tab left empty closes, unless it is the window's last. What was heard about its
+   * session is dropped, unless `keep` (a pane being minimized).
+   */
+  private remove(pane: Pane, keep = false): void {
     const tab = this.tabOf(pane);
     if (!tab) return;
-    if (pane.session !== undefined) this.forget(pane.session);
+    if (pane.session !== undefined && !keep) this.forget(pane.session);
     // The tab's grid takes the pane's element out once it has faded out.
     const wasFocused = tab.remove(pane);
     const next = tab.current();
@@ -1146,7 +1517,7 @@ export class Panes {
    * code would (made safe, rate-limited, and not while the user looks at the pane), or `clear` takes its mark away.
    */
   attentionRequested(request: PaneAttentionRequest): void {
-    const pane = this.allPanes().find((p) => p.session === request.session);
+    const pane = this.everyPane().find((p) => p.session === request.session);
     if (!pane) return;
     if (request.clear) {
       this.clearMark(request.session);
@@ -1156,9 +1527,27 @@ export class Panes {
     if (signal) this.onSignal(pane, signal);
   }
 
+  /**
+   * `tiili minimize` (`minimize` true) and `tiili restore`: minimizes or brings back the pane running `session`,
+   * leaving the focus and the shown tab where they are. A minimized pane minimized again, or a visible one restored,
+   * stays as it is. Rejects with `last_visible_pane` for its tab's only visible pane.
+   */
+  minimizeRequested(session: SessionId, minimize: boolean): void {
+    const pane = this.everyPane().find((p) => p.session === session);
+    if (!pane) throw new Error(`no pane runs session ${session} in this window`);
+    const entry = this.minimizedEntry(pane);
+    if (minimize === (entry !== undefined)) return;
+    const focused = this.current();
+    const hadKeyboard = focused !== undefined && focused !== pane && focused.element.contains(document.activeElement);
+    if (entry) this.restorePane(entry, false);
+    else if (!this.minimize(pane)) throw new Error(LAST_VISIBLE_PANE);
+    // The focus moves only when a minimized pane had it, but re-rendering the grid can take the keyboard.
+    if (focused && hadKeyboard) give(focused);
+  }
+
   /** `tiili close`: closes the pane running `session` as its close control would, without asking. */
   async closeRequested(session: SessionId): Promise<void> {
-    const pane = this.allPanes().find((p) => p.session === session);
+    const pane = this.everyPane().find((p) => p.session === session);
     if (!pane) throw new Error(`no pane runs session ${session} in this window`);
     await this.close(pane);
   }
@@ -1166,12 +1555,13 @@ export class Panes {
   /** Shows `marks`, every marked session app-wide, on this window's panes and its background tabs. */
   private showMarks(marks: AttentionMark[]): void {
     this.marks = new Map(marks.map((mark) => [mark.session, mark]));
-    for (const pane of this.allPanes()) {
+    for (const pane of this.everyPane()) {
       const mark = pane.session === undefined ? undefined : this.marks.get(pane.session);
       showPaneAttention(pane.element, pane.chip, mark);
     }
     for (const tab of this.tabs) tab.showZen();
     this.updateStrip();
+    this.showBadges();
   }
 
   /** Clears session `session`'s mark, if it has one; the app ignores a session without one. */
@@ -1189,9 +1579,16 @@ export class Panes {
   }
 
   /**
-   * Focuses the pane running session `session`, for the next-pane shortcut, showing its tab first; its mark clears.
+   * Focuses the pane running session `session`, for the next-pane shortcut, showing its tab first and restoring it
+   * when it is minimized; its mark clears.
    */
   private focusSession(session: number): void {
+    const entry = this.minimized.find((e) => e.pane.session === session);
+    if (entry) {
+      this.restorePane(entry);
+      this.clearMark(session);
+      return;
+    }
     const index = tabOf(
       this.tabs.map((tab) => tab.sessions()),
       session,
@@ -1215,8 +1612,8 @@ export class Panes {
   }
 
   /**
-   * Tells the app this window's state now, after any report still in flight: every tab with its panes, the shown tab
-   * active. A tab with no pane is left out.
+   * Tells the app this window's state now, after any report still in flight: every tab with its panes and minimized
+   * panes, the shown tab active. A tab with no pane is left out.
    */
   private saveState(): Promise<void> {
     const session = this.backend.session;
@@ -1229,7 +1626,12 @@ export class Panes {
       let activeTab = 0;
       for (const tab of this.tabs) {
         const panes = await Promise.all(tab.panes.map((pane) => this.snapshot(pane)));
-        const saved = snapshotWindow(tab.layout, panes, tab.current()?.id, keep).tabs[0];
+        const minimized = await Promise.all(
+          this.minimized
+            .filter((entry) => this.homeOf(entry) === tab)
+            .map(async (entry) => ({ ...(await this.snapshot(entry.pane)), at: entry.at })),
+        );
+        const saved = snapshotWindow(tab.layout, panes, tab.current()?.id, keep, minimized).tabs[0];
         if (!saved) continue;
         if (tab === this.tab) activeTab = tabs.length;
         tabs.push({ ...saved, name: tab.name });
@@ -1259,7 +1661,8 @@ export class Panes {
 
   /**
    * Answers the app's `session-flush`: tells it the window's latest state and, with Restore scrollback and commands
-   * on, saves each terminal pane's scrollback, then says it is done, which it does even when saving failed.
+   * on, saves each terminal pane's scrollback, minimized ones' too, then says it is done, which it does even when
+   * saving failed.
    */
   async flush(): Promise<void> {
     const session = this.backend.session;
@@ -1268,7 +1671,7 @@ export class Panes {
       await this.saveState().catch(() => undefined);
       if (this.settings().behaviour.restoreScrollback) {
         await Promise.all(
-          this.allPanes().map(async (pane) => {
+          this.everyPane().map(async (pane) => {
             if (!pane.terminal) return;
             await session.saveScrollback(pane.id, await pane.terminal.scrollback());
           }),
@@ -1304,16 +1707,17 @@ export class Panes {
 
   /**
    * Tells the app the panes' sessions when their order changed, so `tiili list` follows the window: tab by tab in
-   * strip order, in grid order inside each tab.
+   * strip order, in grid order inside each tab followed by the tab's minimized panes.
    */
   private reportOrder(): void {
     const control = this.backend.paneControl;
     if (!control) return;
-    const tabs = this.tabs.map((tab) => tab.sessions());
-    const order = JSON.stringify(tabs);
+    const tabs = this.tabSessions();
+    const minimized = this.minimized.flatMap((entry) => (entry.pane.session === undefined ? [] : [entry.pane.session]));
+    const order = JSON.stringify([tabs, minimized]);
     if (order === this.reportedOrder) return;
     this.reportedOrder = order;
-    control.setOrder(tabs).catch(() => undefined);
+    control.setOrder(tabs, minimized).catch(() => undefined);
   }
 
   /**
@@ -1354,7 +1758,7 @@ export class Panes {
   }
 
   /**
-   * Carries out a layout, tab, next-pane, settings, Zen, pane, zoom or find shortcut on keydown. Returns true when
+   * Carries out a layout, tab, next-pane, settings, minimize, Zen, pane, zoom or find shortcut on keydown. Returns true when
    * `event` is one of those keys, which then must not reach the pane's shell, its find bar's field or Heynote. Zoom and find
    * keys act only in terminal panes; in a Heynote pane they reach Heynote, whose own search the find keys open.
    */
@@ -1390,6 +1794,15 @@ export class Panes {
       if (!this.viaMenu() && event.type === "keydown") {
         event.preventDefault();
         this.openSettings();
+      }
+      return true;
+    }
+    if (minimizeAction(event, this.platform)) {
+      // Nothing happens for the tab's only visible pane; the key never reaches the shell.
+      if (event.type === "keydown") {
+        event.preventDefault();
+        const pane = this.current();
+        if (pane) this.minimize(pane);
       }
       return true;
     }

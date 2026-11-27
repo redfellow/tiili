@@ -176,9 +176,9 @@ export function refreshTheme(term: Terminal): void {
  * chosen; otherwise it is a steady outline that never blinks, whatever the Blink setting. The shell runs on
  * `backend`; `onSession` hears the id of each shell session the terminal starts, the first and any after the shell
  * exits. `zoom()` is the pane's zoom offset in pixels, added to the font size whenever the terminal refits, and
- * `onExit` is called when a shell exits. With `adopt` the terminal starts no shell: it shows the adopted scrollback,
- * then takes over that running session, whose output kept during the move follows, and resizes it so full-screen
- * programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
+ * `onExit` hears the exit code each time a shell exits, and `onOutput` is called as each chunk of the shell's output
+ * arrives. With `adopt` the terminal starts no shell: it shows the adopted scrollback, then takes over that running
+ * session, whose output kept during the move follows, and resizes it so full-screen programs redraw. `onSignal` hears each bell and each notification escape code (OSC 9, OSC 777 `notify`, OSC 99) the
  * shell sends, with its message made safe; an adopted scrollback rings nothing. With `launch` the session runs that
  * program instead of a shell, and a failure to start it rejects (after freeing the terminal) instead of being written
  * into the terminal. With `restore` (a pane reopened from the last session) the terminal first shows its preface,
@@ -191,11 +191,12 @@ export async function openTerminal(
   cwd?: string,
   onSession: (id: number) => void = () => {},
   zoom: () => number = () => 0,
-  onExit: () => void = () => {},
+  onExit: (code: number) => void = () => {},
   adopt?: AdoptedSession,
   onSignal: (signal: AttentionSignal) => void = () => {},
   launch?: PaneLaunch,
   restore?: RestoredPane,
+  onOutput: () => void = () => {},
 ): Promise<PaneTerminal> {
   // xterm measures the font when it opens, so the font has to be loaded first.
   await loadFont(settings().font);
@@ -272,6 +273,7 @@ export async function openTerminal(
   // Output drawn but not yet acknowledged; acknowledged in batches so the backend's reader is not held back.
   let pendingAck = 0;
   const output = (bytes: Uint8Array) => {
+    onOutput();
     term.write(bytes, () => {
       pendingAck += bytes.length;
       if (pendingAck >= ACK_BATCH && session !== undefined) {
@@ -281,30 +283,30 @@ export async function openTerminal(
     });
   };
 
-  // Exits heard before the terminal knows its session's id: a shell can end before `spawn` resolves.
-  const earlyExits = new Set<SessionId>();
+  // Exits heard before the terminal knows its session's id, with their codes: a shell can end before `spawn` resolves.
+  const earlyExits = new Map<SessionId, number>();
   // Marks the terminal's new session running, or ended at once when its shell already exited.
   const started = (id: SessionId) => {
     session = id;
-    const ended = earlyExits.delete(id);
+    const code = earlyExits.get(id);
     earlyExits.clear();
-    running = !ended;
+    running = code === undefined;
     onSession(id);
-    if (ended) onExit();
+    if (code !== undefined) onExit(code);
   };
 
   const spawn = async (dir?: string) => {
     started(await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history));
   };
 
-  const unlistenExit = await backend.onExit((id) => {
+  const unlistenExit = await backend.onExit((id, code) => {
     if (session === undefined) {
-      earlyExits.add(id);
+      earlyExits.set(id, code);
       return;
     }
     if (id !== session) return;
     running = false;
-    onExit();
+    onExit(code);
   });
 
   term.onData((data) => {
