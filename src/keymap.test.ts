@@ -6,6 +6,7 @@ import {
   findAction,
   layoutAction,
   lineEditInput,
+  minimizeAction,
   paneAction,
   settingsShortcut,
   tabAction,
@@ -335,6 +336,39 @@ describe("zenAction", () => {
       expect(layoutAction(event, platform)).toBeNull();
       expect(zoomAction(event, platform)).toBeNull();
       expect(findAction(event, platform)).toBeNull();
+    }
+  });
+});
+
+const minimizeCases: [string, Platform, KeyChord, "minimize" | null][] = [
+  ["Shortcut minimizes: ⇧⌘M on macOS", "macos", chord("M", { metaKey: true, shiftKey: true, code: "KeyM" }), "minimize"],
+  ["Shortcut minimizes: Ctrl+Shift+M on Linux", "linux", chord("M", { ctrlKey: true, shiftKey: true, code: "KeyM" }), "minimize"],
+  ["Shortcut minimizes: Ctrl+Shift+M on Windows", "windows", chord("M", { ctrlKey: true, shiftKey: true, code: "KeyM" }), "minimize"],
+  ["macOS: ⌘M stays the window minimize", "macos", chord("m", { metaKey: true, code: "KeyM" }), null],
+  ["macOS: Ctrl+Shift+M reaches the shell", "macos", chord("M", { ctrlKey: true, shiftKey: true, code: "KeyM" }), null],
+  ["macOS: ⌃⇧⌘M is not the shortcut", "macos", chord("M", { ctrlKey: true, metaKey: true, shiftKey: true, code: "KeyM" }), null],
+  ["Linux: plain Ctrl+M reaches the shell", "linux", chord("m", { ctrlKey: true, code: "KeyM" }), null],
+  ["Windows: plain Ctrl+M reaches the shell", "windows", chord("m", { ctrlKey: true, code: "KeyM" }), null],
+  ["Linux: Ctrl+Alt+Shift+M is not the shortcut", "linux", chord("M", { ctrlKey: true, altKey: true, shiftKey: true, code: "KeyM" }), null],
+  ["Windows: Win+Shift+M is not the shortcut", "windows", chord("M", { metaKey: true, shiftKey: true, code: "KeyM" }), null],
+  ["Linux: Ctrl+Shift+Meta+M is not the shortcut", "linux", chord("M", { ctrlKey: true, metaKey: true, shiftKey: true, code: "KeyM" }), null],
+];
+
+describe("minimizeAction", () => {
+  it.each(minimizeCases)("%s", (_name, platform, event, expected) => {
+    expect(minimizeAction(event, platform)).toBe(expected);
+  });
+
+  it("Minimize keys are not pane, layout, zoom, find, tab, zen or clipboard keys", () => {
+    for (const [, platform, event, expected] of minimizeCases) {
+      if (expected === null) continue;
+      expect(clipboardAction(event, platform)).toBeNull();
+      expect(paneAction(event, platform)).toBeNull();
+      expect(layoutAction(event, platform)).toBeNull();
+      expect(zoomAction(event, platform)).toBeNull();
+      expect(findAction(event, platform)).toBeNull();
+      expect(tabAction(event, platform)).toBeNull();
+      expect(zenAction(event, platform)).toBeNull();
     }
   });
 });

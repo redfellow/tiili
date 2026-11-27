@@ -3,8 +3,8 @@
 //! the store keeps.
 
 use tiili_lib::session::{
-    nearest_existing, parse, plan_restore, write_atomic, Geometry, Pane, Session, SessionStore,
-    Tab, TabState, Window, FILE, VERSION,
+    nearest_existing, parse, plan_restore, scrollback_path, write_atomic, write_private, Geometry,
+    MinimizedPane, Pane, Session, SessionStore, Tab, TabState, Window, FILE, VERSION,
 };
 use tiili_lib::window_state::Rect;
 
@@ -90,6 +90,56 @@ fn two_windows_reopen_written_session_reads_back_private() {
         names,
         [std::ffi::OsString::from(FILE)],
         "no temporary file is left"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// Dev server badge after relaunch: a minimized pane, its command and its scrollback survive save and load, a file
+/// from before minimizing reads with none, and turning commands off forgets the minimized pane's command too.
+#[test]
+fn dev_server_badge_after_relaunch_minimized_pane_and_scrollback_survive() {
+    let dir = temp_dir("minimized");
+    let mut state = tabs(&[1, 2]);
+    state.tabs[0].minimized = vec![MinimizedPane {
+        pane: Pane {
+            id: 3,
+            cwd: Some("/tmp".into()),
+            zoom: 2.0,
+            title: Some("dev".into()),
+            command: Some("npm run dev".into()),
+            ..Pane::default()
+        },
+        at: 1,
+    }];
+    let mut store = SessionStore::default();
+    store.update("main", state.clone());
+    let session = store.session();
+    write_atomic(&dir, &session).unwrap();
+    let path = scrollback_path(&dir, "main", 3);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    write_private(&path, b"ready on :5173").unwrap();
+
+    let read = parse(&std::fs::read(dir.join(FILE)).unwrap()).unwrap();
+    assert_eq!(read.windows[0].state, state);
+    let ids: Vec<_> = read.windows[0].state.tabs[0]
+        .all_panes()
+        .map(|pane| pane.id)
+        .collect();
+    assert_eq!(ids, [1, 2, 3]);
+    let kept = scrollback_path(&dir, &read.windows[0].label, 3);
+    assert_eq!(std::fs::read_to_string(kept).unwrap(), "ready on :5173");
+
+    let old = br#"{"version":1,"windows":[{"label":"main","tabs":[{"layout":null,"panes":[{"id":1}]}]}]}"#;
+    assert!(parse(old).unwrap().windows[0].state.tabs[0]
+        .minimized
+        .is_empty());
+
+    store.forget_commands();
+    assert_eq!(
+        store.session().windows[0].state.tabs[0].minimized[0]
+            .pane
+            .command,
+        None
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }

@@ -32,6 +32,7 @@ export type ShortcutAction =
   | "pane:newWindow"
   | "pane:moveToNewWindow"
   | "pane:heynote"
+  | "minimize:pane"
   | "layout:move"
   | "layout:reset"
   | "attention:next"
@@ -115,6 +116,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     label: "Reset grid",
     mac: on("{⌃⌘0}", "ctrl+meta+Digit0", "ctrl+meta+Numpad0"),
     other: on("{Ctrl+Alt+Shift+0}", "ctrl+shift+alt+Digit0", "ctrl+shift+alt+Numpad0"),
+  },
+  {
+    action: "minimize:pane",
+    group: "Panes",
+    label: "Minimize pane",
+    mac: on("{⇧⌘M}", "shift+meta+KeyM"),
+    other: on("{Ctrl+Shift+M}", "ctrl+shift+KeyM"),
   },
   { action: "pane:newWindow", group: "Panes", label: "New window", mac: on("{⌘N}", "meta+KeyN"), other: on("{Ctrl+Shift+N}", "ctrl+shift+KeyN") },
   {

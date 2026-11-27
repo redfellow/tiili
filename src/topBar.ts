@@ -1,4 +1,5 @@
 import type { Platform } from "./keymap";
+import { createMinimizedBar, type BadgeHooks, type MinimizedBar } from "./minimizedBar";
 import type { TabEntry, TabStrip } from "./tabs";
 
 /** What the tab strip asks of its window. */
@@ -25,15 +26,18 @@ export interface TopBarOptions {
   attentionCount?: boolean;
   /** The window's tab strip, on the bar's left. */
   tabs: TabStripOptions;
+  /** The window's minimized-pane badges, after the tab strip. */
+  badges: BadgeHooks;
 }
 
 /**
- * What the top bar shows after it is made: the count of panes that need you, across all windows, and the window's
- * tabs.
+ * What the top bar shows after it is made: the count of panes that need you, across all windows, the window's tabs
+ * and its minimized panes' badges.
  */
 export interface TopBar {
   setAttentionCount: (count: number) => void;
   tabs: TabStrip;
+  badges: MinimizedBar;
 }
 
 /** How far the pointer moves on a tab before it is dragged rather than clicked, in pixels. */
@@ -204,9 +208,10 @@ const ICONS = {
 
 /**
  * Fills `bar`, the window's top bar, with the New pane, Heynote, Reset layout and Settings buttons on its right, led
- * by the count of panes that need you (hidden at zero), and the window's tab strip on its left; each pane closes from
- * its own title row. Each button's popover tooltip names it with the platform's shortcut. In the macOS overlay title
- * bar the bar leaves room for the native window buttons and shows the title; dragging the bar moves the window.
+ * by the count of panes that need you (hidden at zero), and the window's tab strip on its left followed by its
+ * minimized panes' badges; each pane closes from its own title row. Each button's popover tooltip names it with the
+ * platform's shortcut. In the macOS overlay title bar the bar leaves room for the native window buttons and shows the
+ * title, which moves out of the tabs' and badges' way; dragging the bar moves the window.
  */
 export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
   const { platform } = options;
@@ -215,8 +220,9 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
   bar.setAttribute("data-tauri-drag-region", "");
   bar.replaceChildren();
 
+  let title: HTMLElement | undefined;
   if (options.overlay) {
-    const title = document.createElement("span");
+    title = document.createElement("span");
     title.className = "top-bar-title";
     title.textContent = "tiili";
     title.setAttribute("data-tauri-drag-region", "");
@@ -225,7 +231,8 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
 
   const strip = document.createElement("div");
   const tabs = tabStrip(strip, options.tabs);
-  bar.append(strip);
+  const badgeBar = document.createElement("div");
+  bar.append(strip, badgeBar);
 
   const buttons: TopBarButton[] = [
     { name: "New pane", shortcut: ["⌘T", "Ctrl+Shift+T"], icon: ICONS.newPane, action: options.onNewPane },
@@ -289,6 +296,7 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
     group.append(button);
   }
   bar.append(group);
+  const badges = createMinimizedBar(badgeBar, { bar, strip, actions: group, title }, options.badges);
 
   return {
     setAttentionCount: (n) => {
@@ -298,5 +306,6 @@ export function createTopBar(bar: HTMLElement, options: TopBarOptions): TopBar {
       count.setAttribute("aria-label", countTip.textContent);
     },
     tabs,
+    badges,
   };
 }

@@ -94,6 +94,7 @@ step:
 | Focus the terminal that needs you | ⌘J | Ctrl+Shift+J |
 | Move pane | ⌃⌘ + arrow | Ctrl+Alt+Shift + arrow |
 | Reset grid | ⌃⌘0 | Ctrl+Alt+Shift+0 |
+| Minimize pane | ⇧⌘M | Ctrl+Shift+M |
 | New window | ⌘N | Ctrl+Shift+N |
 | Move pane to a new window | ⌃⌘N | Ctrl+Alt+Shift+N |
 

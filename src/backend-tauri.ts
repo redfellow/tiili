@@ -151,7 +151,8 @@ export function tauriBackend(): Backend {
           error: "error" in result ? result.error : null,
         }),
       closed: (requestId, error) => invoke("pane_close_done", { requestId, error: error ?? null }),
-      setOrder: (tabs) => invoke("pane_order_set", { tabs }),
+      minimized: (requestId, error) => invoke("pane_minimize_done", { requestId, error: error ?? null }),
+      setOrder: (tabs, minimized) => invoke("pane_order_set", { tabs, minimized }),
     },
     session: {
       load: async () => (await invoke<Restored | null>("session_load")) ?? undefined,
