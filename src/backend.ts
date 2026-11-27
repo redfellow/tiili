@@ -206,6 +206,12 @@ export interface AppEvents {
   "session-flush": undefined;
 }
 
+/** The system default shell's program name and the installed shells' paths, for the Settings Shell menu. */
+export interface InstalledShells {
+  default: string;
+  shells: string[];
+}
+
 /**
  * Everything the frontend asks of the outside world: shells, the clipboard, menus, settings and the window.
  * The Tauri app and the browser dev server each provide one.
@@ -214,10 +220,11 @@ export interface Backend {
   /** True when native menus (the macOS menu bar) carry out ⌘ shortcuts, so the page must not act on them too. */
   readonly nativeMenus: boolean;
   /**
-   * Starts a default shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own
-   * config leaves the shell's default one; its output goes to `onOutput`. With `launch` the session runs that
-   * program instead of a shell, where the backend can (the dev server always starts a shell). A shell started with
-   * `history` has that line as its newest history entry, where the backend can.
+   * Starts a shell of `rows` x `cols` in `cwd` (home folder when absent) with `prompt` where the user's own config
+   * leaves the shell's default one; its output goes to `onOutput`. The shell is `shell`, the path chosen in Settings,
+   * or the system default when it is absent, empty or cannot be run; the dev server always starts its default. With
+   * `launch` the session runs that program instead of a shell, where the backend can (the dev server always starts a
+   * shell). A shell started with `history` has that line as its newest history entry, where the backend can.
    */
   spawn(
     rows: number,
@@ -227,7 +234,13 @@ export interface Backend {
     onOutput: (bytes: Uint8Array) => void,
     launch?: PaneLaunch,
     history?: string,
+    shell?: string,
   ): Promise<SessionId>;
+  /**
+   * What the Settings Shell menu offers: the system default shell's program name (empty where it is not known) and
+   * the paths of the shells installed on this machine; the dev server offers its default only.
+   */
+  installedShells(): Promise<InstalledShells>;
   /**
    * Makes `prompt` the current choice for new shells and the open local zsh, bash and PowerShell shells, where their
    * own config leaves the default prompt; does nothing where shells only take the prompt they start with.
