@@ -1,6 +1,6 @@
 // @harvaaja-test-tier: fast
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, fontFamilyList, normalize, type Settings } from "./settings";
+import { ctrlVPasteFor, ctrlVPastes, DEFAULT_SETTINGS, fontFamilyList, normalize, type Settings } from "./settings";
 
 const font = DEFAULT_SETTINGS.font;
 const withFont = (patch: Partial<Settings["font"]>): Settings => ({ ...DEFAULT_SETTINGS, font: { ...font, ...patch } });
@@ -29,7 +29,7 @@ const cases: [string, unknown, Settings][] = [
     cursor: { style: "bar", blink: false },
     tiling: { layout: "tall" },
     responsive: { enabled: false, strength: 1.25 },
-    behaviour: { hoverHighlight: false, startupSplash: false, scrollback: 50000, restoreScrollback: false },
+    behaviour: { hoverHighlight: false, startupSplash: false, scrollback: 50000, restoreScrollback: false, ctrlVPaste: "on" },
     zen: { width: 180 },
     inactive: { opacity: 0.5, desaturate: true },
     appIcon: "dark",
@@ -43,7 +43,7 @@ const cases: [string, unknown, Settings][] = [
     cursor: { style: "bar", blink: false },
     tiling: { layout: "tall" },
     responsive: { enabled: false, strength: 1.25 },
-    behaviour: { hoverHighlight: false, startupSplash: false, scrollback: 50000, restoreScrollback: false },
+    behaviour: { hoverHighlight: false, startupSplash: false, scrollback: 50000, restoreScrollback: false, ctrlVPaste: "on" },
     zen: { width: 180 },
     inactive: { opacity: 0.5, desaturate: true },
     appIcon: "dark",
@@ -99,6 +99,10 @@ const cases: [string, unknown, Settings][] = [
   ["scrollback \"lots\" is 10 000", { behaviour: { scrollback: "lots" } }, DEFAULT_SETTINGS],
   ["Restore scrollback is on by default; of the wrong type it is on", { behaviour: { restoreScrollback: "no" } },
     DEFAULT_SETTINGS],
+  ["Ctrl+V pastes follows the platform by default", { theme: "nord" }, { ...DEFAULT_SETTINGS, theme: "nord" }],
+  ["Ctrl+V pastes turned off is kept", { behaviour: { ctrlVPaste: "off" } },
+    { ...DEFAULT_SETTINGS, behaviour: { ...DEFAULT_SETTINGS.behaviour, ctrlVPaste: "off" } }],
+  ["Ctrl+V pastes of an unknown value follows the platform", { behaviour: { ctrlVPaste: true } }, DEFAULT_SETTINGS],
   ["NaN scrollback is 10 000", { behaviour: { scrollback: Number.NaN } }, DEFAULT_SETTINGS],
   ["missing inactive and behaviour give their defaults", { theme: "koski" }, DEFAULT_SETTINGS],
   ["inactive and behaviour of the wrong type give their defaults", { inactive: [], behaviour: "on" }, DEFAULT_SETTINGS],
@@ -153,6 +157,27 @@ const cases: [string, unknown, Settings][] = [
 describe("normalize", () => {
   it.each(cases)("%s", (_name, input, expected) => {
     expect(normalize(input)).toEqual(expected);
+  });
+});
+
+describe("ctrlVPastes", () => {
+  it("Default per platform: Ctrl+V pastes on Windows, not on Linux or macOS", () => {
+    expect(ctrlVPastes("auto", "windows")).toBe(true);
+    expect(ctrlVPastes("auto", "linux")).toBe(false);
+    expect(ctrlVPastes("auto", "macos")).toBe(false);
+  });
+  it("Turned on and off: the setting wins on Windows and Linux", () => {
+    expect(ctrlVPastes("on", "linux")).toBe(true);
+    expect(ctrlVPastes("off", "windows")).toBe(false);
+  });
+  it("macOS leaves Ctrl+V to the shell even when turned on", () => {
+    expect(ctrlVPastes("on", "macos")).toBe(false);
+  });
+  it("the checkbox's value saves as auto where it is the platform's default", () => {
+    expect(ctrlVPasteFor(true, "windows")).toBe("auto");
+    expect(ctrlVPasteFor(false, "linux")).toBe("auto");
+    expect(ctrlVPasteFor(true, "linux")).toBe("on");
+    expect(ctrlVPasteFor(false, "windows")).toBe("off");
   });
 });
 

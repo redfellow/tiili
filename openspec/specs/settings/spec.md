@@ -151,7 +151,7 @@ The settings dialogue SHALL show four tabs, Style, Typography, Behaviour and Int
 - **THEN** the Integrations tab is selected and lists each integration with a checkbox, a description and where it installs
 
 ### Requirement: Settings tab contents
-Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Tiling, Panes (Responsive text, Hover, Scrollback lines), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents.
+Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Tiling, Panes (Responsive text, Hover, Scrollback lines, Reopen, Zen width and, on Windows and Linux, Paste), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents.
 
 #### Scenario: Behaviour tab sections
 - **WHEN** the user opens the Behaviour tab

@@ -64,15 +64,16 @@ function runReporting(backend: Backend, term: Terminal, action: ClipboardAction)
 /**
  * Handles a clipboard shortcut pressed in `term`. Returns true when the key is a clipboard key, which
  * then must not reach the shell. Where the backend's native menus carry the ⌘ shortcuts (the macOS app),
- * the menu carries the action out instead.
+ * the menu carries the action out instead. `ctrlVPastes` makes plain Ctrl+V paste on Windows and Linux.
  */
 export function handleClipboardKey(
   backend: Backend,
   term: Terminal,
   event: KeyChord & { type: string; preventDefault(): void },
   platform: Platform,
+  ctrlVPastes = false,
 ): boolean {
-  const action = clipboardAction(event, platform);
+  const action = clipboardAction(event, platform, ctrlVPastes);
   if (!action) return false;
   const viaMenu = platform === "macos" && backend.nativeMenus;
   if (!viaMenu && event.type === "keydown") {

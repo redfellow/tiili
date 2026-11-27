@@ -23,6 +23,17 @@ On Windows and Linux plain Ctrl+C SHALL reach the shell as an interrupt.
 - **WHEN** the user presses Ctrl+C without Shift
 - **THEN** the shell receives the interrupt character
 
+### Requirement: Ctrl+V pastes setting
+On Windows and Linux a "Ctrl+V pastes" setting SHALL make plain Ctrl+V paste like Ctrl+Shift+V, the key not reaching the shell. It SHALL default to on for Windows and off for Linux, where Ctrl+V stays with the shell (quoted-insert, Vim visual block). macOS SHALL leave Ctrl+V to the shell either way.
+
+#### Scenario: Default per platform
+- **WHEN** the setting was never changed and the user presses plain Ctrl+V
+- **THEN** on Windows the clipboard is pasted, and on Linux and macOS the shell receives Ctrl+V
+
+#### Scenario: Turned on and off
+- **WHEN** the user turns Ctrl+V pastes on under Linux, or off under Windows, and presses plain Ctrl+V
+- **THEN** on Linux the clipboard is pasted, and on Windows the shell receives Ctrl+V
+
 ### Requirement: Right-click Copy and Paste
 Right-clicking the terminal SHALL offer Copy and Paste on all platforms. When the pointer is on a link, link items SHALL come first: Open Link and Copy Link (the target) for a URL or OSC 8 link; Open (absent for executables), Reveal in Finder / Show in Explorer / Show in Folder, and Copy Path (absolute) for a path.
 

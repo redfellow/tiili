@@ -7,8 +7,9 @@ import {
 import { TILING_MODES, type TilingMode } from "./layout";
 import { MIN_RESPONSIVE_LINE_HEIGHT, MIN_RESPONSIVE_SIZE, RESPONSIVE_STRENGTH } from "./responsive";
 import {
-  APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, type CursorStyle, DEFAULT_FONT_FAMILY,
-  DEFAULT_SETTINGS, FONT_RANGES, fontFamilyList, INACTIVE_OPACITY, normalize, NOTIFY_MODES, type NotifyMode,
+  APP_ICONS, type AppIcon, BOUNCE_MODES, type BounceMode, CURSOR_STYLES, ctrlVPasteFor, ctrlVPastes, type CursorStyle,
+  DEFAULT_FONT_FAMILY, DEFAULT_SETTINGS, FONT_RANGES, fontFamilyList, INACTIVE_OPACITY, normalize, NOTIFY_MODES,
+  type NotifyMode,
   type PromptId, SCROLLBACK_RANGE, type Settings, ZEN_WIDTH_RANGE,
 } from "./settings";
 import { PROMPT_STYLES, type PromptSegment } from "./promptStyles";
@@ -639,6 +640,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const startupSplash = element("input", { type: "checkbox", name: "startupSplash" });
   const scrollback = numberInput("scrollback", SCROLLBACK_RANGE);
   const restoreScrollback = element("input", { type: "checkbox", name: "restoreScrollback" });
+  const ctrlVPaste = element("input", { type: "checkbox", name: "ctrlVPaste" });
   scrollback.setAttribute("aria-label", "Scrollback lines");
   const zenWidth = numberInput("zenWidth", ZEN_WIDTH_RANGE);
   zenWidth.setAttribute("aria-label", "Zen width in columns");
@@ -800,6 +802,12 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
           "faster.")),
       row("Hover", check(hoverHighlight, "Highlight the terminal under the mouse")),
       row("Scrollback lines", scrollback),
+      ...(options.platform === "macos" ? [] : [
+        row("Paste", check(ctrlVPaste, "Ctrl+V pastes"),
+          infoButton("Paste",
+            "Ctrl+Shift+V always pastes. With this on, plain Ctrl+V pastes too; off, Ctrl+V goes to the program in " +
+            "the pane, as quoted-insert in the shell or visual block in Vim. On by default on Windows, off on Linux.")),
+      ]),
       row("Reopen", check(restoreScrollback, "Restore scrollback and commands"),
         infoButton("Reopen",
           "tiili always reopens its windows, panes and folders. With this on, each pane also gets back its " +
@@ -978,6 +986,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     startupSplash.checked = settings.behaviour.startupSplash;
     scrollback.value = String(settings.behaviour.scrollback);
     restoreScrollback.checked = settings.behaviour.restoreScrollback;
+    ctrlVPaste.checked = ctrlVPastes(settings.behaviour.ctrlVPaste, options.platform);
     zenWidth.value = String(settings.zen.width);
     updatesAuto.checked = settings.updates.autoCheck;
     appIcon.set(settings.appIcon);
@@ -1012,6 +1021,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
       startupSplash: startupSplash.checked,
       scrollback: scrollback.valueAsNumber,
       restoreScrollback: restoreScrollback.checked,
+      ctrlVPaste: ctrlVPasteFor(ctrlVPaste.checked, options.platform),
     },
     zen: { width: zenWidth.valueAsNumber },
     inactive: { opacity: inactiveOpacity.input.valueAsNumber, desaturate: inactiveDesaturate.checked },
