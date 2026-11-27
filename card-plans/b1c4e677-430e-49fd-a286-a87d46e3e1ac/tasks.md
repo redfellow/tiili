@@ -2,7 +2,7 @@
 
 ## 1. Run the host tests on every card
 
-- [ ] 1.1 (triage) Add the `cargo-test-host-card` check: `stage: every`, `sandbox: none`, with a `tests` block that, when the card changes anything under `src-tauri/`, runs every test target holding a `#[ignore = "host: ..."]` test with `--include-ignored`
+- [x] 1.1 (triage) Add the `cargo-test-host-card` check: `stage: every`, `sandbox: none`, with a `tests` block that, when the card changes anything under `src-tauri/`, runs every test target holding a `#[ignore = "host: ..."]` test with `--include-ignored`
   - file: .harvaaja/checks.yaml
   - content:
 
