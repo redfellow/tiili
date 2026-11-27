@@ -26,6 +26,7 @@ pub mod session;
 mod session_app;
 pub mod settings;
 pub mod shell_integration;
+pub mod shells;
 pub mod sink;
 pub mod tints;
 pub mod updates;

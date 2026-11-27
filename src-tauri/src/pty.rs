@@ -150,13 +150,16 @@ pub fn set_pane_env(
     }
 }
 
-/// How pane `id` starts in `cwd`: `command` when given, else the default shell with `prompt` through tiili's
-/// integration (see [`PtySession::spawn_in`]), either way with the terminal's variables (see [`set_colour_env`])
-/// and the pane's (see [`set_pane_env`]). With it comes whether the shell redraws its prompt on request.
+/// How pane `id` starts in `cwd`: `command` when given, else the shell chosen in Settings (`shell`, the system
+/// default when absent, empty or not a file this user may run; see [`crate::shells::resolve`]) with `prompt` through
+/// tiili's integration (see [`PtySession::spawn_in`]), either way with the terminal's variables (see
+/// [`set_colour_env`]) and the pane's (see [`set_pane_env`]). With it comes whether the shell redraws its prompt on
+/// request.
 pub fn pane_command(
     id: SessionId,
     cwd: Option<&Path>,
     prompt: &str,
+    shell: Option<&str>,
     command: Option<&PaneCommand>,
     control: Option<&ControlEnv>,
 ) -> (CommandBuilder, bool) {
@@ -167,7 +170,8 @@ pub fn pane_command(
         ),
         None => {
             let dir = crate::shell_integration::default_dir();
-            crate::shell_integration::shell_command(prompt, dir.as_deref())
+            let shell = crate::shells::resolve(shell);
+            crate::shell_integration::shell_command(prompt, shell.as_deref(), dir.as_deref())
         }
     };
     set_colour_env(&mut cmd);
@@ -201,24 +205,28 @@ impl PtySession {
         on_output: OutputFn,
         on_exit: ExitFn,
     ) -> io::Result<Self> {
-        Self::spawn_in(None, prompt, rows, cols, on_output, on_exit)
+        Self::spawn_in(None, prompt, None, rows, cols, on_output, on_exit)
     }
 
-    /// Starts the user's default shell in `cwd`. Without `cwd`, or when it is not a folder, the
-    /// shell starts in the home folder. zsh, bash and PowerShell start through tiili's shell
+    /// Starts `shell` (the user's default shell when absent, empty or not a file this user may run; see
+    /// [`crate::shells::resolve`]) in `cwd`, as the default shell starts (a login shell on macOS and Linux, with
+    /// `SHELL` naming it). Without `cwd`, or when it is not a folder, the shell starts in the home folder. zsh, bash and PowerShell start through tiili's shell
     /// integration, which sets `prompt` (Off included) where the user's own startup files left the
     /// default one, and follows later choices from [`set_prompt`]. Every shell gets
     /// `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
     pub fn spawn_in(
         cwd: Option<&Path>,
         prompt: &str,
+        shell: Option<&str>,
         rows: u16,
         cols: u16,
         on_output: OutputFn,
         on_exit: ExitFn,
     ) -> io::Result<Self> {
         let dir = crate::shell_integration::default_dir();
-        let (mut cmd, redraws) = crate::shell_integration::shell_command(prompt, dir.as_deref());
+        let shell = crate::shells::resolve(shell);
+        let (mut cmd, redraws) =
+            crate::shell_integration::shell_command(prompt, shell.as_deref(), dir.as_deref());
         set_colour_env(&mut cmd);
         // portable-pty starts the default shell in the home folder when no cwd is set or the
         // given one is not a folder.
@@ -548,7 +556,7 @@ impl SessionRegistry {
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
         self.spawn_tracked(
-            cwd, prompt, None, rows, cols, on_output, None, None, on_exit,
+            cwd, prompt, None, None, rows, cols, on_output, None, None, on_exit,
         )
     }
 
@@ -558,8 +566,8 @@ impl SessionRegistry {
         let _ = self.control.set(control);
     }
 
-    /// Like [`spawn`](Self::spawn), running `command` directly instead of the shell when given (its exit ends the
-    /// session as a shell's does), and with `on_cwd` follows the shell's working directory and
+    /// Like [`spawn`](Self::spawn), starting `shell` instead of the default shell when given (see [`pane_command`]),
+    /// running `command` directly instead of the shell when given (its exit ends the session as a shell's does), and with `on_cwd` follows the shell's working directory and
     /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
     /// on macOS and Linux, the shell process's working directory about once a second. An OSC 7
     /// naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
@@ -571,6 +579,7 @@ impl SessionRegistry {
         &self,
         cwd: Option<&Path>,
         prompt: &str,
+        shell: Option<&str>,
         command: Option<&PaneCommand>,
         rows: u16,
         cols: u16,
@@ -580,7 +589,7 @@ impl SessionRegistry {
         on_exit: SessionExitFn,
     ) -> io::Result<SessionId> {
         self.spawn_restored(
-            cwd, prompt, command, None, rows, cols, on_output, on_cwd, on_command, on_exit,
+            cwd, prompt, shell, command, None, rows, cols, on_output, on_cwd, on_command, on_exit,
         )
     }
 
@@ -591,6 +600,7 @@ impl SessionRegistry {
         &self,
         cwd: Option<&Path>,
         prompt: &str,
+        shell: Option<&str>,
         command: Option<&PaneCommand>,
         history: Option<&str>,
         rows: u16,
@@ -612,7 +622,7 @@ impl SessionRegistry {
                 .and_then(|c| c.argv.first())
                 .and_then(|program| Path::new(program).file_name())
                 .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(crate::command::shell_name);
+                .unwrap_or_else(|| crate::command::program_name(&crate::shells::shell_path(shell)));
             Arc::new(Mutex::new(CommandTracker::new(
                 name,
                 Box::new(move |c| on_command(id, c)),
@@ -624,7 +634,7 @@ impl SessionRegistry {
         let output_reader = Arc::clone(&reader);
         let alive = Arc::new(AtomicBool::new(true));
         let exit_alive = Arc::clone(&alive);
-        let (mut cmd, redraws) = pane_command(id, cwd, prompt, command, self.control.get());
+        let (mut cmd, redraws) = pane_command(id, cwd, prompt, shell, command, self.control.get());
         // The integration deletes the file once read; one a shell without it leaves goes when the session ends.
         let history = match (
             history.filter(|l| command.is_none() && !l.trim().is_empty()),

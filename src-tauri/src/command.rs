@@ -230,16 +230,6 @@ pub fn program_name(path: &str) -> String {
     }
 }
 
-/// The name of the user's default shell (`$SHELL`, or `%COMSPEC%` on Windows).
-pub fn shell_name() -> String {
-    let var = if cfg!(windows) { "COMSPEC" } else { "SHELL" };
-    std::env::var(var)
-        .ok()
-        .filter(|s| !s.is_empty())
-        .map(|s| program_name(&s))
-        .unwrap_or_else(|| if cfg!(windows) { "cmd" } else { "sh" }.to_string())
-}
-
 /// The name of process `pid`, or `None` when it cannot be read.
 #[cfg(target_os = "macos")]
 pub fn process_name(pid: i32) -> Option<String> {

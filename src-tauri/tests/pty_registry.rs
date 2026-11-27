@@ -369,6 +369,7 @@ fn command_found_on_the_callers_path_runs_with_the_variables_and_its_exit_is_rep
         .spawn_tracked(
             None,
             "off",
+            None,
             Some(&command),
             24,
             80,

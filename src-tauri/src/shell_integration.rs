@@ -224,17 +224,38 @@ pub fn command_for(shell: &str, prompt: &str, dir: &Path) -> Option<CommandBuild
     Some(cmd)
 }
 
-/// The command that starts the user's default shell with `prompt`, its scripts in `dir`, which also gets `prompt` as
-/// the current choice; without a folder, or wherever [`command_for`] gives `None`, the plain default shell. The flag
-/// says whether the shell redraws its prompt on SIGUSR1 (an integrated zsh).
-pub fn shell_command(prompt: &str, dir: Option<&Path>) -> (CommandBuilder, bool) {
-    let default = CommandBuilder::new_default_prog();
-    let shell = default.get_shell();
+/// The command that starts `shell` (resolved from the Settings choice, see [`crate::shells::resolve`]; `None` for the
+/// user's default shell) with `prompt`, its scripts in `dir`, which also gets `prompt` as the current choice; without
+/// a folder, or wherever [`command_for`] gives `None`, the shell starts plainly, as the default shell does (a login
+/// shell on macOS and Linux). On macOS and Linux the command gets `SHELL` naming the shell it runs; on Windows a
+/// chosen shell is started directly and `SHELL` and `COMSPEC` are left alone. The flag says whether the shell redraws
+/// its prompt on SIGUSR1 (an integrated zsh).
+pub fn shell_command(
+    prompt: &str,
+    shell: Option<&Path>,
+    dir: Option<&Path>,
+) -> (CommandBuilder, bool) {
+    let mut default = match shell {
+        Some(path) if cfg!(windows) => CommandBuilder::new(path),
+        _ => CommandBuilder::new_default_prog(),
+    };
+    let shell = shell
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|| default.get_shell());
+    // portable-pty starts the program `SHELL` names in the builder as the login shell, and hands it the same `SHELL`.
+    if cfg!(unix) {
+        default.env("SHELL", &shell);
+    }
     if let Some(dir) = dir {
         let _ = write_prompt(dir, prompt);
     }
     match dir.and_then(|dir| command_for(&shell, prompt, dir)) {
-        Some(cmd) => (cmd, redraws_on_signal(&shell)),
+        Some(mut cmd) => {
+            if cfg!(unix) {
+                cmd.env("SHELL", &shell);
+            }
+            (cmd, redraws_on_signal(&shell))
+        }
         None => (default, false),
     }
 }
@@ -469,6 +490,41 @@ mod tests {
             fs::read_to_string(dir.join(HIGHLIGHT_FILE)).unwrap(),
             "#3C6680"
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Chosen shell instead of the system default, SHELL follows the choice: what a shell starts with, without
+    /// starting it.
+    #[cfg(unix)]
+    #[test]
+    fn chosen_shell_starts_as_the_default_does_with_shell_naming_it() {
+        let dir = std::env::temp_dir().join(format!("tiili-shell-command-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let scripts = dir.join("integration");
+        let zsh = dir.join("zsh");
+        let default = CommandBuilder::new_default_prog().get_shell();
+        let zsh_text = zsh.to_string_lossy().into_owned();
+        type Case<'a> = (Option<&'a Path>, Option<&'a Path>, bool, Option<&'a str>, &'a str);
+        // (chosen, scripts folder, starts as the default program, program otherwise, SHELL)
+        let cases: Vec<Case> = vec![
+            // A shell without an integration starts as the default program does, a login shell named by SHELL.
+            (Some(Path::new("/bin/sh")), Some(&scripts), true, None, "/bin/sh"),
+            (Some(Path::new("/bin/sh")), None, true, None, "/bin/sh"),
+            // zsh starts through the integration, with SHELL naming it too.
+            (Some(&zsh), Some(&scripts), false, Some(&zsh_text), &zsh_text),
+            (Some(&zsh), None, true, None, &zsh_text),
+            (None, None, true, None, &default),
+        ];
+        for (chosen, scripts, default_prog, program, shell) in cases {
+            let (cmd, redraws) = shell_command("off", chosen, scripts);
+            let label = format!("{chosen:?} {scripts:?}");
+            assert_eq!(cmd.is_default_prog(), default_prog, "{label}");
+            if let Some(program) = program {
+                assert_eq!(cmd.get_argv()[0], OsString::from(program), "{label}");
+            }
+            assert_eq!(cmd.get_env("SHELL"), Some(std::ffi::OsStr::new(shell)), "{label}");
+            assert_eq!(redraws, program.is_some(), "{label}");
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 
