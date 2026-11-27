@@ -48,7 +48,7 @@ describe("Tauri backend", () => {
   });
 
   const launches: [string, Parameters<Backend["spawn"]>[5], Record<string, unknown>][] = [
-    ["Open a pane (a shell): no command", undefined, { command: null, path: null }],
+    ["Open a pane (a shell): no command, the system default shell", undefined, { command: null, path: null, shell: null }],
     ["Open a pane: the command, no caller PATH", { command: ["top"] }, { command: ["top"], path: null }],
     [
       "Command found on the caller's PATH: the command and that PATH",
@@ -60,6 +60,26 @@ describe("Tauri backend", () => {
     invoke.mockClear();
     await tauriBackend().spawn(24, 80, "/tmp", "off", () => undefined, launch);
     expect(invoke.mock.calls[0]).toEqual(["pty_spawn", expect.objectContaining({ cwd: "/tmp", ...passed })]);
+  });
+
+  const shells: [string, string | undefined, string | null][] = [
+    ["New panes use the chosen shell: its path reaches pty_spawn", "/usr/bin/zsh", "/usr/bin/zsh"],
+    ["System default by default: an empty choice reaches pty_spawn as null", "", null],
+    ["System default by default: a blank choice reaches pty_spawn as null", "  ", null],
+    ["System default by default: no choice reaches pty_spawn as null", undefined, null],
+  ];
+  it.each(shells)("%s", async (_name, shell, passed) => {
+    invoke.mockClear();
+    await tauriBackend().spawn(24, 80, "/tmp", "off", () => undefined, undefined, undefined, shell);
+    expect(invoke.mock.calls[0]).toEqual(["pty_spawn", expect.objectContaining({ shell: passed })]);
+  });
+
+  it("Installed shells listed: the Shell menu's shells come from shells_installed", async () => {
+    invoke.mockClear();
+    const installed = { default: "fish", shells: ["/bin/bash", "/usr/bin/zsh", "/usr/bin/fish"] };
+    invoke.mockResolvedValueOnce(installed);
+    await expect(tauriBackend().installedShells()).resolves.toEqual(installed);
+    expect(invoke.mock.calls).toEqual([["shells_installed"]]);
   });
 });
 

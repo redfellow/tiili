@@ -296,7 +296,7 @@ export async function openTerminal(
   };
 
   const spawn = async (dir?: string) => {
-    started(await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history));
+    started(await backend.spawn(term.rows, term.cols, dir, settings().prompt, output, launch, restore?.history, settings().shell));
   };
 
   const unlistenExit = await backend.onExit((id, code) => {

@@ -69,6 +69,7 @@ fn change_directory_into_a_repository_tracked_root_follows() {
             Some(&start),
             "off",
             None,
+            None,
             24,
             80,
             Box::new(|_, _| {}),
@@ -118,6 +119,7 @@ fn exit_ssh_on_macos_or_linux_pane_is_local_again() {
         .spawn_tracked(
             Some(&repo),
             "off",
+            None,
             None,
             24,
             80,

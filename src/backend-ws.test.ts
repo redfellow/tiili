@@ -75,6 +75,11 @@ describe("WebSocket backend", () => {
     expect(setup().backend.moves).toBeUndefined();
   });
 
+  it("Shell menu in the dev browser: only the system default is offered", async () => {
+    const { backend } = setup();
+    await expect(backend.installedShells()).resolves.toEqual({ default: "", shells: [] });
+  });
+
   it("Open panes keep their prompt in the dev browser: setPrompt sends nothing to the shells", async () => {
     const { backend, sockets } = setup();
     await backend.spawn(24, 80, undefined, "off", () => undefined);

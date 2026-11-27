@@ -173,6 +173,8 @@ export function wsBackend(overrides: Partial<WsOptions> = {}): Backend {
       showContextMenu(items, event.clientX, event.clientY);
     },
     onAppEvent: async () => undefined,
+    // The dev bridge always starts its default shell, whose name the page does not know.
+    installedShells: async () => ({ default: "", shells: [] }),
     loadSettings: async () => null,
     saveSettings: async () => undefined,
     // No native message box with a Save button here: OK discards, Cancel keeps editing.
