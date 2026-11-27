@@ -504,14 +504,32 @@ mod tests {
         let zsh = dir.join("zsh");
         let default = CommandBuilder::new_default_prog().get_shell();
         let zsh_text = zsh.to_string_lossy().into_owned();
-        type Case<'a> = (Option<&'a Path>, Option<&'a Path>, bool, Option<&'a str>, &'a str);
+        type Case<'a> = (
+            Option<&'a Path>,
+            Option<&'a Path>,
+            bool,
+            Option<&'a str>,
+            &'a str,
+        );
         // (chosen, scripts folder, starts as the default program, program otherwise, SHELL)
         let cases: Vec<Case> = vec![
             // A shell without an integration starts as the default program does, a login shell named by SHELL.
-            (Some(Path::new("/bin/sh")), Some(&scripts), true, None, "/bin/sh"),
+            (
+                Some(Path::new("/bin/sh")),
+                Some(&scripts),
+                true,
+                None,
+                "/bin/sh",
+            ),
             (Some(Path::new("/bin/sh")), None, true, None, "/bin/sh"),
             // zsh starts through the integration, with SHELL naming it too.
-            (Some(&zsh), Some(&scripts), false, Some(&zsh_text), &zsh_text),
+            (
+                Some(&zsh),
+                Some(&scripts),
+                false,
+                Some(&zsh_text),
+                &zsh_text,
+            ),
             (Some(&zsh), None, true, None, &zsh_text),
             (None, None, true, None, &default),
         ];
@@ -522,7 +540,11 @@ mod tests {
             if let Some(program) = program {
                 assert_eq!(cmd.get_argv()[0], OsString::from(program), "{label}");
             }
-            assert_eq!(cmd.get_env("SHELL"), Some(std::ffi::OsStr::new(shell)), "{label}");
+            assert_eq!(
+                cmd.get_env("SHELL"),
+                Some(std::ffi::OsStr::new(shell)),
+                "{label}"
+            );
             assert_eq!(redraws, program.is_some(), "{label}");
         }
         let _ = fs::remove_dir_all(&dir);

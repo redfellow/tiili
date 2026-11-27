@@ -1,4 +1,4 @@
-import type { UnsavedChoice } from "./backend";
+import type { InstalledShells, UnsavedChoice } from "./backend";
 import type { Platform } from "./keymap";
 import {
   integrationChanges, type IntegrationOutcome, integrationRowView, type Integrations, type IntegrationStatus,
@@ -39,6 +39,8 @@ const LIGATURE_SAMPLE = "-> => != === <= >= ::";
 
 /** The preview's terminal is drawn no bigger than this, so a large font still fits the strip. */
 const PREVIEW_MAX_SIZE = 18;
+/** The Shell menu's Other… entry; no shell path can be this value. */
+const OTHER_SHELL = "\u0000other";
 
 export interface SettingsDialogOptions {
   initial: Settings;
@@ -71,6 +73,11 @@ export interface SettingsDialogOptions {
   clearRestored?: () => Promise<void>;
   /** Turns agent integrations on and off from the Integrations tab. Without it (the dev server) the tab says so. */
   integrations?: Integrations;
+  /**
+   * The default shell's name and the installed shells, for the Shell menu; asked each time the settings open. Without
+   * it the menu offers System default and Other… only.
+   */
+  installedShells?: () => Promise<InstalledShells>;
 }
 
 export interface SettingsDialog {
@@ -579,8 +586,8 @@ function terminalRun(prompt: PromptSegment[][], command: string, output: HTMLEle
 }
 
 /**
- * Builds the settings form: tabs for Style (Theme, Prompt, Terminal), Typography (Font) and Behaviour (Tiling, Panes,
- * Attention, App, Remote shells) and Integrations (Coding agents) at the top, a live preview under them on Style and
+ * Builds the settings form: tabs for Style (Theme, Prompt, Terminal), Typography (Font) and Behaviour (Shell, Tiling,
+ * Panes, Attention, App, Remote shells) and Integrations (Coding agents) at the top, a live preview under them on Style and
  * Typography, the selected tab's body, which alone scrolls, and a footer with Reset to defaults, Cancel and Save. Every
  * change applies at once as a preview; only Save writes it, and Cancel and Esc go back to the opening settings. Either
  * one then calls `close`. Integrations are not previewed: Save installs the ticked ones and uninstalls the unticked
@@ -643,6 +650,38 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const bounce = segmented(asks, BOUNCE_MODES.map((value) => ({ value, label: BOUNCE_LABELS[value] })), changed);
   const status = element("p", { className: "settings-status" });
   status.setAttribute("role", "status");
+
+  // The Shell menu: System default (saved as ""), the installed shells' paths, and Other…, which shows a field for
+  // any other path. A saved path that is not in the list shows as Other… with that path.
+  const shellMenu = element("select", { name: "shell" });
+  shellMenu.setAttribute("aria-label", "Shell");
+  const shellPath = element("input", { type: "text", name: "shellPath", placeholder: "/opt/homebrew/bin/nu" });
+  shellPath.spellcheck = false;
+  shellPath.setAttribute("aria-label", "Shell path");
+  let installed: InstalledShells = { default: "", shells: [] };
+  // Other… stays chosen once picked or typed into, even while its path is empty or names a listed shell.
+  let shellOther = false;
+  /** Fills the Shell menu and shows `chosen`, the saved path or "" for System default. */
+  const renderShells = (chosen: string) => {
+    const option = (value: string, label: string) => element("option", { value }, label);
+    shellMenu.replaceChildren(
+      option("", installed.default ? `System default (${installed.default})` : "System default"),
+      ...installed.shells.map((path) => option(path, path)),
+      option(OTHER_SHELL, "Other…"));
+    const other = shellOther || (chosen !== "" && !installed.shells.includes(chosen));
+    shellMenu.value = other ? OTHER_SHELL : chosen;
+    shellPath.hidden = !other;
+    shellPath.value = other ? chosen : "";
+  };
+  shellMenu.addEventListener("change", () => {
+    shellOther = shellMenu.value === OTHER_SHELL;
+    if (!shellOther) return;
+    shellPath.hidden = false;
+    shellPath.focus();
+  });
+  shellPath.addEventListener("input", () => {
+    shellOther = true;
+  });
 
   const reset = element("button", { type: "button", className: "settings-reset" }, "Reset to defaults");
   const confirmReset = element("button", { type: "button", className: "settings-reset" }, "Reset");
@@ -750,6 +789,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   copyAgents.addEventListener("click", () => void options.copy(CLAUDE_CODE_SETTING).catch(() => {}));
 
   const behaviourFields = [
+    section("Shell", "Applies to new panes.", row("Program", shellMenu, shellPath)),
     section("Tiling", "How panes are arranged as you open and close them.", tiling.grid),
     section("Panes", undefined,
       row("Responsive text", check(responsiveOn, "Shrink text in small panes"),
@@ -949,6 +989,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     responsiveStrength.input.value = String(settings.responsive.strength);
     responsiveStrength.input.disabled = !settings.responsive.enabled;
     responsiveStrength.sync();
+    renderShells(settings.shell);
     renderPreview(settings);
   };
 
@@ -978,6 +1019,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     prompt: prompt.value(),
     updates: { autoCheck: updatesAuto.checked },
     attention: { notify: notify.value(), badge: badge.checked, bounce: bounce.value() },
+    shell: shellMenu.value === OTHER_SHELL ? shellPath.value : shellMenu.value,
   });
 
   const report = (error: unknown) => {
@@ -1131,6 +1173,7 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   form.addEventListener("submit", (event) => event.preventDefault());
   reset.addEventListener("click", () => ask(true));
   confirmReset.addEventListener("click", () => {
+    shellOther = false;
     change(DEFAULT_SETTINGS);
     show(session.draft);
     ask(false, true);
@@ -1164,12 +1207,19 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
         osFonts = names;
         if (form.isConnected) renderFamilies(family.value());
       });
+      shellOther = false;
+      // So are the installed shells; the menu refills, keeping what is chosen, when they are known.
+      void options.installedShells?.().then((found) => {
+        installed = found;
+        if (form.isConnected) renderShells(session.draft.shell);
+      }).catch(() => {});
       // Shown once on screen, so the selected theme card can scroll into view.
       show(session.saved);
       theme.grid.focus();
       theme.reveal();
     },
     adopt(settings) {
+      shellOther = false;
       session.commit(settings);
       session.edit(settings);
       if (form.isConnected) show(settings);

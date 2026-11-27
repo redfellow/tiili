@@ -210,9 +210,9 @@ impl PtySession {
 
     /// Starts `shell` (the user's default shell when absent, empty or not a file this user may run; see
     /// [`crate::shells::resolve`]) in `cwd`, as the default shell starts (a login shell on macOS and Linux, with
-    /// `SHELL` naming it). Without `cwd`, or when it is not a folder, the shell starts in the home folder. zsh, bash and PowerShell start through tiili's shell
-    /// integration, which sets `prompt` (Off included) where the user's own startup files left the
-    /// default one, and follows later choices from [`set_prompt`]. Every shell gets
+    /// `SHELL` naming it). Without `cwd`, or when it is not a folder, the shell starts in the home folder. zsh, bash
+    /// and PowerShell start through tiili's shell integration, which sets `prompt` (Off included) where the user's own
+    /// startup files left the default one, and follows later choices from [`set_prompt`]. Every shell gets
     /// `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=tiili` and `TERM_PROGRAM_VERSION`.
     pub fn spawn_in(
         cwd: Option<&Path>,
@@ -567,8 +567,8 @@ impl SessionRegistry {
     }
 
     /// Like [`spawn`](Self::spawn), starting `shell` instead of the default shell when given (see [`pane_command`]),
-    /// running `command` directly instead of the shell when given (its exit ends the session as a shell's does), and with `on_cwd` follows the shell's working directory and
-    /// repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
+    /// running `command` directly instead of the shell when given (its exit ends the session as a shell's does), and
+    /// with `on_cwd` follows the shell's working directory and repository: first the folder it starts in, then OSC 7 from the shell on every platform and,
     /// on macOS and Linux, the shell process's working directory about once a second. An OSC 7
     /// naming another host makes the pane remote until a local one arrives or, on macOS and Linux,
     /// the shell is back in front. With

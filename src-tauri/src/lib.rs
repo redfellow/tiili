@@ -209,7 +209,8 @@ fn report_foreground(app: &AppHandle, id: SessionId) {
     app_icon::foreground(app, id, at_shell);
 }
 
-/// Starts a new default shell in `cwd` (home folder when absent or unreadable) with the prompt chosen
+/// Starts a new shell in `cwd` (home folder when absent or unreadable): `shell`, the shell chosen in Settings, or the
+/// system default when it is absent, empty or cannot be run (see [`shells::resolve`]), with the prompt chosen
 /// in Settings (`off` when absent), or `command` directly when given (looked up on and run with `path`, the `PATH` of
 /// the `tiili open` that asked for it, when given), and returns its session id. A shell started with `history` has that
 /// line as the newest entry of its history. Its output streams over `on_output`, a channel of its own, and its working
@@ -228,6 +229,7 @@ fn pty_spawn(
     command: Option<Vec<String>>,
     path: Option<String>,
     history: Option<String>,
+    shell: Option<String>,
     on_output: Channel<Vec<u8>>,
 ) -> Result<SessionId, String> {
     let command = command
@@ -255,6 +257,7 @@ fn pty_spawn(
         .spawn_restored(
             cwd.as_deref().map(Path::new),
             prompt.as_deref().unwrap_or(shell_integration::PROMPT_OFF),
+            shell.as_deref().filter(|s| !s.trim().is_empty()),
             command.as_ref(),
             history.as_deref(),
             rows,
@@ -308,6 +311,13 @@ fn pty_spawn(
 
 /// Session `id`'s pane is leaving its window: its output is kept from now until `pty_attach`. The old terminal never
 /// acknowledges again, so the flow gate counts from zero: what is kept from now is acknowledged by the new window.
+/// What the Settings dialogue's Shell menu offers: the system default shell's program name and the shells installed
+/// on this machine (see [`shells::installed`]).
+#[tauri::command]
+fn shells_installed() -> shells::InstalledShells {
+    shells::installed_shells()
+}
+
 #[tauri::command]
 fn pty_detach(
     sinks: State<'_, SessionSinks>,
@@ -750,6 +760,7 @@ pub fn run() {
             pty_running,
             pty_set_prompt,
             pty_set_highlight,
+            shells_installed,
             settings::settings_load,
             settings::settings_save,
             settings::settings_open,

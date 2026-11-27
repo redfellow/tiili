@@ -132,6 +132,8 @@ export interface Settings {
   appIcon: AppIcon;
   /** Applies to open panes and new ones. */
   prompt: PromptId;
+  /** The path of the shell new panes start; empty for the system default. Open panes keep the shell they run. */
+  shell: string;
   updates: UpdateSettings;
   /** How a pane that needs you shows outside tiili; read by the app, which mirrors these defaults. */
   attention: AttentionSettings;
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
   prompt: "off",
+  shell: "",
   updates: { autoCheck: true },
   attention: { notify: "messages", badge: true, bounce: "once" },
 };
@@ -207,7 +210,7 @@ function family(value: unknown): string {
 /**
  * Settings from anything read back from disk or a form: each field that is missing or of the wrong type gets its
  * default, numbers are clamped to their range and snapped to their step, an unknown theme becomes Koski and an
- * unknown prompt becomes Off.
+ * unknown prompt becomes Off. The shell's path is trimmed; one that is not text is the system default.
  */
 export function normalize(value: unknown): Settings {
   const raw = isRecord(value) ? value : {};
@@ -270,6 +273,7 @@ export function normalize(value: unknown): Settings {
     },
     appIcon: APP_ICONS.includes(raw.appIcon as AppIcon) ? (raw.appIcon as AppIcon) : DEFAULT_SETTINGS.appIcon,
     prompt: PROMPT_IDS.includes(raw.prompt as PromptId) ? (raw.prompt as PromptId) : DEFAULT_SETTINGS.prompt,
+    shell: typeof raw.shell === "string" ? raw.shell.trim() : DEFAULT_SETTINGS.shell,
     updates: {
       autoCheck: typeof updates.autoCheck === "boolean" ? updates.autoCheck : DEFAULT_SETTINGS.updates.autoCheck,
     },
