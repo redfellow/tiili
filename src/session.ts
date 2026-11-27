@@ -21,10 +21,17 @@ export interface SavedPane {
   program?: string;
 }
 
-/** One tab: its layout and panes in grid order, and which pane had the focus. */
+/** A pane minimized in its tab, with its grid index when it was minimized. */
+export type SavedMinimized = SavedPane & { at: number };
+
+/**
+ * One tab: its layout and panes in grid order, and which pane had the focus. Its minimized panes are kept apart from
+ * `panes`, so the layout still matches the grid; a session saved before minimizing has none.
+ */
 export interface SavedTab {
   layout: LayoutState;
   panes: SavedPane[];
+  minimized?: SavedMinimized[];
   focused?: number;
   zenPane?: number;
   name?: string;
@@ -58,34 +65,36 @@ export interface Restored {
 export type PaneSnapshot = SavedPane;
 
 /**
- * The window's state to save: its panes in grid order, the layout, and the focused pane. `keepCommands` false
- * (Restore scrollback and commands is off) leaves out the command lines; the program names stay for the reminder.
- * A window without panes gives no tab, so it does not reopen.
+ * The window's state to save: its panes in grid order, the layout, the focused pane and the `minimized` panes, in the
+ * order they were minimized. `keepCommands` false (Restore scrollback and commands is off) leaves out the command
+ * lines; the program names stay for the reminder. A window without panes gives no tab, so it does not reopen.
  */
 export function snapshotWindow(
   layout: LayoutState,
   panes: PaneSnapshot[],
   focused: PaneId | undefined,
   keepCommands: boolean,
+  minimized: SavedMinimized[] = [],
 ): TabState {
+  const keep = <T extends SavedPane>(pane: T): T => {
+    const saved = { ...pane };
+    if (!keepCommands) delete saved.command;
+    return saved;
+  };
   const byId = new Map(panes.map((pane) => [pane.id, pane]));
   const ordered = layout.order.flatMap((id) => {
     const pane = byId.get(id);
-    if (!pane) return [];
-    const saved: SavedPane = { ...pane };
-    if (!keepCommands) delete saved.command;
-    return [saved];
+    return pane ? [keep(pane)] : [];
   });
   if (ordered.length === 0) return { tabs: [], activeTab: 0 };
   const order = ordered.map((pane) => pane.id);
-  return {
-    tabs: [{
-      layout: { ...layout, order },
-      panes: ordered,
-      focused: focused !== undefined && order.includes(focused) ? focused : undefined,
-    }],
-    activeTab: 0,
+  const tab: SavedTab = {
+    layout: { ...layout, order },
+    panes: ordered,
+    focused: focused !== undefined && order.includes(focused) ? focused : undefined,
   };
+  if (minimized.length > 0) tab.minimized = minimized.map(keep);
+  return { tabs: [tab], activeTab: 0 };
 }
 
 /** How one saved pane reopens. */
@@ -101,9 +110,22 @@ export interface PaneRestore {
   history?: string;
 }
 
-/** How a saved window reopens: its panes in grid order, the tiling and track sizes, and the focused pane. */
+/**
+ * How a saved minimized pane reopens: as other panes do, minimized at grid index `at`, its badge naming what ran in it
+ * (`null` when nothing is known, or for a remote pane).
+ */
+export interface MinimizedRestore extends PaneRestore {
+  at: number;
+  command: string | null;
+}
+
+/**
+ * How a saved window reopens: its panes in grid order, the tiling and track sizes, the focused pane and the panes
+ * that reopen minimized.
+ */
 export interface WindowRestore {
   panes: PaneRestore[];
+  minimized: MinimizedRestore[];
   mode?: TilingMode;
   /**
    * The grid's columns and rows: in Grid mode the saved shape when it still fits the panes (Grid chose it for the
@@ -183,7 +205,8 @@ export function restorePlans(restored: Restored, withScrollback: boolean): Windo
  * still match the grid. A terminal pane's preface holds, with
  * `withScrollback`, its saved scrollback and the dim divider; then a dim note when its folder no longer exists, and
  * a dim reminder of what ran: the connected host for a remote pane, else the command line or the program's name.
- * The command line, with `withScrollback`, also becomes the newest history entry. Nothing is ever re-run.
+ * The command line, with `withScrollback`, also becomes the newest history entry. Nothing is ever re-run. Its
+ * minimized panes reopen the same way, minimized, their grid index kept within the panes.
  */
 function tabPlan(tab: SavedTab, restored: Restored, withScrollback: boolean): WindowRestore | undefined {
   if (tab.panes.length === 0) return undefined;
@@ -200,7 +223,20 @@ function tabPlan(tab: SavedTab, restored: Restored, withScrollback: boolean): Wi
     ? { colSizes: layout.colSizes, rowSizes: layout.rowSizes }
     : undefined;
   const focused = Math.max(0, saved.findIndex((pane) => pane.id === tab.focused));
-  return { panes: saved.map((pane) => paneRestore(restored, pane, withScrollback)), mode, cols, rows, sizes, focused };
+  const minimized = (Array.isArray(tab.minimized) ? tab.minimized : []).map((pane): MinimizedRestore => {
+    const at = Number.isInteger(pane.at) ? Math.min(Math.max(pane.at, 0), saved.length) : saved.length;
+    const ran = pane.kind === "terminal" && !pane.host ? plain(pane.command ?? "") || plain(pane.program ?? "") : "";
+    return { ...paneRestore(restored, pane, withScrollback), at, command: ran || null };
+  });
+  return {
+    panes: saved.map((pane) => paneRestore(restored, pane, withScrollback)),
+    minimized,
+    mode,
+    cols,
+    rows,
+    sizes,
+    focused,
+  };
 }
 
 /**

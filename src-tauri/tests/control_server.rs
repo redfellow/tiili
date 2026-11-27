@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use tiili_lib::control::{
     parse_reply, request_line, AttentionRecord, CliError, Op, PaneInfo, Reply, RunningRecord,
 };
-use tiili_lib::control_server::{bind, respond, Handler};
+use tiili_lib::control_server::{bind, respond, Handler, OpenRequest};
 use tiili_lib::pty::SessionId;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -23,15 +23,15 @@ type Seen = Vec<(SessionId, Op)>;
 struct Recorder(Mutex<Seen>);
 
 impl Handler for Recorder {
-    fn open(
-        &self,
-        caller: SessionId,
-        cwd: Option<String>,
-        title: Option<String>,
-        command: Vec<String>,
-        path: Option<String>,
-        key: Option<String>,
-    ) -> Result<(SessionId, bool), String> {
+    fn open(&self, caller: SessionId, request: OpenRequest) -> Result<(SessionId, bool), String> {
+        let OpenRequest {
+            cwd,
+            title,
+            command,
+            path,
+            key,
+            minimized,
+        } = request;
         // The key "again" stands for one already open.
         let reused = key.as_deref() == Some("again");
         self.0.lock().unwrap().push((
@@ -42,6 +42,7 @@ impl Handler for Recorder {
                 command,
                 path,
                 key,
+                minimized,
             },
         ));
         Ok((caller + 40, reused))
@@ -83,6 +84,30 @@ impl Handler for Recorder {
         }
     }
 
+    fn minimize(
+        &self,
+        caller: SessionId,
+        target: Option<SessionId>,
+        minimize: bool,
+    ) -> Result<(), CliError> {
+        let op = if minimize {
+            Op::Minimize { target }
+        } else {
+            Op::Restore { target }
+        };
+        self.0.lock().unwrap().push((caller, op));
+        // Pane 5 stands for one the caller did not open; pane 7 is its tab's only visible pane.
+        match (target, minimize) {
+            (Some(5), _) => Err(CliError::NotOpenedByYou(
+                "pane 5 was not opened by this pane".into(),
+            )),
+            (None, true) if caller == 7 => Err(CliError::LastVisiblePane(
+                "pane 7 is the only pane showing in its tab".into(),
+            )),
+            _ => Ok(()),
+        }
+    }
+
     fn panes(&self) -> Result<Vec<PaneInfo>, String> {
         self.0.lock().unwrap().push((0, Op::Panes));
         Ok(vec![PaneInfo {
@@ -94,7 +119,7 @@ impl Handler for Recorder {
     }
 }
 
-/// The pane the recorder lists: every field of the record set, so all of it crosses the wire.
+/// The pane the recorder lists: every field of the record set, minimized too, so all of it crosses the wire.
 fn tmp_pane(id: SessionId) -> PaneInfo {
     PaneInfo {
         id,
@@ -115,6 +140,7 @@ fn tmp_pane(id: SessionId) -> PaneInfo {
         tab: Some(1),
         key: Some("dev".into()),
         opened_by_you: true,
+        minimized: true,
     }
 }
 
@@ -184,6 +210,7 @@ fn request_with_the_right_token_reaches_the_handler_and_others_are_refused() {
         command: vec!["tail".into(), "-f".into(), "x.log".into()],
         path: Some("/opt/bin:/usr/bin".into()),
         key: None,
+        minimized: false,
     };
     let wrong = "f".repeat(64);
     // The line sent, the reply expected (an error just has to be one), and what the handler then holds.
@@ -256,6 +283,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
                     command: vec!["top".into()],
                     path: None,
                     key: None,
+                    minimized: false,
                 },
             ),
             Ok(Reply::Opened {
@@ -276,6 +304,7 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
                     command: vec!["npm".into()],
                     path: None,
                     key: Some("again".into()),
+                    minimized: false,
                 },
             ),
             Ok(Reply::Opened {
@@ -363,6 +392,33 @@ fn request_with_the_right_token_is_answered_and_others_are_refused() {
             );
         }
         assert_eq!(recorder.0.lock().unwrap().len(), calls, "{line}");
+    }
+}
+
+/// Minimize own pane, Restore an opened pane, Refuse another pane, Last visible pane: each `minimize` and `restore`
+/// line reaches the handler as the op it names, and the handler's refusal comes back by its code.
+#[test]
+fn minimize_and_restore_reach_the_handler_as_sent() {
+    // The caller, the op sent, and the reply expected (an error by its code).
+    let cases: Vec<(SessionId, Op, Result<Reply, &str>)> = vec![
+        (3, Op::Minimize { target: None }, Ok(Reply::Done)),
+        (3, Op::Minimize { target: Some(8) }, Ok(Reply::Done)),
+        (3, Op::Restore { target: None }, Ok(Reply::Done)),
+        (3, Op::Restore { target: Some(8) }, Ok(Reply::Done)),
+        (
+            3,
+            Op::Minimize { target: Some(5) },
+            Err("not_opened_by_you"),
+        ),
+        (3, Op::Restore { target: Some(5) }, Err("not_opened_by_you")),
+        (7, Op::Minimize { target: None }, Err("last_visible_pane")),
+    ];
+    for (caller, op, reply) in cases {
+        let recorder = Recorder::default();
+        let line = request_line(TOKEN, caller, &op);
+        let answer = respond(&line, TOKEN, &recorder);
+        assert_eq!(parse_reply(&answer).map_err(|e| e.code()), reply, "{line}");
+        assert_eq!(*recorder.0.lock().unwrap(), vec![(caller, op)], "{line}");
     }
 }
 

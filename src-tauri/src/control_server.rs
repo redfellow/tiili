@@ -1,4 +1,4 @@
-//! The local endpoint `tiili open`, `list`, `attention` and `close` talk to (see [`crate::control`]): a Unix domain socket with 0600
+//! The local endpoint `tiili open`, `list`, `attention`, `close`, `minimize` and `restore` talk to (see [`crate::control`]): a Unix domain socket with 0600
 //! permissions in a 0700 folder on macOS and Linux, a named pipe only the current user and local clients can open on
 //! Windows. Each connection carries one request line and gets one reply line. What a request does is up to a
 //! [`Handler`], so the endpoint tests without the app.
@@ -17,20 +17,24 @@ use crate::pty::SessionId;
 /// The longest request line read; a `PATH` and a command line fit many times over.
 const MAX_REQUEST: u64 = 1 << 20;
 
+/// What a `tiili open` asks for: a pane running `command` in `cwd`, titled `title`, looked up on and run with `path`
+/// (the app's own when absent); with `key`, the caller's live pane opened with that key instead; with `minimized`,
+/// a pane that opens minimized to a badge instead of joining the grid.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OpenRequest {
+    pub cwd: Option<String>,
+    pub title: Option<String>,
+    pub command: Vec<String>,
+    pub path: Option<String>,
+    pub key: Option<String>,
+    pub minimized: bool,
+}
+
 /// Carries out requests that passed the token check, for the pane `caller` they came from.
 pub trait Handler: Send + Sync + 'static {
-    /// Opens a pane in `caller`'s window running `command` in `cwd`, titled `title`, looked up on and run with
-    /// `path`; returns the new pane's id. With `key`, `caller`'s live pane opened with that key is returned instead
-    /// when there is one, with `true` for reused.
-    fn open(
-        &self,
-        caller: SessionId,
-        cwd: Option<String>,
-        title: Option<String>,
-        command: Vec<String>,
-        path: Option<String>,
-        key: Option<String>,
-    ) -> Result<(SessionId, bool), String>;
+    /// Opens the pane `request` asks for in `caller`'s window; returns the new pane's id. With a key, `caller`'s
+    /// live pane opened with that key is returned instead when there is one, with `true` for reused.
+    fn open(&self, caller: SessionId, request: OpenRequest) -> Result<(SessionId, bool), String>;
 
     /// The panes of `caller`'s window, in grid order.
     fn list(&self, caller: SessionId) -> Result<Vec<PaneInfo>, String>;
@@ -46,6 +50,16 @@ pub trait Handler: Send + Sync + 'static {
     /// Closes pane `target` when `caller` opened it; the error is the reply's (`not_opened_by_you`,
     /// `no_such_pane` or `close_failed`).
     fn close(&self, caller: SessionId, target: SessionId) -> Result<(), CliError>;
+
+    /// Minimizes pane `target` (`minimize`) or restores it to its tab's grid, `caller`'s own pane when `None`;
+    /// a target needs `caller` to have opened it, as [`Handler::close`] does. The error is the reply's
+    /// (`not_opened_by_you`, `no_such_pane`, `last_visible_pane` or `minimize_failed`).
+    fn minimize(
+        &self,
+        caller: SessionId,
+        target: Option<SessionId>,
+        minimize: bool,
+    ) -> Result<(), CliError>;
 
     /// Every pane of every window, window by window, for the token-free `panes` request: what `list` reports,
     /// without what only the caller's own panes have (`self`, `opened_by_you`, `key`).
@@ -65,8 +79,19 @@ pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
                     command,
                     path,
                     key,
+                    minimized,
                 },
-        }) => match handler.open(pane, cwd, title, command, path, key) {
+        }) => match handler.open(
+            pane,
+            OpenRequest {
+                cwd,
+                title,
+                command,
+                path,
+                key,
+                minimized,
+            },
+        ) {
             Ok((id, reused)) => opened_reply(id, reused),
             Err(error) => error_reply(&CliError::OpenFailed(error)),
         },
@@ -88,10 +113,23 @@ pub fn respond(line: &str, token: &str, handler: &dyn Handler) -> String {
         Ok(Request {
             pane,
             op: Op::Close { target },
-        }) => match handler.close(pane, target) {
-            Ok(()) => done_reply(),
-            Err(error) => error_reply(&error),
-        },
+        }) => done_or_error(handler.close(pane, target)),
+        Ok(Request {
+            pane,
+            op: Op::Minimize { target },
+        }) => done_or_error(handler.minimize(pane, target, true)),
+        Ok(Request {
+            pane,
+            op: Op::Restore { target },
+        }) => done_or_error(handler.minimize(pane, target, false)),
+    }
+}
+
+/// The reply to a request carried out, or refused with `error`.
+fn done_or_error(result: Result<(), CliError>) -> String {
+    match result {
+        Ok(()) => done_reply(),
+        Err(error) => error_reply(&error),
     }
 }
 

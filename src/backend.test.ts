@@ -74,10 +74,10 @@ describe("Tauri backend pane control", () => {
     expect(invoke.mock.calls).toEqual([["pane_open_done", args]]);
   });
 
-  it("Own and opened panes: the window reports its sessions tab by tab in grid order", async () => {
+  it("Own and opened panes, Minimized pane listed: the window reports its sessions tab by tab and its minimized ones", async () => {
     invoke.mockClear();
-    await tauriBackend().paneControl?.setOrder([[4, 2], [7]]);
-    expect(invoke.mock.calls).toEqual([["pane_order_set", { tabs: [[4, 2], [7]] }]]);
+    await tauriBackend().paneControl?.setOrder([[4, 2], [7]], [2]);
+    expect(invoke.mock.calls).toEqual([["pane_order_set", { tabs: [[4, 2], [7]], minimized: [2] }]]);
   });
 
   const closes: [string, string | undefined, Record<string, unknown>][] = [
@@ -88,6 +88,16 @@ describe("Tauri backend pane control", () => {
     invoke.mockClear();
     await tauriBackend().paneControl?.closed(5, error);
     expect(invoke.mock.calls).toEqual([["pane_close_done", args]]);
+  });
+
+  const minimizes: [string, string | undefined, Record<string, unknown>][] = [
+    ["Minimize own pane: the window answers it is minimized", undefined, { requestId: 6, error: null }],
+    ["Last visible pane: the window answers why it could not", "last_visible_pane", { requestId: 6, error: "last_visible_pane" }],
+  ];
+  it.each(minimizes)("%s", async (_name, error, args) => {
+    invoke.mockClear();
+    await tauriBackend().paneControl?.minimized(6, error);
+    expect(invoke.mock.calls).toEqual([["pane_minimize_done", args]]);
   });
 });
 

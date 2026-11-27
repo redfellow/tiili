@@ -51,18 +51,39 @@ pub struct Pane {
     pub program: Option<String>,
 }
 
-/// One saved tab: its layout (kept as the frontend sends it), panes and focus.
+/// A pane that was minimized in its tab, with its grid index then; it reopens minimized.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MinimizedPane {
+    #[serde(flatten)]
+    pub pane: Pane,
+    pub at: usize,
+}
+
+/// One saved tab: its layout (kept as the frontend sends it), panes and focus. Its minimized panes are kept apart
+/// from `panes`, so the layout still matches the grid; a file from before minimizing reads with none.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Tab {
     pub layout: serde_json::Value,
     pub panes: Vec<Pane>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub minimized: Vec<MinimizedPane>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focused: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub zen_pane: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
+
+impl Tab {
+    /// Every pane of the tab: the ones in its grid, then the minimized ones.
+    pub fn all_panes(&self) -> impl Iterator<Item = &Pane> {
+        self.panes
+            .iter()
+            .chain(self.minimized.iter().map(|m| &m.pane))
+    }
 }
 
 /// What a window's frontend reports about it: its tabs and which one is in front.
@@ -98,7 +119,10 @@ pub struct Window {
 impl Window {
     /// Whether the window has any pane left; one whose last pane exited does not reopen.
     pub fn has_panes(&self) -> bool {
-        self.state.tabs.iter().any(|tab| !tab.panes.is_empty())
+        self.state
+            .tabs
+            .iter()
+            .any(|tab| tab.all_panes().next().is_some())
     }
 }
 
@@ -271,7 +295,11 @@ impl SessionStore {
             .windows
             .iter_mut()
             .flat_map(|w| w.state.tabs.iter_mut())
-            .flat_map(|t| t.panes.iter_mut())
+            .flat_map(|t| {
+                t.panes
+                    .iter_mut()
+                    .chain(t.minimized.iter_mut().map(|m| &mut m.pane))
+            })
         {
             pane.command = None;
         }

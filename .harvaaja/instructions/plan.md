@@ -24,6 +24,20 @@ tiered, what its end-to-end tests are, and anything every plan must include.
   Rust task's lint proof is `cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D warnings`, with
   `--test <name>` added when it touches that test target.
 
+## Host tests
+
+- A host test is a Rust test marked `#[ignore = "host: ..."]` because it binds a Unix socket or opens a
+  pseudo-terminal, which the sandbox refuses. Today they live in `control_cli`, `control_server`, `dev_bridge`,
+  `pty_registry`, `pty_resize_panes`, `pty_session` and `repo_tracking` under `src-tauri/tests/`.
+- When a task edits one of those files, or the code its host tests cover (for example `tiili list --json` behind
+  `control_cli`), list the file on `Tests to update:` and name `cargo test --manifest-path src-tauri/Cargo.toml
+  --test <name>` as a proof. In the sandbox that compiles the target and reports the host tests ignored. The
+  `cargo-test-host-card` card check runs them for real on the host before the card merges, so a stale
+  expectation fails the card, not the release.
+- Never write `-- --include-ignored` in a proof: proofs run in the sandbox, where the host tests fail.
+- A task that adds a host test gives it the `#[ignore = "host: ..."]` attribute; without it the test fails in the
+  sandbox, and `cargo-test-host-card` finds its target only by that attribute.
+
 ## Specs
 
 - A delta spec that creates a new capability (a folder under `openspec/changes/<change>/specs/` with no matching

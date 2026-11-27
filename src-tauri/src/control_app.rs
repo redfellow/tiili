@@ -1,8 +1,10 @@
 //! The app's side of the control channel (see [`crate::control_server`]): an open asks the caller's window for a
 //! pane through `pane-open-request` and waits for its `pane_open_done`; a close asks the pane's window through
-//! `pane-close-request` and waits for its `pane_close_done`; an attention request goes to the caller's window as
+//! `pane-close-request` and waits for its `pane_close_done`; a minimize or restore asks the pane's window through
+//! `pane-minimize-request` and waits for its `pane_minimize_done`; an attention request goes to the caller's window as
 //! `pane-attention-request`, which marks it as an escape-code signal would. A list is answered from the window's
-//! sessions and their latest reports, in the grid order the window reports through `pane_order_set`. Which pane
+//! sessions and their latest reports, in the grid order the window reports through `pane_order_set`, with the panes
+//! it reports minimized marked so. Which pane
 //! opened which, and with what key, lives in [`PaneOwners`]. Setup starts the endpoint, tells every pane about it and
 //! puts `tiili` in the app's bin folder.
 
@@ -20,7 +22,7 @@ use crate::command::Running;
 use crate::control::{
     grid_order, place_name, AttentionRecord, CliError, PaneInfo, RepoRecord, RunningRecord,
 };
-use crate::control_server::{ControlServer, Handler};
+use crate::control_server::{ControlServer, Handler, OpenRequest};
 use crate::pty::{ControlEnv, SessionId, SessionRegistry};
 use crate::windows::WindowSessions;
 use crate::{PaneCwdEvent, SessionReports};
@@ -33,10 +35,17 @@ pub const PANE_OPEN_REQUEST_EVENT: &str = "pane-open-request";
 /// answers with `pane_close_done`.
 pub const PANE_CLOSE_REQUEST_EVENT: &str = "pane-close-request";
 
+/// Event sent to a pane's window to minimize or restore it for `tiili minimize` and `tiili restore`; its payload is a
+/// [`PaneMinimizeRequest`], and the window answers with `pane_minimize_done`.
+pub const PANE_MINIMIZE_REQUEST_EVENT: &str = "pane-minimize-request";
+
+/// The answer a window gives a minimize when the pane is the only one showing in its tab.
+const LAST_VISIBLE_PANE: &str = "last_visible_pane";
+
 /// Event sent to the caller's window for `tiili attention`; its payload is a [`PaneAttentionRequest`].
 pub const PANE_ATTENTION_REQUEST_EVENT: &str = "pane-attention-request";
 
-/// How long an open or a close waits for the window to answer.
+/// How long an open, a close, a minimize or a restore waits for the window to answer.
 const OPEN_WAIT: Duration = Duration::from_secs(10);
 
 /// A pane `tiili open` asks a window for.
@@ -50,6 +59,8 @@ struct PaneOpenRequest {
     title: Option<String>,
     command: Vec<String>,
     path: Option<String>,
+    /// `--minimized`: the pane opens as a badge in the window's top bar and never shows in the grid first.
+    minimized: bool,
 }
 
 /// A pane `tiili close` asks its window to close.
@@ -58,6 +69,15 @@ struct PaneOpenRequest {
 struct PaneCloseRequest {
     request_id: u64,
     session: SessionId,
+}
+
+/// A pane `tiili minimize` (`minimize` true) or `tiili restore` asks its window to minimize or bring back.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneMinimizeRequest {
+    request_id: u64,
+    session: SessionId,
+    minimize: bool,
 }
 
 /// `tiili attention` from pane `session`: mark it with `message`, or clear its mark.
@@ -71,7 +91,7 @@ struct PaneAttentionRequest {
 
 type OpenResult = Result<SessionId, String>;
 
-/// Opens and closes waiting for their window's answer, by request id.
+/// Opens, closes, minimizes and restores waiting for their window's answer, by request id.
 #[derive(Default)]
 pub struct PendingOpens {
     next: AtomicU64,
@@ -256,6 +276,21 @@ impl PaneOwners {
         }
     }
 
+    /// The pane `caller` may minimize or restore: `target` under the close rule, else the caller itself while it is
+    /// `live`.
+    fn check_minimize(
+        &self,
+        caller: SessionId,
+        target: Option<SessionId>,
+        live: impl Fn(SessionId) -> bool,
+    ) -> Result<SessionId, CliError> {
+        match target {
+            Some(target) => self.check_close(caller, target, live).map(|()| target),
+            None if live(caller) => Ok(caller),
+            None => Err(CliError::NoSuchPane(format!("no open pane {caller}"))),
+        }
+    }
+
     /// The pane that opened `id` and the key it gave.
     fn get(&self, id: SessionId) -> Option<(SessionId, Option<String>)> {
         self.lock().owners.get(&id).map(|o| (o.by, o.key.clone()))
@@ -269,12 +304,21 @@ impl PaneOwners {
     }
 }
 
-/// Each window's sessions by tab in grid order, as its frontend last reported them, by window label.
+/// One window's sessions as its frontend last reported them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PaneOrder {
+    /// By tab in strip order, each tab's visible panes in grid order followed by its minimized ones.
+    tabs: Vec<Vec<SessionId>>,
+    /// The window's minimized panes.
+    minimized: Vec<SessionId>,
+}
+
+/// Each window's [`PaneOrder`], by window label.
 #[derive(Default)]
-pub struct PaneOrders(Mutex<HashMap<String, Vec<Vec<SessionId>>>>);
+pub struct PaneOrders(Mutex<HashMap<String, PaneOrder>>);
 
 impl PaneOrders {
-    fn get(&self, label: &str) -> Vec<Vec<SessionId>> {
+    fn get(&self, label: &str) -> PaneOrder {
         self.0
             .lock()
             .ok()
@@ -301,15 +345,23 @@ fn tab_of(tabs: &[Vec<SessionId>], id: SessionId) -> Option<u32> {
         .and_then(|i| u32::try_from(i + 1).ok())
 }
 
-/// The window reports its panes' sessions, tab by tab in grid order, whenever its grid or a pane's session changes.
+/// The window reports its panes' sessions, tab by tab in grid order with each tab's minimized panes last, and which
+/// are minimized, whenever its grid, its minimized panes or a pane's session changes.
 #[tauri::command]
 pub fn pane_order_set(
     window: WebviewWindow,
     orders: State<'_, PaneOrders>,
     tabs: Vec<Vec<SessionId>>,
+    minimized: Option<Vec<SessionId>>,
 ) {
     if let Ok(mut map) = orders.0.lock() {
-        map.insert(window.label().to_string(), tabs);
+        map.insert(
+            window.label().to_string(),
+            PaneOrder {
+                tabs,
+                minimized: minimized.unwrap_or_default(),
+            },
+        );
     }
 }
 
@@ -336,6 +388,26 @@ pub fn pane_close_done(pending: State<'_, PendingOpens>, request_id: u64, error:
     pending.finish(request_id, error.map_or(Ok(0), Err));
 }
 
+/// The window answers a `pane-minimize-request`: the pane is minimized or back, else `error` says why it is not.
+#[tauri::command]
+pub fn pane_minimize_done(
+    pending: State<'_, PendingOpens>,
+    request_id: u64,
+    error: Option<String>,
+) {
+    // Like a close, a minimize answers with no pane.
+    pending.finish(request_id, error.map_or(Ok(0), Err));
+}
+
+/// The error a minimize or restore of pane `id` gives when its window answers `error`.
+fn minimize_error(id: SessionId, error: String) -> CliError {
+    if error == LAST_VISIBLE_PANE {
+        CliError::LastVisiblePane(format!("pane {id} is the only pane showing in its tab"))
+    } else {
+        CliError::MinimizeFailed(error)
+    }
+}
+
 struct AppHandler(AppHandle);
 
 impl AppHandler {
@@ -353,15 +425,15 @@ impl AppHandler {
 }
 
 impl Handler for AppHandler {
-    fn open(
-        &self,
-        caller: SessionId,
-        cwd: Option<String>,
-        title: Option<String>,
-        command: Vec<String>,
-        path: Option<String>,
-        key: Option<String>,
-    ) -> Result<(SessionId, bool), String> {
+    fn open(&self, caller: SessionId, request: OpenRequest) -> Result<(SessionId, bool), String> {
+        let OpenRequest {
+            cwd,
+            title,
+            command,
+            path,
+            key,
+            minimized,
+        } = request;
         let label = self.window_of(caller)?;
         let opened = self.0.state::<PaneOwners>().open(
             caller,
@@ -379,6 +451,7 @@ impl Handler for AppHandler {
                         title: title.clone(),
                         command: command.clone(),
                         path,
+                        minimized,
                     },
                 )
             },
@@ -448,6 +521,30 @@ impl Handler for AppHandler {
             .map(|_| ())
             .map_err(CliError::CloseFailed)
     }
+
+    fn minimize(
+        &self,
+        caller: SessionId,
+        target: Option<SessionId>,
+        minimize: bool,
+    ) -> Result<(), CliError> {
+        let target = self
+            .0
+            .state::<PaneOwners>()
+            .check_minimize(caller, target, |id| self.live(id))?;
+        let label = self.window_of(target).map_err(CliError::NoSuchPane)?;
+        self.0
+            .state::<PendingOpens>()
+            .ask(&self.0, &label, PANE_MINIMIZE_REQUEST_EVENT, |request_id| {
+                PaneMinimizeRequest {
+                    request_id,
+                    session: target,
+                    minimize,
+                }
+            })
+            .map(|_| ())
+            .map_err(|e| minimize_error(target, e))
+    }
 }
 
 impl AppHandler {
@@ -461,7 +558,7 @@ impl AppHandler {
             self.0.state::<PaneOwners>(),
         );
         let marks = self.0.state::<Attention>().marks();
-        let tabs = self.0.state::<PaneOrders>().get(label);
+        let PaneOrder { tabs, minimized } = self.0.state::<PaneOrders>().get(label);
         let grid = list_order(&tabs);
         grid_order(self.0.state::<WindowSessions>().sessions(label), &grid)
             .into_iter()
@@ -477,6 +574,7 @@ impl AppHandler {
                     mark: marks.iter().find(|m| m.session == id),
                     tab: tab_of(&tabs, id),
                     owner: owners.get(id),
+                    minimized: minimized.contains(&id),
                 })
             })
             .collect()
@@ -498,6 +596,8 @@ struct PaneFacts<'a> {
     tab: Option<u32>,
     /// The pane that opened it with `tiili open`, and the key it gave.
     owner: Option<(SessionId, Option<String>)>,
+    /// Whether its window reports it minimized.
+    minimized: bool,
 }
 
 /// One pane as `tiili list` reports it. A pane `tiili open` started runs its command line, quoted, while its shell
@@ -513,6 +613,7 @@ fn pane_record(facts: PaneFacts) -> PaneInfo {
         mark,
         tab,
         owner,
+        minimized,
     } = facts;
     let command = running.command.or_else(|| {
         open.filter(|o| !o.argv.is_empty())
@@ -553,6 +654,7 @@ fn pane_record(facts: PaneFacts) -> PaneInfo {
         opened_by_you: owner.as_ref().is_some_and(|(by, _)| caller == Some(*by)),
         // A key is the opener's own handle on its pane: only a token holder sees it.
         key: owner.filter(|_| caller.is_some()).and_then(|(_, key)| key),
+        minimized,
     }
 }
 
@@ -693,6 +795,12 @@ mod tests {
             target: SessionId,
             expect: Result<(), &'static str>,
         },
+        /// `caller` minimizes or restores `target`, itself when `None`; expect the pane or the error code.
+        Minimize {
+            caller: SessionId,
+            target: Option<SessionId>,
+            expect: Result<SessionId, &'static str>,
+        },
     }
     use Step::*;
 
@@ -756,12 +864,23 @@ mod tests {
                         .map_err(|e| e.code());
                     assert_eq!(got, *expect, "step {i}");
                 }
+                Minimize {
+                    caller,
+                    target,
+                    expect,
+                } => {
+                    let got = owners
+                        .check_minimize(*caller, *target, is_live)
+                        .map_err(|e| e.code());
+                    assert_eq!(got, *expect, "step {i}");
+                }
             }
         }
     }
 
     /// Owner recorded, Second call reuses, Concurrent calls, Dead key reopens, Keys are per owner, Close own pane,
-    /// Refuse another pane: what each open and close answers, in order.
+    /// Refuse another pane, Minimize own pane, Minimize an opened pane, Refuse to minimize another pane: what each
+    /// open, close, minimize and restore answers, in order.
     #[test]
     fn ownership_and_keys_decide_reuse_and_close() {
         let cases: &[(&str, &[Step])] = &[
@@ -815,6 +934,33 @@ mod tests {
                     Close { caller: 1, target: 10, expect: Ok(()) },
                     Die(10),
                     Close { caller: 1, target: 10, expect: Err("no_such_pane") },
+                ],
+            ),
+            (
+                "Minimize own pane: no target is the caller itself, while it lives",
+                &[
+                    Minimize { caller: 1, target: None, expect: Ok(1) },
+                    Die(1),
+                    Minimize { caller: 1, target: None, expect: Err("no_such_pane") },
+                ],
+            ),
+            (
+                "Minimize an opened pane: a pane the caller opened minimizes and restores by id",
+                &[
+                    Open { caller: 1, key: Some("dev"), gives: 10, expect: (10, false) },
+                    Minimize { caller: 1, target: Some(10), expect: Ok(10) },
+                    Minimize { caller: 1, target: Some(10), expect: Ok(10) },
+                ],
+            ),
+            (
+                "Refuse to minimize another pane: one opened by someone else, by hand, or gone is left alone",
+                &[
+                    Open { caller: 1, key: None, gives: 10, expect: (10, false) },
+                    Minimize { caller: 2, target: Some(10), expect: Err("not_opened_by_you") },
+                    Minimize { caller: 1, target: Some(2), expect: Err("not_opened_by_you") },
+                    Minimize { caller: 1, target: Some(77), expect: Err("no_such_pane") },
+                    Die(10),
+                    Minimize { caller: 1, target: Some(10), expect: Err("no_such_pane") },
                 ],
             ),
             (
@@ -876,6 +1022,7 @@ mod tests {
                 mark: None,
                 tab: Some(2),
                 owner: owner.map(|(by, key)| (by, key.map(Into::into))),
+                minimized: false,
             });
             assert_eq!(record.opened_by_you, *mine, "{owner:?}");
             assert_eq!(record.key.as_deref(), *key, "{owner:?}");
@@ -883,7 +1030,8 @@ mod tests {
         }
     }
 
-    /// The token-free `panes` request has no caller: no pane is its own or opened by it, and no key shows.
+    /// The token-free `panes` request has no caller: no pane is its own or opened by it, and no key shows; Minimized
+    /// pane listed: a pane its window reports minimized is marked so.
     #[test]
     fn panes_without_a_caller_show_no_keys() {
         let record = pane_record(PaneFacts {
@@ -896,10 +1044,12 @@ mod tests {
             mark: None,
             tab: Some(1),
             owner: Some((3, Some("dev".into()))),
+            minimized: true,
         });
         assert!(!record.is_self && !record.opened_by_you);
         assert_eq!(record.key, None);
         assert_eq!((record.window.as_str(), record.tab), ("main", Some(1)));
+        assert!(record.minimized);
     }
 
     fn at(cwd: &str, repo: Option<(&str, Option<&str>)>, host: Option<&str>) -> PaneCwdEvent {
@@ -1082,6 +1232,7 @@ mod tests {
                 mark,
                 tab: None,
                 owner: None,
+                minimized: false,
             });
             assert_eq!(record, expected, "{name}");
         }

@@ -171,7 +171,7 @@ token and ANSI sets live in `src/themes.ts`, mirrored in the `[data-variant]` bl
 | --- | --- | --- | --- | --- | --- |
 | Savi | light | `#F3EEE7` / `#F3EEE7` / `#DDD3C8` | `#2A2321` / `#6F6560` | savi `#C9764F` | Warm light grounds; savi and sammal brighten red and green |
 | Muratti | dark | `#151112` / `#1E1919` / `#0E0B0B` | `#F3E7DC` / `#A0948C` | muratti `#861B22` | Warm dark grounds; muratti reds, koivu yellow |
-| Koski | dark | `#0F1516` / `#182023` / `#0B0F10` | `#C9CFCD` / `#8A9492` | savi `#C9764F` | Rapids at night; tiili red, ok green `#8FB59A`, ikkuna cyan |
+| Koski | dark | `#121414` / `#1C1F21` / `#0E0E0E` | `#CECECA` / `#8F938F` | savi `#C9764F` | Rapids at night; tiili red, ok green `#8FB59A`, ikkuna cyan |
 | Laasti | light | `#E8DECD` / `#E8DECD` / `#CFC2AC` | `#2A2321` / `#5E5650` | tiili `#A4472B` | The mortar grid: tiili, klinkkeri, savi and rauta on laasti |
 
 The app also ships Solarized Light, Solarized Dark, Gruvbox Dark, Nord and Dracula with their published palettes.

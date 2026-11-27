@@ -245,8 +245,14 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
           panes.tabMenu(index, event).catch(report);
         },
       },
+      badges: {
+        restore: (id) => panes.restoreBadge(id),
+        menu: (id) => panes.badgeMenu(id),
+        peek: (id) => panes.peekBadge(id),
+      },
     });
     panes.attachStrip(topBar.tabs);
+    panes.attachBadges(topBar.badges);
     // The count covers every window's marked panes.
     if (attention) {
       await backend.onAppEvent("attention-changed", ({ marks }) => topBar.setAttentionCount(marks.length));

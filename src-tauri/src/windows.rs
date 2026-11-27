@@ -2,7 +2,7 @@
 //! Shell menu or the app icon), which shells each window started and which window was focused last. The pure parts
 //! (labels, cascade, start-up URL, the session map) carry no Tauri types, so they test without a window.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
@@ -74,69 +74,127 @@ fn percent_encode(text: &str) -> String {
     out
 }
 
-/// Which shells each window started, by window label, so a closed window's shells end with it.
+/// Which shells each window started, by window label, so a closed window's shells end with it. A session whose
+/// process exited while its pane stays (a minimized pane showing its exit) is kept until the pane closes, so its
+/// attention mark still leads to its window, but it is no longer live: [`owner`](Self::owner), the window list and
+/// a window's sessions leave it out.
 #[derive(Default)]
-pub struct WindowSessions(Mutex<HashMap<String, Vec<SessionId>>>);
+pub struct WindowSessions(Mutex<Sessions>);
+
+#[derive(Default)]
+struct Sessions {
+    by_window: HashMap<String, Vec<SessionId>>,
+    exited: HashSet<SessionId>,
+}
+
+impl Sessions {
+    fn window(&self, id: SessionId) -> Option<&String> {
+        self.by_window
+            .iter()
+            .find(|(_, ids)| ids.contains(&id))
+            .map(|(label, _)| label)
+    }
+
+    fn leave(&mut self, id: SessionId) {
+        for ids in self.by_window.values_mut() {
+            ids.retain(|&s| s != id);
+        }
+        self.by_window.retain(|_, ids| !ids.is_empty());
+    }
+
+    fn live(&self, label: &str) -> Vec<SessionId> {
+        self.by_window
+            .get(label)
+            .map(|ids| {
+                ids.iter()
+                    .copied()
+                    .filter(|id| !self.exited.contains(id))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
 
 impl WindowSessions {
     /// Session `id` belongs to window `label`.
     pub fn add(&self, label: &str, id: SessionId) {
         if let Ok(mut map) = self.0.lock() {
-            map.entry(label.to_string()).or_default().push(id);
+            map.by_window.entry(label.to_string()).or_default().push(id);
         }
     }
 
-    /// Session `id` has ended; it belongs to no window any more.
+    /// Session `id`'s process exited; its pane may stay in its window until it closes.
+    pub fn exit(&self, id: SessionId) {
+        if let Ok(mut map) = self.0.lock() {
+            if map.window(id).is_some() {
+                map.exited.insert(id);
+            }
+        }
+    }
+
+    /// Session `id`'s pane has closed; it belongs to no window any more.
     pub fn remove(&self, id: SessionId) {
         if let Ok(mut map) = self.0.lock() {
-            for ids in map.values_mut() {
-                ids.retain(|&s| s != id);
-            }
-            map.retain(|_, ids| !ids.is_empty());
+            map.leave(id);
+            map.exited.remove(&id);
         }
     }
 
-    /// The window session `id` belongs to, if any.
+    /// The window live session `id` belongs to, if any.
     pub fn owner(&self, id: SessionId) -> Option<String> {
         let map = self.0.lock().ok()?;
-        map.iter()
-            .find(|(_, ids)| ids.contains(&id))
-            .map(|(label, _)| label.clone())
+        if map.exited.contains(&id) {
+            return None;
+        }
+        map.window(id).cloned()
     }
 
-    /// Session `id` now belongs to window `to`, which ends it on closing; its former window no longer does.
+    /// The window session `id`'s pane is in, whether its process still runs or has exited.
+    pub fn pane_window(&self, id: SessionId) -> Option<String> {
+        self.0.lock().ok()?.window(id).cloned()
+    }
+
+    /// Session `id` now belongs to window `to`, which ends it on closing; its former window no longer does. An
+    /// exited session stays exited.
     pub fn reassign(&self, id: SessionId, to: &str) {
-        self.remove(id);
-        self.add(to, id);
+        if let Ok(mut map) = self.0.lock() {
+            map.leave(id);
+            map.by_window.entry(to.to_string()).or_default().push(id);
+        }
     }
 
-    /// The windows that have sessions, by label.
+    /// The windows that have live sessions, by label.
     pub fn labels(&self) -> Vec<String> {
         let mut labels: Vec<String> = self
             .0
             .lock()
-            .map(|map| map.keys().cloned().collect())
+            .map(|map| {
+                map.by_window
+                    .keys()
+                    .filter(|label| !map.live(label).is_empty())
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default();
         labels.sort();
         labels
     }
 
-    /// Window `label`'s sessions, in the order they joined it.
+    /// Window `label`'s live sessions, in the order they joined it.
     pub fn sessions(&self, label: &str) -> Vec<SessionId> {
-        self.0
-            .lock()
-            .ok()
-            .and_then(|map| map.get(label).cloned())
-            .unwrap_or_default()
+        self.0.lock().map(|map| map.live(label)).unwrap_or_default()
     }
 
-    /// Window `label`'s remaining sessions, which then belong to no window.
+    /// Window `label`'s remaining sessions, exited ones included, which then belong to no window.
     pub fn take(&self, label: &str) -> Vec<SessionId> {
-        self.0
-            .lock()
-            .ok()
-            .and_then(|mut map| map.remove(label))
-            .unwrap_or_default()
+        let Ok(mut map) = self.0.lock() else {
+            return Vec::new();
+        };
+        let ids = map.by_window.remove(label).unwrap_or_default();
+        for id in &ids {
+            map.exited.remove(id);
+        }
+        ids
     }
 }
 
@@ -206,7 +264,7 @@ pub fn numbered_names(entries: &[WindowEntry]) -> Vec<String> {
 
 /// What moves to another window: a terminal pane's session with its scrollback and zoom offset, a Heynote pane, or
 /// a whole tab (Pop Out) with its name, its grid's track sizes (kept as the frontend sent them), its focused pane and
-/// its panes in grid order.
+/// its panes in grid order. A pane minimized in the window it leaves says so, and arrives minimized.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum MovePayload {
@@ -214,8 +272,13 @@ pub enum MovePayload {
         session: SessionId,
         scrollback: String,
         zoom: f64,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        minimized: bool,
     },
-    Heynote,
+    Heynote {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        minimized: bool,
+    },
     Tab {
         name: Option<String>,
         layout: serde_json::Value,
@@ -229,7 +292,7 @@ impl MovePayload {
     pub fn sessions(&self) -> Vec<SessionId> {
         match self {
             MovePayload::Terminal { session, .. } => vec![*session],
-            MovePayload::Heynote => Vec::new(),
+            MovePayload::Heynote { .. } => Vec::new(),
             MovePayload::Tab { panes, .. } => {
                 panes.iter().flat_map(MovePayload::sessions).collect()
             }
@@ -593,6 +656,38 @@ mod tests {
     }
 
     #[test]
+    fn crash_while_minimized_mark_still_leads_to_its_window() {
+        let sessions = WindowSessions::default();
+        sessions.add("main", 1);
+        sessions.add("main", 2);
+        sessions.add("window-1", 3);
+        // Pane 2's process exits while it is minimized: its pane stays, so its mark still leads to its window…
+        sessions.exit(2);
+        assert_eq!(sessions.pane_window(2).as_deref(), Some("main"));
+        // …but it is not live: control commands and listings leave it out.
+        assert_eq!(sessions.owner(2), None);
+        assert_eq!(sessions.sessions("main"), vec![1]);
+        // Moved to another window, it is still exited and still found there.
+        sessions.reassign(2, "window-1");
+        assert_eq!(sessions.pane_window(2).as_deref(), Some("window-1"));
+        assert_eq!(sessions.owner(2), None);
+        assert_eq!(sessions.sessions("window-1"), vec![3]);
+        // A window left with only exited sessions is not listed.
+        sessions.add("window-2", 4);
+        sessions.exit(4);
+        assert_eq!(sessions.labels(), vec!["main", "window-1"]);
+        // Its pane closing takes it out.
+        sessions.remove(2);
+        assert_eq!(sessions.pane_window(2), None);
+        // A closing window ends its exited sessions too.
+        assert_eq!(sessions.take("window-2"), vec![4]);
+        assert_eq!(sessions.pane_window(4), None);
+        // Exiting a session no window has does nothing.
+        sessions.exit(9);
+        assert_eq!(sessions.pane_window(9), None);
+    }
+
+    #[test]
     fn last_pane_moves_out_to_a_window_that_had_no_shells() {
         let sessions = WindowSessions::default();
         sessions.add("main", 1);
@@ -632,13 +727,17 @@ mod tests {
             session: 4,
             scrollback: "$ ls\r\n".into(),
             zoom: 2.0,
+            minimized: false,
         };
         let first = moves.put(terminal.clone());
-        let second = moves.put(MovePayload::Heynote);
+        let second = moves.put(MovePayload::Heynote { minimized: false });
         assert_ne!(first, second);
         assert_eq!(moves.take(&first), Some(terminal));
         assert_eq!(moves.take(&first), None);
-        assert_eq!(moves.take(&second), Some(MovePayload::Heynote));
+        assert_eq!(
+            moves.take(&second),
+            Some(MovePayload::Heynote { minimized: false })
+        );
     }
 
     #[test]
@@ -650,9 +749,26 @@ mod tests {
                     session: 3,
                     scrollback: "hi".into(),
                     zoom: -1.0,
+                    minimized: false,
                 },
             ),
-            (r#"{"kind":"heynote"}"#, MovePayload::Heynote),
+            (
+                r#"{"kind":"heynote"}"#,
+                MovePayload::Heynote { minimized: false },
+            ),
+            (
+                r#"{"kind":"terminal","session":5,"scrollback":"","zoom":0,"minimized":true}"#,
+                MovePayload::Terminal {
+                    session: 5,
+                    scrollback: String::new(),
+                    zoom: 0.0,
+                    minimized: true,
+                },
+            ),
+            (
+                r#"{"kind":"heynote","minimized":true}"#,
+                MovePayload::Heynote { minimized: true },
+            ),
             (
                 r#"{"kind":"tab","name":"build","layout":{"colSizes":[1,1],"rowSizes":[1]},"focused":1,"panes":[{"kind":"terminal","session":3,"scrollback":"","zoom":0},{"kind":"heynote"}]}"#,
                 MovePayload::Tab {
@@ -664,8 +780,9 @@ mod tests {
                             session: 3,
                             scrollback: String::new(),
                             zoom: 0.0,
+                            minimized: false,
                         },
-                        MovePayload::Heynote,
+                        MovePayload::Heynote { minimized: false },
                     ],
                 },
             ),
@@ -685,17 +802,26 @@ mod tests {
             session,
             scrollback: String::new(),
             zoom: 0.0,
+            minimized: false,
         };
         let cases = [
             ("a terminal pane", terminal(4), vec![4]),
-            ("a Heynote pane", MovePayload::Heynote, vec![]),
+            (
+                "a Heynote pane",
+                MovePayload::Heynote { minimized: false },
+                vec![],
+            ),
             (
                 "a tab of three panes",
                 MovePayload::Tab {
                     name: None,
                     layout: serde_json::Value::Null,
                     focused: 0,
-                    panes: vec![terminal(1), MovePayload::Heynote, terminal(2)],
+                    panes: vec![
+                        terminal(1),
+                        MovePayload::Heynote { minimized: false },
+                        terminal(2),
+                    ],
                 },
                 vec![1, 2],
             ),
@@ -714,6 +840,7 @@ mod tests {
             session: 7,
             scrollback: scrollback.clone(),
             zoom: 0.0,
+            minimized: false,
         };
         let json = serde_json::to_string(&payload).unwrap();
         let back = serde_json::from_str::<MovePayload>(&json).unwrap();

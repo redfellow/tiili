@@ -2,7 +2,8 @@
 //! the token check, the replies and the `tiili` command line. The control server
 //! ([`control_server`](crate::control_server)) and the CLI ([`cli`](crate::cli)) carry it out.
 //!
-//! A request is one JSON line, `{"protocol":1,"token","pane","op":"open"|"list"|"attention"|"close",...}`; the reply
+//! A request is one JSON line,
+//! `{"protocol":1,"token","pane","op":"open"|"list"|"attention"|"close"|"minimize"|"restore",...}`; the reply
 //! is one JSON line, `{"ok":true,"protocol":1,"pane":7,"reused":false}`, `{"ok":true,"protocol":1,"panes":[...]}`,
 //! `{"ok":true,"protocol":1,"done":true}` or `{"ok":false,"protocol":1,"code","error","suggestion"}`. The command line is one table, [`COMMANDS`], and its
 //! failures one, [`ERRORS`].
@@ -40,6 +41,9 @@ pub enum Op {
         /// Reuse the caller's live pane opened with this key instead of opening another.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         key: Option<String>,
+        /// Open the pane minimized: it never joins the grid, and its badge shows in the window's top bar.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        minimized: bool,
     },
     /// List the panes of the caller's window.
     List,
@@ -52,6 +56,16 @@ pub enum Op {
     },
     /// Close pane `target`, which the caller must have opened. (Not `pane`: that is the caller.)
     Close { target: SessionId },
+    /// Minimize pane `target`, which the caller must have opened, or the caller's own pane without one.
+    Minimize {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<SessionId>,
+    },
+    /// Restore pane `target` into its tab's grid, as [`Op::Minimize`] picks it.
+    Restore {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<SessionId>,
+    },
     /// List every pane of every window. Read-only, and the one request taken without a token or a `pane`.
     Panes,
 }
@@ -172,6 +186,18 @@ pub const ERRORS: &[ErrorSpec] = &[
         summary: "the app could not close the pane",
         suggestion: "check that the pane is still open, or ask the user to close it",
     },
+    ErrorSpec {
+        code: "last_visible_pane",
+        exit: 1,
+        summary: "the pane is the only one showing in its tab",
+        suggestion: "open or restore another pane in the tab first",
+    },
+    ErrorSpec {
+        code: "minimize_failed",
+        exit: 1,
+        summary: "the app could not minimize or restore the pane",
+        suggestion: "check that the pane is still open in a tiili window",
+    },
 ];
 
 /// Why a `tiili` command failed, in the app or on the command line.
@@ -203,6 +229,10 @@ pub enum CliError {
     AttentionFailed(String),
     /// The app could not close the pane.
     CloseFailed(String),
+    /// The pane to minimize is the only one showing in its tab; the text names it.
+    LastVisiblePane(String),
+    /// The app could not minimize or restore the pane.
+    MinimizeFailed(String),
     /// An error the app replied with, carrying the app's own suggestion, which may differ from this binary's
     /// [`ERRORS`] when the two are different versions.
     FromApp {
@@ -228,6 +258,8 @@ impl CliError {
             CliError::NoSuchPane(_) => "no_such_pane",
             CliError::AttentionFailed(_) => "attention_failed",
             CliError::CloseFailed(_) => "close_failed",
+            CliError::LastVisiblePane(_) => "last_visible_pane",
+            CliError::MinimizeFailed(_) => "minimize_failed",
             CliError::FromApp { error, .. } => error.code(),
         }
     }
@@ -268,7 +300,9 @@ impl CliError {
             | CliError::NotOpenedByYou(why)
             | CliError::NoSuchPane(why)
             | CliError::AttentionFailed(why)
-            | CliError::CloseFailed(why) => why.clone(),
+            | CliError::CloseFailed(why)
+            | CliError::LastVisiblePane(why)
+            | CliError::MinimizeFailed(why) => why.clone(),
             CliError::FromApp { error, .. } => error.message(),
         }
     }
@@ -290,6 +324,8 @@ impl CliError {
             Some("no_such_pane") => CliError::NoSuchPane(message),
             Some("attention_failed") => CliError::AttentionFailed(message),
             Some("close_failed") => CliError::CloseFailed(message),
+            Some("last_visible_pane") => CliError::LastVisiblePane(message),
+            Some("minimize_failed") => CliError::MinimizeFailed(message),
             _ => CliError::BadReply(message),
         };
         match suggestion.filter(|s| !s.is_empty()) {
@@ -387,6 +423,8 @@ pub struct PaneInfo {
     pub key: Option<String>,
     /// Whether the pane the request came from opened it with `tiili open`, so may close it.
     pub opened_by_you: bool,
+    /// Whether the pane is minimized to a badge in its window's top bar.
+    pub minimized: bool,
 }
 
 /// A pane's repository: root folder, name and, in a linked worktree, its branch or worktree name.
@@ -441,7 +479,7 @@ pub fn opened_reply(id: SessionId, reused: bool) -> String {
     .unwrap_or_default()
 }
 
-/// The reply to an attention or close that was carried out.
+/// The reply to an attention, close, minimize or restore that was carried out.
 pub fn done_reply() -> String {
     serde_json::to_string(&Success {
         ok: true,
@@ -558,13 +596,15 @@ pub fn parse_reply(line: &str) -> Result<Reply, CliError> {
     }
 }
 
-/// `tiili list`'s output: one line per pane, id, folder and title (its chip name when it has none) separated by tabs.
+/// `tiili list`'s output: one line per pane, id, folder and title (its chip name when it has none) separated by tabs,
+/// and a fourth field, `minimized`, on a minimized pane.
 pub fn list_lines(panes: &[PaneInfo]) -> String {
     panes
         .iter()
         .map(|p| {
             let title = p.title.as_deref().unwrap_or(&p.label);
-            format!("{}\t{}\t{title}\n", p.id, p.cwd)
+            let minimized = if p.minimized { "\tminimized" } else { "" };
+            format!("{}\t{}\t{title}{minimized}\n", p.id, p.cwd)
         })
         .collect()
 }
@@ -613,6 +653,7 @@ pub enum CliCommand {
         cwd: Option<String>,
         title: Option<String>,
         key: Option<String>,
+        minimized: bool,
         command: Vec<String>,
         json: bool,
     },
@@ -626,6 +667,10 @@ pub enum CliCommand {
     },
     /// `tiili close PANE`.
     Close(SessionId),
+    /// `tiili minimize [PANE]`: the caller's own pane without one.
+    Minimize(Option<SessionId>),
+    /// `tiili restore [PANE]`: the caller's own pane without one.
+    Restore(Option<SessionId>),
     /// `tiili prompt`.
     Prompt,
     InstallClaudeSkill,
@@ -822,7 +867,7 @@ const LIST_OUTPUT_SCHEMA: &str = concat!(
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "self", "window", "cwd", "host", "repo", "title", "label", "running", "attention", "tab", "key", "opened_by_you"],
+            "required": ["id", "self", "window", "cwd", "host", "repo", "title", "label", "running", "attention", "tab", "key", "opened_by_you", "minimized"],
             "properties": {
               "id": { "type": "integer" },
               "self": { "type": "boolean" },
@@ -855,7 +900,8 @@ const LIST_OUTPUT_SCHEMA: &str = concat!(
               },
               "tab": { "type": ["integer", "null"] },
               "key": { "type": ["string", "null"] },
-              "opened_by_you": { "type": "boolean" }
+              "opened_by_you": { "type": "boolean" },
+              "minimized": { "type": "boolean" }
             }
           }
         }
@@ -873,7 +919,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "open",
         summary: "Open a pane in this pane's window running a command",
-        usage: "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--json] -- CMD [ARGS...]",
+        usage: "tiili open [--cwd DIR] [--title TITLE] [--key KEY] [--minimized] [--json] -- CMD [ARGS...]",
         options: &[
             OptSpec {
                 name: "--cwd",
@@ -889,6 +935,11 @@ pub const COMMANDS: &[CommandSpec] = &[
                 name: "--key",
                 value: Some("KEY"),
                 summary: "reuse the live pane this pane opened with KEY instead of opening another",
+            },
+            OptSpec {
+                name: "--minimized",
+                value: None,
+                summary: "open the pane minimized, as a badge in the window's top bar",
             },
             JSON_OPTION,
         ],
@@ -921,7 +972,8 @@ pub const COMMANDS: &[CommandSpec] = &[
         rest: None,
         needs: PANE_NEEDS,
         output_text:
-            "one line per pane: id, folder and title separated by tabs; with --json, one JSON object",
+            "one line per pane: id, folder and title separated by tabs, then minimized for a minimized pane; with \
+            --json, one JSON object",
         output_schema: Some(LIST_OUTPUT_SCHEMA),
         exit_codes: &[0, 1, 2, 3, 4],
         errors: &[
@@ -987,6 +1039,61 @@ pub const COMMANDS: &[CommandSpec] = &[
             "not_opened_by_you",
             "no_such_pane",
             "close_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "minimize",
+        summary: "Minimize this pane, or a pane it opened with tiili open, to a badge in the window's top bar",
+        usage: "tiili minimize [PANE]",
+        options: &[],
+        positionals: &[ArgSpec {
+            name: "PANE",
+            required: false,
+            summary: "the id of the pane to minimize (default: this pane)",
+        }],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "nothing",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "not_opened_by_you",
+            "no_such_pane",
+            "last_visible_pane",
+            "minimize_failed",
+            "bad_reply",
+        ],
+    },
+    CommandSpec {
+        name: "restore",
+        summary: "Bring back this pane, or a pane it opened with tiili open, from its badge into its tab's grid",
+        usage: "tiili restore [PANE]",
+        options: &[],
+        positionals: &[ArgSpec {
+            name: "PANE",
+            required: false,
+            summary: "the id of the pane to restore (default: this pane)",
+        }],
+        rest: None,
+        needs: PANE_NEEDS,
+        output_text: "nothing",
+        output_schema: None,
+        exit_codes: &[0, 1, 2, 3, 4],
+        errors: &[
+            "usage",
+            "not_in_pane",
+            "unreachable",
+            "bad_token",
+            "malformed_request",
+            "not_opened_by_you",
+            "no_such_pane",
+            "minimize_failed",
             "bad_reply",
         ],
     },
@@ -1254,6 +1361,7 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 key => key,
             },
+            minimized: flag("--minimized"),
             command: words.unwrap_or_default(),
             json,
         },
@@ -1274,6 +1382,19 @@ pub fn parse_args(args: &[String]) -> Result<CliCommand, CliError> {
                 pane.parse()
                     .map_err(|_| CliError::Usage(format!("close needs a pane id, not {pane}")))?,
             )
+        }
+        "minimize" | "restore" => {
+            let target = match positionals.first() {
+                Some(pane) => Some(pane.parse().map_err(|_| {
+                    CliError::Usage(format!("{} needs a pane id, not {pane}", spec.name))
+                })?),
+                None => None,
+            };
+            if spec.name == "minimize" {
+                CliCommand::Minimize(target)
+            } else {
+                CliCommand::Restore(target)
+            }
         }
         "prompt" => CliCommand::Prompt,
         "install-claude-skill" => CliCommand::InstallClaudeSkill,
@@ -1443,6 +1564,7 @@ mod tests {
             command: command.iter().map(|s| s.to_string()).collect(),
             path: path.map(Into::into),
             key: None,
+            minimized: false,
         }
     }
 
@@ -1460,6 +1582,28 @@ mod tests {
                 command,
                 path,
                 key: Some(key.into()),
+                minimized: false,
+            },
+            other => other,
+        }
+    }
+
+    fn minimized(command: &[&str]) -> Op {
+        match open(None, None, command, None) {
+            Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                key,
+                ..
+            } => Op::Open {
+                cwd,
+                title,
+                command,
+                path,
+                key,
+                minimized: true,
             },
             other => other,
         }
@@ -1495,6 +1639,7 @@ mod tests {
                 "id",
                 "key",
                 "label",
+                "minimized",
                 "opened_by_you",
                 "repo",
                 "running",
@@ -1557,6 +1702,28 @@ mod tests {
                 3,
                 Op::Close { target: 8 },
             ),
+            (
+                format!(
+                    r#"{{"token":"{TOKEN}","pane":3,"op":"open","command":["npm"],"minimized":true}}"#
+                ),
+                3,
+                minimized(&["npm"]),
+            ),
+            (
+                format!(r#"{{"token":"{TOKEN}","pane":3,"op":"minimize"}}"#),
+                3,
+                Op::Minimize { target: None },
+            ),
+            (
+                format!(r#"{{"token":"{TOKEN}","pane":3,"op":"minimize","target":8}}"#),
+                3,
+                Op::Minimize { target: Some(8) },
+            ),
+            (
+                format!(r#"{{"token":"{TOKEN}","pane":3,"op":"restore","target":8}}"#),
+                3,
+                Op::Restore { target: Some(8) },
+            ),
         ];
         for (line, pane, op) in cases {
             assert_eq!(
@@ -1598,6 +1765,7 @@ mod tests {
         for line in [
             r#"{"op":"list","pane":3}"#,
             r#"{"op":"close","pane":3,"target":4}"#,
+            r#"{"op":"minimize","pane":3}"#,
         ] {
             assert_eq!(
                 parse_request(line, TOKEN),
@@ -1635,6 +1803,7 @@ mod tests {
             format!(r#"{{"token":"{TOKEN}","op":"list"}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":3,"op":"close"}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":3,"op":"close","target":"x"}}"#),
+            format!(r#"{{"token":"{TOKEN}","pane":3,"op":"restore","target":-2}}"#),
             format!(r#"{{"token":"{TOKEN}","pane":3,"op":"frobnicate"}}"#),
             format!(
                 r#"{{"token":"{TOKEN}","pane":3,"op":"attention","message":"hi","clear":true}}"#
@@ -1690,6 +1859,8 @@ mod tests {
             CliError::NoSuchPane(String::new()),
             CliError::AttentionFailed(String::new()),
             CliError::CloseFailed(String::new()),
+            CliError::LastVisiblePane(String::new()),
+            CliError::MinimizeFailed(String::new()),
         ];
         assert_eq!(errors.len(), ERRORS.len());
         for (error, spec) in errors.iter().zip(ERRORS) {
@@ -1750,6 +1921,11 @@ mod tests {
                 clear: true,
             },
             Op::Close { target: 8 },
+            minimized(&["npm", "run", "dev"]),
+            Op::Minimize { target: None },
+            Op::Minimize { target: Some(8) },
+            Op::Restore { target: None },
+            Op::Restore { target: Some(8) },
         ] {
             let line = request_line(TOKEN, 9, &op);
             assert!(!line.contains('\n'), "one line: {line}");
@@ -1778,6 +1954,7 @@ mod tests {
                 tab: Some(2),
                 key: Some("dev".into()),
                 opened_by_you: true,
+                minimized: true,
                 ..pane(7, "/tmp", Some("logs"), "tmp")
             },
         ];
@@ -1853,6 +2030,8 @@ mod tests {
             CliError::NoSuchPane("no open pane 9".into()),
             CliError::AttentionFailed("pane 9 is not open in tiili".into()),
             CliError::CloseFailed("the window did not answer in time".into()),
+            CliError::LastVisiblePane("pane 3 is the only pane showing in its tab".into()),
+            CliError::MinimizeFailed("the window did not answer in time".into()),
         ] {
             let suggestion = error.suggestion().to_string();
             cases.push((
@@ -1868,17 +2047,21 @@ mod tests {
         }
     }
 
-    /// List panes: one tab-separated line per pane.
+    /// List panes, Minimized pane listed: one tab-separated line per pane, a minimized one's ending in `minimized`.
     #[test]
     fn list_panes_prints_one_line_per_pane() {
         let panes = [
             pane(3, "/Users/red/src/app", None, "app"),
             pane(7, "/tmp", Some("logs"), "tmp"),
             pane(9, "/tmp", None, ""),
+            PaneInfo {
+                minimized: true,
+                ..pane(8, "/tmp", Some("dev"), "tmp")
+            },
         ];
         assert_eq!(
             list_lines(&panes),
-            "3\t/Users/red/src/app\tapp\n7\t/tmp\tlogs\n9\t/tmp\t\n"
+            "3\t/Users/red/src/app\tapp\n7\t/tmp\tlogs\n9\t/tmp\t\n8\t/tmp\tdev\tminimized\n"
         );
         assert_eq!(list_lines(&[]), "");
     }
@@ -1926,6 +2109,7 @@ mod tests {
                     cwd: None,
                     title: None,
                     key: None,
+                    minimized: false,
                     command: cmd(&["npm", "test"]),
                     json: true,
                 }),
@@ -1937,6 +2121,7 @@ mod tests {
                     cwd: None,
                     title: None,
                     key: None,
+                    minimized: false,
                     command: cmd(&["jq", "--json"]),
                     json: false,
                 }),
@@ -1950,6 +2135,7 @@ mod tests {
                     cwd: None,
                     title: None,
                     key: None,
+                    minimized: false,
                     command: cmd(&["npm", "run", "dev"]),
                     json: false,
                 }),
@@ -1962,6 +2148,7 @@ mod tests {
                     cwd: Some("/tmp".into()),
                     title: Some("logs".into()),
                     key: None,
+                    minimized: false,
                     command: cmd(&["tail", "-f", "x.log"]),
                     json: false,
                 }),
@@ -1973,6 +2160,7 @@ mod tests {
                     cwd: None,
                     title: None,
                     key: None,
+                    minimized: false,
                     command: cmd(&["ls", "--cwd", "--"]),
                     json: false,
                 }),
@@ -1983,8 +2171,20 @@ mod tests {
                     cwd: None,
                     title: None,
                     key: Some("dev".into()),
+                    minimized: false,
                     command: cmd(&["npm", "run", "dev"]),
                     json: false,
+                }),
+            ),
+            (
+                args(&["open", "--minimized", "--key", "dev", "--json", "--", "npm"]),
+                Ok(CliCommand::Open {
+                    cwd: None,
+                    title: None,
+                    key: Some("dev".into()),
+                    minimized: true,
+                    command: cmd(&["npm"]),
+                    json: true,
                 }),
             ),
             (args(&["open", "--key", "", "--", "ls"]), Err(())),
@@ -2016,6 +2216,13 @@ mod tests {
             (args(&["close", "abc"]), Err(())),
             (args(&["close", "-1"]), Err(())),
             (args(&["close", "8", "9"]), Err(())),
+            (args(&["minimize"]), Ok(CliCommand::Minimize(None))),
+            (args(&["minimize", "8"]), Ok(CliCommand::Minimize(Some(8)))),
+            (args(&["restore"]), Ok(CliCommand::Restore(None))),
+            (args(&["restore", "8"]), Ok(CliCommand::Restore(Some(8)))),
+            (args(&["minimize", "abc"]), Err(())),
+            (args(&["restore", "8", "9"]), Err(())),
+            (args(&["minimize", "--json"]), Err(())),
             (args(&["prompt"]), Ok(CliCommand::Prompt)),
             (args(&["prompt", "x"]), Err(())),
             (args(&["open"]), Err(())),
@@ -2145,7 +2352,8 @@ mod tests {
                 "attention",
                 "tab",
                 "key",
-                "opened_by_you"
+                "opened_by_you",
+                "minimized"
             ])
         );
         for name in ["open", "list"] {
