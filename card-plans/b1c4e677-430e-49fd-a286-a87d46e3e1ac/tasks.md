@@ -92,7 +92,7 @@ checks:
 
 ## 2. Write the rule where planners, builders and reviewers read it
 
-- [ ] 2.1 (triage) Planner rule: a task that edits a host test file, or the code it covers, names that target's `cargo test --test <name>` as its proof, and `cargo-test-host-card` runs it on the host
+- [x] 2.1 (triage) Planner rule: a task that edits a host test file, or the code it covers, names that target's `cargo test --test <name>` as its proof, and `cargo-test-host-card` runs it on the host
   - file: .harvaaja/instructions/plan.md
   - content:
 
