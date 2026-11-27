@@ -1,5 +1,6 @@
 import { TILING_MODES, type TilingMode } from "./layout";
 import { RESPONSIVE_STRENGTH, type ResponsiveSettings } from "./responsive";
+import type { Platform } from "./keymap";
 
 /** Every theme a user can choose; `system` follows the OS between tiili Light and tiili Dark. */
 export const THEME_IDS = [
@@ -61,6 +62,26 @@ export interface BehaviourSettings {
    * already saved is deleted.
    */
   restoreScrollback: boolean;
+  /**
+   * Whether plain Ctrl+V pastes on Windows and Linux instead of reaching the shell: `auto` follows the platform (on
+   * for Windows, off for Linux). macOS pastes with ⌘V and leaves Ctrl+V to the shell either way.
+   */
+  ctrlVPaste: CtrlVPaste;
+}
+
+export const CTRL_V_PASTE = ["auto", "on", "off"] as const;
+export type CtrlVPaste = (typeof CTRL_V_PASTE)[number];
+
+/** Whether plain Ctrl+V pastes on `platform` with the `ctrlVPaste` setting. */
+export function ctrlVPastes(setting: CtrlVPaste, platform: Platform): boolean {
+  if (platform === "macos") return false;
+  return setting === "auto" ? platform === "windows" : setting === "on";
+}
+
+/** The `ctrlVPaste` setting that gives `pastes` on `platform`: `auto` where that is the platform's default. */
+export function ctrlVPasteFor(pastes: boolean, platform: Platform): CtrlVPaste {
+  if (pastes === ctrlVPastes("auto", platform)) return "auto";
+  return pastes ? "on" : "off";
 }
 
 export interface ZenSettings {
@@ -165,7 +186,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursor: { style: "block", blink: true },
   tiling: { layout: "grid" },
   responsive: { enabled: true, strength: 0.5 },
-  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000, restoreScrollback: true },
+  behaviour: { hoverHighlight: true, startupSplash: true, scrollback: 10000, restoreScrollback: true, ctrlVPaste: "auto" },
   zen: { width: 140 },
   inactive: { opacity: 0.82, desaturate: false },
   appIcon: "system",
@@ -261,6 +282,9 @@ export function normalize(value: unknown): Settings {
         typeof behaviour.restoreScrollback === "boolean"
           ? behaviour.restoreScrollback
           : DEFAULT_SETTINGS.behaviour.restoreScrollback,
+      ctrlVPaste: CTRL_V_PASTE.includes(behaviour.ctrlVPaste as CtrlVPaste)
+        ? (behaviour.ctrlVPaste as CtrlVPaste)
+        : DEFAULT_SETTINGS.behaviour.ctrlVPaste,
     },
     zen: { width: number(zen.width, DEFAULT_SETTINGS.zen.width, ZEN_WIDTH_RANGE) },
     inactive: {

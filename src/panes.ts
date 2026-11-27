@@ -57,7 +57,7 @@ import {
   type SavedTab,
   type TabRestore,
 } from "./session";
-import type { Settings } from "./settings";
+import { ctrlVPastes, type Settings } from "./settings";
 import { zoomedSize } from "./responsive";
 import { give, Tab, type Pane, type TabHooks } from "./tab";
 import {
@@ -1734,7 +1734,8 @@ export class Panes {
       }
       return false;
     }
-    return !handleClipboardKey(this.backend, terminal.term, event, this.platform);
+    const pastes = ctrlVPastes(this.settings().behaviour.ctrlVPaste, this.platform);
+    return !handleClipboardKey(this.backend, terminal.term, event, this.platform, pastes);
   }
 
   /**

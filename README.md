@@ -131,6 +131,9 @@ step:
 
 <!-- end generated:shortcuts -->
 
+Plain Ctrl+V pastes too on Windows. On Linux it goes to the shell (quoted-insert) or to Vim (visual block) by default.
+Settings › Behaviour › Paste turns "Ctrl+V pastes" on or off on either.
+
 On Windows the name chip follows `cd` only when your shell reports its folder: see
 [Windows: let the chip follow `cd`](docs/windows-cd.md).
 
