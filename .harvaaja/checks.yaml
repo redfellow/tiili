@@ -27,14 +27,38 @@ checks:
     run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
     stage: every
     timeoutSeconds: 120
+  # The host-only Rust tests on a card, outside the sandbox: a card's proofs run in the sandbox, which refuses the
+  # Unix sockets and pseudo-terminals these tests need, so there they only compile and report ignored. When a card
+  # changes anything under src-tauri/, every target in src-tauri/tests/ with a test marked #[ignore = "host: ..."]
+  # runs with the ignored tests included; a card that leaves src-tauri/ alone skips it. The targets are found by
+  # that attribute, so a new host test is picked up without editing this check. cargo test writes no JUnit report,
+  # so a failure counts against the whole check. The run line is the whole set, for main's batch.
+  - name: cargo-test-host-card
+    run: >-
+      cargo test --manifest-path src-tauri/Cargo.toml
+      $(grep -l 'ignore = "host:' src-tauri/tests/*.rs | sed -E 's|.*/([^/]+)[.]rs$|--test \1|')
+      -- --include-ignored
+    stage: every
+    sandbox: none
+    timeoutSeconds: 1200
+    tests:
+      report: junit
+      affected: >-
+        git diff --quiet {since} HEAD -- src-tauri
+        || grep -l 'ignore = "host:' src-tauri/tests/*.rs
+      only: >-
+        cargo test --manifest-path src-tauri/Cargo.toml
+        $(for f in {files}; do printf -- '--test %s ' "$(basename "$f" .rs)"; done)
+        -- --include-ignored
   # At promotion, not on each card: a card's merge into hv/main needs only fast checks (about 87 s per card here).
   # A card's proofs run a narrower clippy (--lib, plus --test <name>); this exact command is refused as a proof.
   - name: cargo-clippy
     run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
     stage: release
     timeoutSeconds: 1200
-  # The whole Rust suite before a release, outside the sandbox so the PTY tests (#[ignore = "host: ..."], tagged
-  # @harvaaja-test-tier: host) run too. Not a card check: a card's proofs run the tests it touches.
+  # The whole Rust suite before a release, outside the sandbox so the host tests (#[ignore = "host: ..."], tagged
+  # @harvaaja-test-tier: host) run too. Cards run their host tests in cargo-test-host-card; this one also runs the
+  # lib and bin tests and every other target.
   - name: cargo-test-host
     run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests -- --include-ignored
     stage: release
