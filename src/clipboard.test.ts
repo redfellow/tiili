@@ -1,6 +1,8 @@
 // @harvaaja-test-tier: fast
-import { describe, expect, it } from "vitest";
-import { sanitizePaste } from "./clipboard";
+import type { Terminal } from "@xterm/xterm";
+import { describe, expect, it, vi } from "vitest";
+import type { Backend } from "./backend";
+import { handleClipboardKey, sanitizePaste } from "./clipboard";
 
 describe("sanitizePaste", () => {
   it.each([
@@ -13,5 +15,30 @@ describe("sanitizePaste", () => {
     const out = sanitizePaste(input);
     expect(out).toBe(expected);
     expect(out).not.toContain("\x1b");
+  });
+});
+
+describe("handleClipboardKey with plain Ctrl+V", () => {
+  const setup = () => {
+    const backend = { readClipboard: vi.fn(() => Promise.resolve("ls")), nativeMenus: false } as unknown as Backend;
+    const term = { paste: vi.fn(), focus: vi.fn() } as unknown as Terminal;
+    const event = {
+      type: "keydown", key: "v", ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, preventDefault: vi.fn(),
+    };
+    return { backend, term, event };
+  };
+
+  it("Ctrl+V pastes: the clipboard is pasted and the key kept from the shell", async () => {
+    const { backend, term, event } = setup();
+    expect(handleClipboardKey(backend, term, event, "linux", true)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    await vi.waitFor(() => expect(term.paste).toHaveBeenCalledWith("ls"));
+  });
+
+  it("Ctrl+V reaches the shell when the setting is off", () => {
+    const { backend, term, event } = setup();
+    expect(handleClipboardKey(backend, term, event, "linux", false)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(backend.readClipboard).not.toHaveBeenCalled();
   });
 });
