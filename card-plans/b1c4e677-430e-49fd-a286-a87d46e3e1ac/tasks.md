@@ -145,7 +145,7 @@ tiered, what its end-to-end tests are, and anything every plan must include.
   placeholder that fails `openspec validate --all --strict` on the base branch after the merge.
 ```
 
-- [ ] 2.2 (triage) Builder rule: replace "Card checks don't run the Rust tests" with how `cargo-test-host-card` runs the host tests on the card
+- [x] 2.2 (triage) Builder rule: replace "Card checks don't run the Rust tests" with how `cargo-test-host-card` runs the host tests on the card
   - file: .harvaaja/instructions/build.md
   - content:
 
