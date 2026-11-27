@@ -139,8 +139,8 @@ export const THEMES: readonly Theme[] = [
     // Rapids at night: koski panes on a darker window, savi cursor, ikkuna for cyan.
     id: "koski", name: "Koski", kind: "dark",
     tokens: tokens({
-      bg: "#0F1516", surface: "#182023", fg: "#C9CFCD", muted: "#8A9492", line: "#24302F", accent: "#C9764F",
-      termBg: "#182023", termFg: "#C9CFCD", termDim: "#6E7876", termGap: "#0B0F10",
+      bg: "#121414", surface: "#1C1F21", fg: "#CECECA", muted: "#8F938F", line: "#282F2D", accent: "#C9764F",
+      termBg: "#1C1F21", termFg: "#CECECA", termDim: "#727773", termGap: "#0E0E0E",
     }, "#222B2E #D05B3F #8FB59A #D9A43A #7FA2B8 #B97C92 #8FA6A4 #C9CFCD #626C6A #C9764F #A9CBB0 #EDC066 #9DBCD0 #D198AC #B3C7C5 #EEF1EF"),
   },
   {

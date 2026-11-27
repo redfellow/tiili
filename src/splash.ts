@@ -14,7 +14,7 @@ import { VERSION_LABEL } from "./version";
  */
 const FALLBACK: Record<string, string> = {
   // tokens-allow: fallbacks for a missing stylesheet, copied from tiili.css's Koski theme
-  "--bg": "#0f1516", "--fg": "#c9cfcd", "--muted": "#8a9492", "--term-bg": "#182023", "--accent": "#c9764f",
+  "--bg": "#121414", "--fg": "#cececa", "--muted": "#8f938f", "--term-bg": "#1c1f21", "--accent": "#c9764f",
   // tokens-allow: fallbacks for a missing stylesheet, copied from tiili.css's core palette and dark mark
   "--tiili-tiili": "#A4472B", "--tiili-klinkkeri": "#6B2A1E", "--tiili-savi": "#C9764F", "--tiili-laasti": "#E8DECD", "--tiili-graniitti": "#8D877D", "--mark-prompt": "#111617",
 };
