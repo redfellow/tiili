@@ -187,7 +187,7 @@ run one test file, lint or type check, and conventions the code must follow.
   change: a stale one fails `cargo-test-host-card` on the card. When it fails, fix it on the card.
 ```
 
-- [ ] 2.3 (triage) Reviewer rule: every edited test file is run by a proof, host tests by `cargo-test-host-card` too
+- [x] 2.3 (triage) Reviewer rule: every edited test file is run by a proof, host tests by `cargo-test-host-card` too
   - file: .harvaaja/review.md
   - content:
 
