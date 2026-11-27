@@ -45,9 +45,10 @@ export interface KeyChord {
 
 /**
  * Which clipboard action a key press asks for, or null when the key belongs to the shell.
- * macOS: ⌘C, ⌘V, ⌘A. Windows and Linux: Ctrl+Shift+C and Ctrl+Shift+V; plain Ctrl+C stays an interrupt.
+ * macOS: ⌘C, ⌘V, ⌘A. Windows and Linux: Ctrl+Shift+C and Ctrl+Shift+V; plain Ctrl+C stays an interrupt. With
+ * `ctrlVPastes` (the Ctrl+V pastes setting), plain Ctrl+V pastes too on Windows and Linux instead of reaching the shell.
  */
-export function clipboardAction(event: KeyChord, platform: Platform): ClipboardAction | null {
+export function clipboardAction(event: KeyChord, platform: Platform, ctrlVPastes = false): ClipboardAction | null {
   if (event.altKey) return null;
   const key = event.key.toLowerCase();
   if (platform === "macos") {
@@ -57,7 +58,8 @@ export function clipboardAction(event: KeyChord, platform: Platform): ClipboardA
     if (key === "a") return "selectAll";
     return null;
   }
-  if (!event.ctrlKey || !event.shiftKey || event.metaKey) return null;
+  if (!event.ctrlKey || event.metaKey) return null;
+  if (!event.shiftKey) return ctrlVPastes && key === "v" ? "paste" : null;
   if (key === "c") return "copy";
   if (key === "v") return "paste";
   return null;

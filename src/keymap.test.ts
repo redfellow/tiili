@@ -49,6 +49,21 @@ describe("clipboardAction", () => {
   });
 });
 
+const ctrlVCases: [string, Platform, KeyChord, ClipboardAction | null][] = [
+  ["Ctrl+V pastes: plain Ctrl+V pastes on Linux", "linux", chord("v", { ctrlKey: true }), "paste"],
+  ["Ctrl+V pastes: plain Ctrl+V pastes on Windows", "windows", chord("v", { ctrlKey: true }), "paste"],
+  ["Ctrl+V pastes: Ctrl+Shift+V still pastes", "linux", chord("V", { ctrlKey: true, shiftKey: true }), "paste"],
+  ["Ctrl+V pastes: plain Ctrl+C still interrupts", "linux", chord("c", { ctrlKey: true }), null],
+  ["Ctrl+V pastes: Ctrl+Alt+V (AltGr on Windows) is not a clipboard key", "windows", chord("v", { ctrlKey: true, altKey: true }), null],
+  ["Ctrl+V pastes: macOS leaves Ctrl+V to the shell", "macos", chord("v", { ctrlKey: true }), null],
+];
+
+describe("clipboardAction with Ctrl+V pastes on", () => {
+  it.each(ctrlVCases)("%s", (_name, platform, event, expected) => {
+    expect(clipboardAction(event, platform, true)).toBe(expected);
+  });
+});
+
 const NEW: PaneAction = { type: "new" };
 const CLOSE: PaneAction = { type: "close" };
 const focus = (index: number): PaneAction => ({ type: "focus", index });
