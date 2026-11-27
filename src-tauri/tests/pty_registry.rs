@@ -232,8 +232,17 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
         argv: vec!["ls".into()],
         path: Some(joined(&[caller[0].clone(), bin.clone()])),
     };
+    // SHELL follows the choice, Missing chosen shell: a shell gets SHELL naming the shell it runs, the chosen one
+    // when it can be run, else the system default's.
+    let default_shell = tiili_lib::shells::system_default();
+    let missing = std::env::temp_dir()
+        .join(format!("tiili-no-such-shell-{}", std::process::id()))
+        .to_string_lossy()
+        .into_owned();
     struct Case<'a> {
         id: SessionId,
+        shell: Option<&'a str>,
+        shell_var: Option<&'a str>,
         command: Option<&'a PaneCommand>,
         control: Option<&'a ControlEnv>,
         argv: Option<Vec<&'a str>>,
@@ -242,6 +251,8 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
     let cases = [
         Case {
             id: 4,
+            shell: None,
+            shell_var: Some(&default_shell),
             command: None,
             control: Some(&control),
             argv: None,
@@ -249,6 +260,8 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
         },
         Case {
             id: 5,
+            shell: None,
+            shell_var: None,
             command: Some(&npm),
             control: Some(&control),
             argv: Some(vec!["npm", "run", "dev"]),
@@ -256,6 +269,8 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
         },
         Case {
             id: 6,
+            shell: None,
+            shell_var: None,
             command: Some(&ls),
             control: Some(&control),
             argv: Some(vec!["ls"]),
@@ -263,6 +278,8 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
         },
         Case {
             id: 7,
+            shell: None,
+            shell_var: None,
             command: Some(&again),
             control: Some(&control),
             argv: Some(vec!["ls"]),
@@ -270,10 +287,30 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
         },
         Case {
             id: 8,
+            shell: None,
+            shell_var: None,
             command: Some(&npm),
             control: None,
             argv: Some(vec!["npm", "run", "dev"]),
             path: Some(joined(&caller)),
+        },
+        Case {
+            id: 9,
+            shell: Some("/bin/sh"),
+            shell_var: Some("/bin/sh"),
+            command: None,
+            control: None,
+            argv: None,
+            path: std::env::var_os("PATH"),
+        },
+        Case {
+            id: 10,
+            shell: Some(&missing),
+            shell_var: Some(&default_shell),
+            command: None,
+            control: None,
+            argv: None,
+            path: std::env::var_os("PATH"),
         },
     ];
     for case in cases {
@@ -281,6 +318,7 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
             case.id,
             Some(std::path::Path::new("/tmp")),
             "off",
+            case.shell,
             case.command,
             case.control,
         );
@@ -304,6 +342,11 @@ fn shell_sees_the_variables_and_commands_get_the_callers_path() {
             case.id
         );
         assert_eq!(var("PATH"), case.path, "pane {}", case.id);
+        if cfg!(unix) {
+            if let Some(shell) = case.shell_var {
+                assert_eq!(var("SHELL"), Some(shell.into()), "pane {}", case.id);
+            }
+        }
         assert_eq!(
             var("TERM"),
             Some("xterm-256color".into()),
@@ -369,6 +412,7 @@ fn command_found_on_the_callers_path_runs_with_the_variables_and_its_exit_is_rep
         .spawn_tracked(
             None,
             "off",
+            None,
             Some(&command),
             24,
             80,

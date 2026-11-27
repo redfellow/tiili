@@ -50,7 +50,7 @@ export function tauriBackend(): Backend {
   let listening: Promise<unknown> | undefined;
   return {
     nativeMenus: currentPlatform() === "macos",
-    spawn: (rows, cols, cwd, prompt, onOutput, launch, history) => {
+    spawn: (rows, cols, cwd, prompt, onOutput, launch, history, shell) => {
       const output = new Channel<number[]>();
       output.onmessage = (bytes) => onOutput(new Uint8Array(bytes));
       return invoke<number>("pty_spawn", {
@@ -62,8 +62,10 @@ export function tauriBackend(): Backend {
         command: launch?.command ?? null,
         path: launch?.path ?? null,
         history: history ?? null,
+        shell: shell?.trim() || null,
       });
     },
+    installedShells: () => invoke("shells_installed"),
     setPrompt: (prompt) => invoke("pty_set_prompt", { prompt }),
     setHighlight: (colour) => invoke("pty_set_highlight", { colour }),
     write: (id, data) => invoke("pty_write", { id, data }),

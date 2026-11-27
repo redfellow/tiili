@@ -1,0 +1,21 @@
+format: 1
+slug: choose-which-shell-the-terminal-launches
+title: Choose which shell the terminal launches, independent of the system
+  default (fish vs zsh)
+x-harvaaja-card: 552d9bcd-3c5b-4965-9910-4e955288672c
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: A new user-visible setting (Shell) changes which shell tiili starts,
+    a contract the terminal-session spec fixes as "the user's default shell",
+    and adds to the settings spec's Behaviour tab contents. No active change
+    exists.
+  citations:
+    - "openspec/specs/terminal-session/spec.md: Requirement: One terminal on the
+      user's default shell"
+    - "openspec/specs/settings/spec.md: Requirement: Settings tab contents"
+    - src-tauri/src/shell_integration.rs:230 shell_command uses
+      CommandBuilder::new_default_prog ($SHELL)
+  revision: beba3d21-2f9f-4f78-b416-09cb96360ab1
