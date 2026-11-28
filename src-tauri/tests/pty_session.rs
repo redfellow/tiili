@@ -247,28 +247,27 @@ fn classic_zsh_keeps_the_users_history_file() {
 }
 
 /// Folder reported at every prompt: with Classic, zsh and bash, with and without their own prompt, send OSC 7 naming
-/// this machine for `/tmp` before the prompt after `cd /tmp`, and the user's prompt hooks still run.
+/// this machine for `/tmp` before the prompt after `cd /tmp`; Classic replaces their own prompt and their prompt hooks
+/// still run.
 #[cfg(unix)]
 #[test]
 #[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
 fn folder_reported_at_every_prompt_zsh_and_bash_send_osc7() {
     const CLASSIC: &str = "\x1b[39m@\x1b[32m";
     let osc7 = format!("\x1b]7;file://{}/tmp\x07", tiili_lib::cwd::local_hostname());
-    let cases: &[(&str, &str, &str, &str)] = &[
+    let cases: &[(&str, &str, &str)] = &[
         (
             "/bin/zsh",
             ".zshrc",
             "PROMPT='mine-zsh> '\nprecmd() { print -n \"hook:$PWD\" }\n",
-            "mine-zsh> ",
         ),
         (
             "/bin/bash",
             ".bash_profile",
             "PS1='mine-bash> '\nPROMPT_COMMAND='printf \"hook:%s\" \"$PWD\"'\n",
-            "mine-bash> ",
         ),
     ];
-    for &(shell, rc_name, rc, mine) in cases {
+    for &(shell, rc_name, rc) in cases {
         if !std::path::Path::new(shell).exists() {
             eprintln!("{shell} is missing; skipped");
             continue;
@@ -283,12 +282,12 @@ fn folder_reported_at_every_prompt_zsh_and_bash_send_osc7() {
         let (found, seen) = classic_shell(
             shell,
             Some((rc_name, rc)),
-            mine,
+            CLASSIC,
             Some(("cd /tmp", &[osc7.as_str(), "hook:/tmp"])),
         );
         assert!(
             found,
-            "{shell} with its own prompt and hook sent no OSC 7 for /tmp or lost its hook: {seen:?}"
+            "{shell} with its own prompt and hook showed no Classic prompt, sent no OSC 7 for /tmp or lost its hook: {seen:?}"
         );
     }
 }

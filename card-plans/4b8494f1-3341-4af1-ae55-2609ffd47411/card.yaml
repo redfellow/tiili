@@ -1,0 +1,24 @@
+format: 1
+slug: fix-failing-checks-openspec-cargo-test-h
+title: "Fix failing checks: openspec, cargo-test-host-card & cargo-test-host"
+x-harvaaja-card: 4b8494f1-3341-4af1-ae55-2609ffd47411
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: "No contract changes. OpenSpec 2.2.0 strict now flags four main-spec
+    requirements over 500 characters; their extra detail moves into scenarios
+    word for word. The host test folder_reported_at_every_prompt is stale since
+    #267: it still waits for the user's own prompt under Classic, which Classic
+    now replaces. The test and the matching scenario wording get aligned with
+    the existing requirement."
+  citations:
+    - "openspec/specs/settings/spec.md: Settings tab contents, Prompt choice,
+      Prompt list"
+    - "openspec/specs/terminal-session/spec.md: Prompt shell integration,
+      Scenario: Folder reported at every prompt"
+    - src-tauri/tests/pty_session.rs:folder_reported_at_every_prompt_zsh_and_bash_send_osc7
+    - commit 98d2637 (#267) prompt profiles replace the user's own prompt
+  revision: c1b02e1f-812a-4841-ad95-31a4a4604590

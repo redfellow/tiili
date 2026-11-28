@@ -151,11 +151,15 @@ The settings dialogue SHALL show four tabs, Style, Typography, Behaviour and Int
 - **THEN** the Integrations tab is selected and lists each integration with a checkbox, a description and where it installs
 
 ### Requirement: Settings tab contents
-Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Shell, Tiling, Panes (Responsive text, Hover, Scrollback lines), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents, whose heading SHALL carry an "EXPERIMENTAL" tag with a line under it saying the integrations hook into each agent's own configuration and may change with a new agent version.
+Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Shell, Tiling, Panes (Responsive text, Hover, Scrollback lines), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents.
 
 #### Scenario: Behaviour tab sections
 - **WHEN** the user opens the Behaviour tab
 - **THEN** it shows the Shell, Tiling, Panes, Attention, App and Remote shells sections
+
+#### Scenario: Integrations tab marks coding agents experimental
+- **WHEN** the user opens the Integrations tab
+- **THEN** the Coding agents heading carries an "EXPERIMENTAL" tag with a line under it saying the integrations hook into each agent's own configuration and may change with a new agent version
 
 ### Requirement: Tiling setting
 The Behaviour tab SHALL have Tiling cards, each with an icon above its label: Grid (default), Wide grid, Tall grid, Side by side and Stacked, with the hint "How panes are arranged as you open and close them." behind an info button. Choosing a mode SHALL re-lay out the open panes live, and the mode SHALL be saved with the settings. A missing or invalid saved mode SHALL fall back to Grid.
@@ -176,15 +180,23 @@ The Behaviour tab SHALL have a "Shrink text in small panes" checkbox (default on
 - **THEN** every pane uses the chosen font size
 
 ### Requirement: Prompt choice
-The user SHALL be able to choose the shell prompt tiili gives its shells: Default (saved as `off`: the prompt the shell's own config sets up), Classic, Minimal or Tiili. Default SHALL be the default and its card SHALL show a "DEFAULT" tag; an unknown or wrong-typed saved value SHALL load as Default. Classic, Minimal and Tiili SHALL show in place of the shell's own prompt, including one set up by the user's config or a prompt framework, and Default SHALL bring that prompt back. The choice SHALL apply to shells opened after it and to the local zsh, bash, fish and PowerShell shells already open in the app.
+The user SHALL be able to choose the shell prompt tiili gives its shells: Default (saved as `off`: the prompt the shell's own config sets up), Classic, Minimal or Tiili. Default SHALL be the default. Classic, Minimal and Tiili SHALL show in place of the shell's own prompt, including one set up by the user's config or a prompt framework, and Default SHALL bring that prompt back.
 
 #### Scenario: Default by default
 - **WHEN** tiili starts with no saved settings, or the saved prompt is unknown
 - **THEN** the prompt setting is Default and shells show their own prompt
 
+#### Scenario: Default card is tagged and wrong types load as Default
+- **WHEN** the saved prompt has the wrong type and the user opens the Style tab
+- **THEN** the prompt setting is Default and the Default card shows a "DEFAULT" tag
+
 #### Scenario: New panes use the choice
 - **WHEN** the user chooses Classic and opens a new pane
 - **THEN** the new pane's shell starts with the Classic prompt
+
+#### Scenario: Choice applies to new and open shells
+- **WHEN** the user saves a prompt choice
+- **THEN** it applies to shells opened after it and to the local zsh, bash, fish and PowerShell shells already open in the app
 
 #### Scenario: Open panes switch
 - **WHEN** a zsh or fish pane started with Default is idle at its prompt and the user saves Tiili
@@ -203,11 +215,15 @@ The user SHALL be able to choose the shell prompt tiili gives its shells: Defaul
 - **THEN** the pane shows the prompt its own config set up again
 
 ### Requirement: Prompt list
-The prompt choices SHALL be shown on the Style tab under Theme as one row of cards, each showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours, with an info button beside the Prompt heading whose hint says the choice applies to open and new panes and that Default keeps the prompt the user's own shell config sets up while the others show in its place. Selecting a card SHALL preview that prompt in the open panes; Cancel and Esc SHALL put the saved prompt back.
+The prompt choices SHALL be shown on the Style tab under Theme as one row of cards, each showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours. Selecting a card SHALL preview that prompt in the open panes; Cancel and Esc SHALL put the saved prompt back.
 
 #### Scenario: Preview follows the theme
 - **WHEN** the user moves the theme grid from Nord to Dracula
 - **THEN** the prompt previews redraw in Dracula's colours
+
+#### Scenario: Prompt info hint
+- **WHEN** the user opens the info button beside the Prompt heading
+- **THEN** its hint says the choice applies to open and new panes and that Default keeps the prompt the user's own shell config sets up while the others show in its place
 
 #### Scenario: Live preview in open panes
 - **WHEN** a zsh pane is idle at its prompt and the user moves the prompt cards from Default to Minimal, then cancels

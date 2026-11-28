@@ -54,7 +54,7 @@ Every shell tiili spawns SHALL have `TERM=xterm-256color`, `COLORTERM=truecolor`
 - **THEN** `truecolor` is shown
 
 ### Requirement: Prompt shell integration
-tiili SHALL start zsh, bash, fish and PowerShell through its integration so that the user's own startup files still load first. With Classic, Minimal or Tiili chosen, the chosen prompt SHALL show in place of the prompt those files set up, including one a framework rebuilds before every prompt; with Default (`off`), the shell SHALL show the prompt those files set up, and switching to Default SHALL bring it back. These shells SHALL also report their working folder with OSC 7, naming this machine's hostname, before every prompt, whichever prompt is shown. Other shells SHALL start with the same program and arguments as without the integration.
+tiili SHALL start zsh, bash, fish and PowerShell through its integration so that the user's own startup files still load first. With Classic, Minimal or Tiili chosen, the chosen prompt SHALL show in place of the prompt those files set up; with Default (`off`), the shell SHALL show the prompt those files set up. These shells SHALL also report their working folder with OSC 7, naming this machine's hostname, before every prompt, whichever prompt is shown.
 
 #### Scenario: Default zsh gets the chosen prompt
 - **WHEN** Classic is chosen and a zsh whose config sets no PROMPT starts
@@ -68,9 +68,17 @@ tiili SHALL start zsh, bash, fish and PowerShell through its integration so that
 - **WHEN** Default is chosen and the user's shell config sets its own prompt
 - **THEN** the shell shows the user's prompt
 
+#### Scenario: Framework prompt replaced and brought back
+- **WHEN** Classic is chosen and the user's config sets up a prompt a framework rebuilds before every prompt, then the user switches to Default
+- **THEN** the Classic prompt shows in its place, and switching to Default brings the user's prompt back
+
 #### Scenario: Folder reported at every prompt
 - **WHEN** Classic is chosen and the user runs `cd /tmp` in zsh, bash, fish or PowerShell, including one whose own config set the prompt
-- **THEN** the shell sends OSC 7 for `/tmp` (or the Windows folder) before its next prompt, and the user's prompt and existing prompt hooks still run
+- **THEN** the shell sends OSC 7 for `/tmp` (or the Windows folder) before its next prompt, and the chosen prompt and the user's existing prompt hooks still run
+
+#### Scenario: Other shells start unchanged
+- **WHEN** the user's shell is not zsh, bash, fish or PowerShell
+- **THEN** other shells start with the same program and arguments as without the integration
 
 ### Requirement: Session environment in AppImage shells
 When tiili runs from a Linux AppImage, every shell it spawns SHALL get no environment entries pointing at or inside the AppImage mount: such entries SHALL be dropped from colon-separated variables (removing a variable left empty), variables whose single value is inside the mount SHALL be removed, `APPIMAGE`, `APPDIR`, `ARGV0` and `OWD` SHALL be removed, and `GDK_BACKEND` SHALL be removed when it is `x11`. Outside an AppImage the shell environment SHALL be unchanged.
