@@ -674,6 +674,16 @@ fn shell_join(argv: &[String]) -> String {
         .join(" ")
 }
 
+/// What `tiili` in the app's `bin` folder runs: the running binary `exe`, or, in an AppImage, the AppImage file the
+/// runtime names in `appimage` (its `APPIMAGE`). The binary of an AppImage lives in a temporary mount that goes when
+/// the app exits, and the file stays where the user put it, so a link to it keeps working, across updates too.
+fn cli_target(exe: PathBuf, appimage: Option<std::ffi::OsString>) -> PathBuf {
+    match appimage.map(PathBuf::from) {
+        Some(file) if file.is_absolute() => file,
+        _ => exe,
+    }
+}
+
 /// Puts `tiili` in `bin`: a link to `exe` on macOS and Linux. On Windows a hard link to (or, across volumes, a copy
 /// of) the console program `tiili-cli.exe` next to `exe`, named `tiili.exe`: `exe` is a GUI program there, which
 /// shells neither wait for nor take an exit code from, and no batch file sits between, so cmd.exe never re-parses
@@ -741,6 +751,7 @@ pub fn start(app: &AppHandle) {
         .unwrap_or_else(|_| PathBuf::from("bin"));
     match std::env::current_exe() {
         Ok(exe) => {
+            let exe = cli_target(exe, std::env::var_os("APPIMAGE"));
             if let Err(e) = install_cli(&bin_dir, &exe) {
                 eprintln!("tiili: could not put tiili in {}: {e}", bin_dir.display());
             }
@@ -771,6 +782,24 @@ mod tests {
 
     use super::*;
     use crate::RepoInfo;
+
+    #[test]
+    fn cli_links_the_appimage_file_not_its_mount() {
+        let mounted = PathBuf::from("/tmp/.mount_tiiliX1/usr/bin/tiili");
+        let cases = [
+            (
+                Some("/home/u/Applications/tiili.AppImage"),
+                "/home/u/Applications/tiili.AppImage",
+            ),
+            (None, "/tmp/.mount_tiiliX1/usr/bin/tiili"),
+            (Some(""), "/tmp/.mount_tiiliX1/usr/bin/tiili"),
+            (Some("tiili.AppImage"), "/tmp/.mount_tiiliX1/usr/bin/tiili"),
+        ];
+        for (appimage, want) in cases {
+            let got = cli_target(mounted.clone(), appimage.map(std::ffi::OsString::from));
+            assert_eq!(got, PathBuf::from(want), "APPIMAGE={appimage:?}");
+        }
+    }
 
     /// One thing done to the owners table, and what it should answer.
     enum Step {
