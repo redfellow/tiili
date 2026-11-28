@@ -54,18 +54,22 @@ Every shell tiili spawns SHALL have `TERM=xterm-256color`, `COLORTERM=truecolor`
 - **THEN** `truecolor` is shown
 
 ### Requirement: Prompt shell integration
-When a prompt other than Off is chosen, tiili SHALL start zsh, bash and PowerShell so that the user's own startup files still load first and the chosen prompt is set only when those files left the shell's default prompt. These shells SHALL also report their working folder with OSC 7, naming this machine's hostname, before every prompt, whichever prompt is shown. Other shells, and every shell with Off, SHALL start with the same program and arguments as without the integration.
+tiili SHALL start zsh, bash, fish and PowerShell through its integration so that the user's own startup files still load first. With Classic, Minimal or Tiili chosen, the chosen prompt SHALL show in place of the prompt those files set up, including one a framework rebuilds before every prompt; with Default (`off`), the shell SHALL show the prompt those files set up, and switching to Default SHALL bring it back. These shells SHALL also report their working folder with OSC 7, naming this machine's hostname, before every prompt, whichever prompt is shown. Other shells SHALL start with the same program and arguments as without the integration.
 
 #### Scenario: Default zsh gets the chosen prompt
 - **WHEN** Classic is chosen and a zsh whose config sets no PROMPT starts
 - **THEN** its prompt is the coloured Classic prompt
 
-#### Scenario: User's own prompt wins
-- **WHEN** Classic is chosen and the user's `.zshrc` sets PROMPT (or `.bashrc` sets PS1, or the PowerShell profile defines `prompt`)
+#### Scenario: Chosen prompt replaces the user's own
+- **WHEN** Classic is chosen and the user's `.zshrc` sets PROMPT (or `.bashrc` sets PS1, `config.fish` defines `fish_prompt`, or the PowerShell profile defines `prompt`)
+- **THEN** the shell shows the Classic prompt
+
+#### Scenario: Default keeps the user's own prompt
+- **WHEN** Default is chosen and the user's shell config sets its own prompt
 - **THEN** the shell shows the user's prompt
 
 #### Scenario: Folder reported at every prompt
-- **WHEN** Classic is chosen and the user runs `cd /tmp` in zsh, bash or PowerShell, including one whose own config set the prompt
+- **WHEN** Classic is chosen and the user runs `cd /tmp` in zsh, bash, fish or PowerShell, including one whose own config set the prompt
 - **THEN** the shell sends OSC 7 for `/tmp` (or the Windows folder) before its next prompt, and the user's prompt and existing prompt hooks still run
 
 ### Requirement: Session environment in AppImage shells

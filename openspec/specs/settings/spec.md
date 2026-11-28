@@ -151,7 +151,7 @@ The settings dialogue SHALL show four tabs, Style, Typography, Behaviour and Int
 - **THEN** the Integrations tab is selected and lists each integration with a checkbox, a description and where it installs
 
 ### Requirement: Settings tab contents
-Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Shell, Tiling, Panes (Responsive text, Hover, Scrollback lines), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents.
+Style SHALL hold Theme, Prompt and Terminal (Cursor, Inactive panes and, on macOS, Dock icon). Typography SHALL hold Font, with the family list beside Size, Weight, Bold weight, Line height, Letter spacing and Ligatures. Behaviour SHALL hold Shell, Tiling, Panes (Responsive text, Hover, Scrollback lines), Attention, App (Startup, Updates) and Remote shells. Integrations SHALL hold Coding agents, whose heading SHALL carry an "EXPERIMENTAL" tag with a line under it saying the integrations hook into each agent's own configuration and may change with a new agent version.
 
 #### Scenario: Behaviour tab sections
 - **WHEN** the user opens the Behaviour tab
@@ -176,37 +176,41 @@ The Behaviour tab SHALL have a "Shrink text in small panes" checkbox (default on
 - **THEN** every pane uses the chosen font size
 
 ### Requirement: Prompt choice
-The user SHALL be able to choose the shell prompt tiili gives its shells: Off (the shell's own prompt), Classic, Minimal or Tiili. Off SHALL be the default and its card SHALL show a "DEFAULT" tag; an unknown or wrong-typed saved value SHALL load as Off. The choice SHALL apply to shells opened after it and to the local zsh, bash and PowerShell shells already open in the app, where those shells' own config left the default prompt.
+The user SHALL be able to choose the shell prompt tiili gives its shells: Default (saved as `off`: the prompt the shell's own config sets up), Classic, Minimal or Tiili. Default SHALL be the default and its card SHALL show a "DEFAULT" tag; an unknown or wrong-typed saved value SHALL load as Default. Classic, Minimal and Tiili SHALL show in place of the shell's own prompt, including one set up by the user's config or a prompt framework, and Default SHALL bring that prompt back. The choice SHALL apply to shells opened after it and to the local zsh, bash, fish and PowerShell shells already open in the app.
 
-#### Scenario: Off by default
+#### Scenario: Default by default
 - **WHEN** tiili starts with no saved settings, or the saved prompt is unknown
-- **THEN** the prompt setting is Off and shells show their own prompt
+- **THEN** the prompt setting is Default and shells show their own prompt
 
 #### Scenario: New panes use the choice
 - **WHEN** the user chooses Classic and opens a new pane
 - **THEN** the new pane's shell starts with the Classic prompt
 
 #### Scenario: Open panes switch
-- **WHEN** a zsh pane started with Off is idle at its prompt and the user saves Tiili
+- **WHEN** a zsh or fish pane started with Default is idle at its prompt and the user saves Tiili
 - **THEN** the pane's prompt redraws as the Tiili prompt without anything typed into the shell
 
 #### Scenario: Other shells switch at next prompt
-- **WHEN** a bash or PowerShell pane started with Off is running a command and the user saves Tiili
+- **WHEN** a bash or PowerShell pane started with Default is running a command and the user saves Tiili
 - **THEN** the pane switches to the Tiili prompt at its next prompt, and nothing is typed into the shell
 
-#### Scenario: Own prompt wins
-- **WHEN** a pane's shell config sets its own prompt and the user saves Classic
-- **THEN** that pane keeps its own prompt
+#### Scenario: Chosen prompt replaces the user's own
+- **WHEN** a pane's shell config sets its own prompt (such as powerlevel10k) and the user saves Classic
+- **THEN** that pane shows the Classic prompt
+
+#### Scenario: Default brings the user's own prompt back
+- **WHEN** that pane shows Classic and the user saves Default
+- **THEN** the pane shows the prompt its own config set up again
 
 ### Requirement: Prompt list
-The prompt choices SHALL be shown on the Style tab under Theme as one row of cards, each showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours, with an info button beside the Prompt heading whose hint says the choice applies to open and new panes and that a prompt set in the user's own shell config wins. Selecting a card SHALL preview that prompt in the open panes; Cancel and Esc SHALL put the saved prompt back.
+The prompt choices SHALL be shown on the Style tab under Theme as one row of cards, each showing a preview of that prompt drawn in the selected theme's terminal background and ANSI colours, with an info button beside the Prompt heading whose hint says the choice applies to open and new panes and that Default keeps the prompt the user's own shell config sets up while the others show in its place. Selecting a card SHALL preview that prompt in the open panes; Cancel and Esc SHALL put the saved prompt back.
 
 #### Scenario: Preview follows the theme
 - **WHEN** the user moves the theme grid from Nord to Dracula
 - **THEN** the prompt previews redraw in Dracula's colours
 
 #### Scenario: Live preview in open panes
-- **WHEN** a zsh pane is idle at its prompt and the user moves the prompt cards from Off to Minimal, then cancels
+- **WHEN** a zsh pane is idle at its prompt and the user moves the prompt cards from Default to Minimal, then cancels
 - **THEN** the pane shows the Minimal prompt while Minimal is selected and its own prompt again after Cancel
 
 ### Requirement: Saved settings apply in every window

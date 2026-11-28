@@ -1,6 +1,6 @@
-# tiili shell integration for zsh: the user's own .zshrc, with their ZDOTDIR, then tiili's prompt when the user's
-# files left zsh's default one, following the choice in the integration folder's `prompt` file before every prompt
-# (Off puts the default prompt back). Colours are ANSI slots (%F{0..7}), so the terminal's theme picks the actual colours.
+# tiili shell integration for zsh: the user's own .zshrc, with their ZDOTDIR, then tiili's prompt in place of the one
+# they set up, following the choice in the integration folder's `prompt` file before every prompt (Off, shown as
+# Default, puts theirs back). Colours are ANSI slots (%F{0..7}), so the terminal's theme picks the actual colours.
 ZDOTDIR="${TIILI_USER_ZDOTDIR:-$HOME}"
 # /etc/zshrc (macOS) put the history in tiili's folder, as ZDOTDIR pointed there: keep it where the user's is.
 [[ "$HISTFILE" == "$_tiili_zdotdir/.zsh_history" ]] && HISTFILE="$ZDOTDIR/.zsh_history"
@@ -9,27 +9,35 @@ TIILI_USER_ZDOTDIR="$ZDOTDIR"
 ZDOTDIR="$_tiili_zdotdir"
 
 autoload -Uz add-zsh-hook
-if [[ -z "$PROMPT" || "$PROMPT" == '%m%# ' || "$PROMPT" == '%n@%m %1~ %# ' ]]; then
-  typeset -g _tiili_default_prompt="$PROMPT" _tiili_prompt_start="${TIILI_PROMPT:-off}" _tiili_prompt_applied=
-  typeset -g _tiili_prompt_file="${_tiili_zdotdir:h}/prompt"
-  # Sets the chosen prompt; succeeds only when it changed, so an unchanged choice never touches PROMPT.
-  _tiili_apply_prompt() {
-    emulate -L zsh
-    local style=$_tiili_prompt_start
-    [[ -r $_tiili_prompt_file ]] && style=$(<$_tiili_prompt_file)
-    [[ $style == $_tiili_prompt_applied ]] && return 1
-    _tiili_prompt_applied=$style
-    case $style in
-      classic) PROMPT='%F{6}%n%f@%F{2}%m%f:%F{4}%~%f%(!.#.$) ' ;;
-      minimal) PROMPT='%F{4}%~%f %F{5}❯%f ' ;;
-      tiili) PROMPT='%F{6}%n%f@%F{2}%m%f %F{4}%~%f'$'\n''%F{3}❯%f ' ;;
-      *) PROMPT=$_tiili_default_prompt ;;
-    esac
-    return 0
-  }
-  _tiili_apply_prompt
-  add-zsh-hook precmd _tiili_apply_prompt
-fi
+typeset -g _tiili_prompt_start="${TIILI_PROMPT:-off}" _tiili_prompt_set= _tiili_user_prompt="$PROMPT" _tiili_user_rprompt="$RPROMPT"
+typeset -g _tiili_prompt_file="${_tiili_zdotdir:h}/prompt"
+# Shows the chosen prompt in place of the user's own (theirs, a framework's like powerlevel10k, or zsh's default), and
+# Off (Default) puts theirs back. Whatever PROMPT holds that tiili didn't set is the user's: it is remembered each time,
+# so Default brings back their prompt as it is now. Run last of the precmd hooks, after any that rebuild the user's
+# prompt, it sets the chosen one again before every prompt. Succeeds only when what shows changed.
+_tiili_apply_prompt() {
+  emulate -L zsh
+  precmd_functions=(${precmd_functions:#_tiili_apply_prompt} _tiili_apply_prompt)
+  local style=$_tiili_prompt_start chosen= shown=$_tiili_prompt_set
+  [[ -r $_tiili_prompt_file ]] && style=$(<$_tiili_prompt_file)
+  case $style in
+    classic) chosen='%F{6}%n%f@%F{2}%m%f:%F{4}%~%f%(!.#.$) ' ;;
+    minimal) chosen='%F{4}%~%f %F{5}❯%f ' ;;
+    tiili) chosen='%F{6}%n%f@%F{2}%m%f %F{4}%~%f'$'\n''%F{3}❯%f ' ;;
+  esac
+  if [[ -z $_tiili_prompt_set || "$PROMPT" != "$_tiili_prompt_set" ]]; then
+    _tiili_user_prompt=$PROMPT _tiili_user_rprompt=$RPROMPT
+  fi
+  if [[ -n $chosen ]]; then
+    PROMPT=$chosen RPROMPT=
+  elif [[ -n $_tiili_prompt_set ]]; then
+    PROMPT=$_tiili_user_prompt RPROMPT=$_tiili_user_rprompt
+  fi
+  _tiili_prompt_set=$chosen
+  [[ "$shown" != "$chosen" ]]
+}
+_tiili_apply_prompt
+add-zsh-hook precmd _tiili_apply_prompt
 
 # zsh shows pasted text and its own selection (the region) in reverse video, a block of the text colour. Give them the
 # terminal selection's colour instead, which tiili writes to the integration folder's `highlight` file with each theme

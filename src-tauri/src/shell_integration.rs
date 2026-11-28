@@ -1,5 +1,5 @@
-//! Shell integration: how tiili starts zsh, bash and PowerShell so they show the prompt the user chose in
-//! Settings, after the user's own startup files have loaded and only where those left the shell's default prompt.
+//! Shell integration: how tiili starts zsh, bash, fish and PowerShell so they show the prompt the user chose in
+//! Settings in place of the one the user's own startup files set up, which Off (shown as Default) keeps.
 //! The current choice is kept in the integration folder's [`PROMPT_FILE`], which the scripts read before every
 //! prompt, so open shells follow a new choice too. Free of Tauri types; [`plan`] is pure so it can be tested without
 //! a shell.
@@ -32,7 +32,7 @@ pub fn known_prompt(prompt: &str) -> &str {
 
 /// The scripts, embedded in the binary and written to the integration folder before a shell needs them: each
 /// path is relative to that folder.
-const SCRIPTS: [(&str, &str); 6] = [
+const SCRIPTS: [(&str, &str); 7] = [
     (
         "zsh/.zshenv",
         include_str!("shell_integration/zsh/zshenv.zsh"),
@@ -57,6 +57,10 @@ const SCRIPTS: [(&str, &str); 6] = [
         "pwsh/tiili.ps1",
         include_str!("shell_integration/pwsh/tiili.ps1"),
     ),
+    (
+        "fish/tiili.fish",
+        include_str!("shell_integration/fish/tiili.fish"),
+    ),
 ];
 
 /// How to start a shell: `program` with `args` and extra `env`, or, when `program` is `None`, the default shell
@@ -79,7 +83,7 @@ impl ShellPlan {
 }
 
 /// How to start `shell` (a path, e.g. `$SHELL` or `%COMSPEC%`) so it shows `prompt`, with the integration scripts in
-/// `dir`. `user_zdotdir` is the ZDOTDIR tiili itself was started with, if any. zsh, bash and PowerShell start
+/// `dir`. `user_zdotdir` is the ZDOTDIR tiili itself was started with, if any. zsh, bash, fish and PowerShell start
 /// through the scripts for every prompt, Off (and an unknown prompt, started as Off) included, so they can follow a
 /// later choice; other shells get the plain plan.
 pub fn plan(shell: &str, prompt: &str, dir: &Path, user_zdotdir: Option<OsString>) -> ShellPlan {
@@ -114,6 +118,24 @@ pub fn plan(shell: &str, prompt: &str, dir: &Path, user_zdotdir: Option<OsString
             ],
             env: vec![chosen],
         },
+        "fish" => {
+            let script = dir.join("fish").join("tiili.fish");
+            // A single-quoted fish string: a backslash or quote inside is escaped with a backslash.
+            let quoted = script
+                .to_string_lossy()
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'");
+            // A login shell, like the default spawn.
+            ShellPlan {
+                program,
+                args: vec![
+                    "-l".into(),
+                    "--init-command".into(),
+                    format!("source '{quoted}'").into(),
+                ],
+                env: vec![chosen],
+            }
+        }
         "pwsh" | "powershell" => {
             let script = dir.join("pwsh").join("tiili.ps1");
             // A single-quoted PowerShell string: a quote inside is written twice.
@@ -187,10 +209,11 @@ fn write_choice(dir: &Path, file: &str, text: &str) -> io::Result<()> {
     fs::rename(&aside, &target)
 }
 
-/// Whether `shell` (a path) redraws an idle prompt on SIGUSR1 once its integration has loaded: zsh only. bash and
+/// Whether `shell` (a path) redraws an idle prompt on SIGUSR1 once its integration has loaded: zsh and fish. bash and
 /// PowerShell switch at their next prompt and are never sent the signal.
 pub fn redraws_on_signal(shell: &str) -> bool {
-    crate::command::program_name(shell).eq_ignore_ascii_case("zsh")
+    let name = crate::command::program_name(shell);
+    name.eq_ignore_ascii_case("zsh") || name.eq_ignore_ascii_case("fish")
 }
 
 /// The folder tiili keeps the integration scripts in: `shell-integration` in the app's cache folder.
@@ -290,6 +313,9 @@ mod tests {
         let zsh_dir = joined(dir, &["zsh"]);
         let rcfile = joined(dir, &["bash", "tiili.bash"]);
         let ps1 = joined(dir, &["pwsh", "tiili.ps1"]);
+        let fish = joined(dir, &["fish", "tiili.fish"]);
+        let quirky = Path::new(r"/home/o'brien/odd\dir");
+        let quirky_fish = r"source '/home/o\'brien/odd\\dir/fish/tiili.fish'";
         let windows_ps1 = joined(windows, &["pwsh", "tiili.ps1"]).replace('\'', "''");
         let plain = ShellPlan::plain();
         let some = |s: &str| Some(s.to_string());
@@ -351,9 +377,29 @@ mod tests {
                     env: env(&[("TIILI_PROMPT", "off")]),
                 },
             ),
-            ("/usr/local/bin/fish", "off", dir, None, plain.clone()),
+            (
+                "/usr/local/bin/fish",
+                "classic",
+                dir,
+                None,
+                ShellPlan {
+                    program: some("/usr/local/bin/fish"),
+                    args: strings(&["-l", "--init-command", &format!("source '{fish}'")]),
+                    env: env(&[("TIILI_PROMPT", "classic")]),
+                },
+            ),
+            (
+                "/usr/bin/fish",
+                "off",
+                quirky,
+                None,
+                ShellPlan {
+                    program: some("/usr/bin/fish"),
+                    args: strings(&["-l", "--init-command", quirky_fish]),
+                    env: env(&[("TIILI_PROMPT", "off")]),
+                },
+            ),
             // Shells without an integration start unchanged.
-            ("/usr/local/bin/fish", "classic", dir, None, plain.clone()),
             ("/opt/homebrew/bin/nu", "classic", dir, None, plain.clone()),
             (
                 r"C:\Windows\System32\cmd.exe",
@@ -551,13 +597,13 @@ mod tests {
     }
 
     #[test]
-    fn only_zsh_redraws_on_signal() {
+    fn zsh_and_fish_redraw_on_signal() {
         let cases = [
             ("/bin/zsh", true),
             ("/usr/local/bin/ZSH", true),
             ("/bin/bash", false),
             ("/usr/local/bin/pwsh", false),
-            ("/usr/local/bin/fish", false),
+            ("/usr/local/bin/fish", true),
         ];
         for (shell, redraws) in cases {
             assert_eq!(redraws_on_signal(shell), redraws, "{shell}");
