@@ -114,11 +114,15 @@ Opening or closing a pane, changing the tiling mode, or a settled window resize 
 - **THEN** once the resize has settled the panes re-flow to one above the other, and not during the drag
 
 ### Requirement: Pane zoom
-The app SHALL zoom the focused terminal pane's font size one pixel per press within 6–48 px, and reset it to the Settings font size with the keys its scenarios name. Zoom SHALL affect only the focused pane, SHALL NOT be saved or change the Settings font size, and the keys SHALL NOT reach the shell. The pane's PTY SHALL follow its new size.
+The app SHALL zoom the focused terminal pane's font size one pixel per press within 6–48 px, and reset it to the Settings font size with the keys its scenarios name; Ctrl or ⌘ with the mouse wheel zooms the pane under the pointer the same way. Zoom SHALL affect only the focused pane, SHALL NOT be saved or change the Settings font size, and the keys SHALL NOT reach the shell. The pane's PTY SHALL follow its new size.
 
 #### Scenario: Zoom keys
 - **WHEN** the user presses ⌘+ or ⌘= / ⌘− / ⌘0 on macOS, or Ctrl++ or Ctrl+= / Ctrl+− / Ctrl+0 on Windows and Linux
 - **THEN** the focused pane zooms in / zooms out / returns to the Settings font size
+
+#### Scenario: Zoom with the wheel
+- **WHEN** the user turns the mouse wheel up / down over a terminal pane while holding Ctrl on Windows and Linux, or ⌘ on macOS
+- **THEN** that pane zooms in / out one pixel per notch (a touchpad's small scrolls add up to a step), the pane does not scroll and its shell gets no wheel event
 
 #### Scenario: Zoom limits
 - **WHEN** a pane is at 48 px and the user zooms in, or at 6 px and the user zooms out

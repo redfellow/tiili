@@ -143,6 +143,48 @@ export function zoomAction(event: KeyChord, platform: Platform): ZoomAction | nu
   return null;
 }
 
+/** The parts of a wheel event the wheel zoom reads. */
+export interface WheelChord {
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+  deltaY: number;
+  /** 0 pixels, 1 lines, 2 pages, as in WheelEvent. */
+  deltaMode: number;
+}
+
+/** Wheel pixels that make one zoom step when a touchpad scrolls in small amounts. */
+export const WHEEL_ZOOM_PIXELS = 50;
+
+/**
+ * The zoom a wheel event asks for, or null when the wheel belongs to the terminal: Ctrl with the wheel on Windows
+ * and Linux, ⌘ with it on macOS, the same modifier as the zoom keys. Wheel up zooms in and down zooms out. A mouse
+ * notch (a line or a page, or at least WHEEL_ZOOM_PIXELS pixels) is one step; a touchpad's small pixel amounts are
+ * added up in `carried`, the pixels left over from earlier events, until they make a step. Returns the step, 0 when
+ * none is due yet, and the pixels to carry to the next event.
+ */
+export function wheelZoom(
+  event: WheelChord,
+  platform: Platform,
+  carried: number,
+): { zoom: Exclude<ZoomAction, "reset"> | null; carried: number } | null {
+  if (event.altKey || event.shiftKey) return null;
+  if (platform === "macos") {
+    if (!event.metaKey || event.ctrlKey) return null;
+  } else if (!event.ctrlKey || event.metaKey) {
+    return null;
+  }
+  const { deltaY } = event;
+  if (deltaY === 0) return { zoom: null, carried };
+  const zoom = deltaY < 0 ? "in" : "out";
+  if (event.deltaMode !== 0 || Math.abs(deltaY) >= WHEEL_ZOOM_PIXELS) return { zoom, carried: 0 };
+  // Turning back starts the count again.
+  const total = Math.sign(carried) === Math.sign(deltaY) ? carried + deltaY : deltaY;
+  if (Math.abs(total) < WHEEL_ZOOM_PIXELS) return { zoom: null, carried: total };
+  return { zoom, carried: total - Math.sign(total) * WHEEL_ZOOM_PIXELS };
+}
+
 /** Whether a key press opens the settings: ⌘, on macOS, Ctrl+, on Windows and Linux. Null when it belongs to the shell. */
 export function settingsShortcut(event: KeyChord, platform: Platform): "settings" | null {
   if (event.key !== "," || event.altKey || event.shiftKey) return null;
