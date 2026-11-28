@@ -542,7 +542,7 @@ function promptPreview(lines: PromptSegment[][]): HTMLElement {
   return preview;
 }
 
-/** The prompt grid: one row of cards, Off first, each showing what its prompt looks like. */
+/** The prompt grid: one row of cards, Default first, each showing what its prompt looks like. */
 function promptGrid(onSelect: () => void, locked: () => boolean) {
   const byId = new Map(PROMPT_STYLES.map((style) => [style.id as string, style]));
   const items = PROMPT_STYLES.map(({ id, label }) => ({ id, name: label }));
@@ -733,8 +733,8 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
   const styleFields = [
     section("Theme", undefined, theme.grid),
     section("Prompt",
-      "Applies to open panes and new ones. A prompt set in your own shell config (PROMPT, PS1 or a prompt " +
-      "function) always wins.",
+      "Applies to open panes and new ones in zsh, bash, fish and PowerShell. Default keeps the prompt your own " +
+      "shell config sets up (such as powerlevel10k or starship); the others show in its place.",
       prompt.grid),
     section("Terminal", undefined,
       row("Cursor", cursorStyle.el, check(cursorBlink, "Blink")),
@@ -902,10 +902,15 @@ function createSettingsForm(options: SettingsDialogOptions, close: () => void): 
     }
     renderIntegrations();
   };
+  const experimental = element("p", { className: "settings-experimental" },
+    "Experimental: these hook into each agent's own configuration, so a new version of an agent may change how " +
+    "they work. Untick one to remove it.");
   const integrationFields = section("Coding agents",
     "tiili installs one only when you tick it and save, and removes it when you untick it and save. A new version " +
     "of tiili updates the ones that are installed.",
-    integrationNote, integrationList);
+    experimental, integrationNote, integrationList);
+  integrationFields.querySelector("legend > span")?.after(
+    element("span", { className: "settings-tag settings-tag-inline" }, "EXPERIMENTAL"));
 
   const stylePanel = element("div", { className: "settings-panel", id: "settings-panel-style" }, ...styleFields);
   const typography = element("div", { className: "settings-panel", id: "settings-panel-typography" }, fontFields);

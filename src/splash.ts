@@ -55,16 +55,24 @@ export const SKIP_PACE = 1.4;
 /** How long the reduced-motion splash shows the finished lockup, and how long it fades, in real seconds. */
 const STILL = { hold: 0.9, fade: 0.3 };
 
-// ---- once a day ----
+// ---- once a day, and after an update ----
 /** The local calendar day of `now` as YYYY-MM-DD. */
 export function localDay(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-/** Whether the splash is due: unless it already started today, whatever is stored (nothing, an earlier day, garbage). */
-export function splashDue(lastShown: string | null, now: Date): boolean {
-  return lastShown !== localDay(now);
+/** What is stored once the splash starts: the local day and the version it played in. */
+export function splashStamp(now: Date, version: string): string {
+  return `${localDay(now)} ${version}`;
+}
+
+/**
+ * Whether the splash is due: unless it already started today in this version, whatever is stored (nothing, an earlier
+ * day, another version, garbage). So it plays once a day, and once more on the first start after an update.
+ */
+export function splashDue(lastShown: string | null, now: Date, version: string): boolean {
+  return lastShown !== splashStamp(now, version);
 }
 
 // ---- helpers ----
@@ -110,7 +118,7 @@ const proj = (x: number, y: number) => x * DIR[0] + y * DIR[1];
 
 /** The brand bricks: the core palette, and the mark's `>_` colour (white on light grounds, near-black on dark). */
 interface Bricks { tiili: string; klinkkeri: string; savi: string; laasti: string; graniitti: string; prompt: string }
-interface Palette { bg: string; fg: string; muted: string; termBg: string; accent: string; light: boolean; brick: Bricks }
+export interface Palette { bg: string; fg: string; muted: string; termBg: string; accent: string; light: boolean; brick: Bricks }
 
 /** The splash's colours from the applied theme's tokens; Koski's where a token can't be read. */
 function readPalette(root: HTMLElement): Palette {
@@ -142,6 +150,58 @@ interface Layout {
 }
 interface Dust { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number }
 interface Pose { dy: number; sx: number; sy: number; a: number }
+
+/**
+ * The wall laid round the wordmark in a `W`×`H` window: the bricks, where the wordmark sits, and the `>_` focus brick
+ * the view dives into. Null where the focus brick has no room, as in a window not yet shown, which measures 0×0.
+ */
+export function wallLayout(W: number, H: number, p: Palette): Layout | null {
+  const TL = TIMELINE;
+  let s = clamp(W * 0.3, 120, 400) / 86.72;
+  if (48.32 * s > H * 0.22) s = (H * 0.22) / 48.32;
+  const bw = s * 21, bh = (bw * 12) / 25, g = (bw * 2) / 25;
+  const px = g + bw * 0.3, py = g + bh * 0.45;
+  const wordH = (WORD.y1 - WORD.y0) * s;
+  const top = H / 2 - (wordH + py + bh) / 2;
+  const ox = W / 2 - ((WORD.x0 + WORD.x1) / 2) * s, oy = top - WORD.y0 * s;
+  const x0 = ox + WORD.x0 * s, x1 = ox + WORD.x1 * s, y0 = top, y1 = top + wordH;
+  const clear = [x0 - px, y0 - py, x1 + px, y1 + py];
+  const baseY = y1 + py, cx = W / 2, cy = (y0 + y1) / 2;
+  const pX = bw + g, pY = bh + g;
+
+  const bricks: Brick[] = [];
+  const rMin = -Math.ceil((baseY + bh) / pY) - 1, rMax = Math.ceil((H - baseY) / pY) + 1;
+  const n = Math.ceil(W / 2 / pX) + 2;
+  let dMax = 0;
+  for (let row = rMin; row <= rMax; row++) {
+    const off = ((row % 2) + 2) % 2 ? pX / 2 : 0;
+    const y = baseY + row * pY;
+    for (let c = -n; c <= n; c++) {
+      const x = cx - bw / 2 + c * pX + off;
+      if (x + bw < -2 || x > W + 2 || y + bh < -2 || y > H + 2) continue;
+      if (x < clear[2] && x + bw > clear[0] && y < clear[3] - 0.5 && y + bh > clear[1]) continue;
+      const rand = rng((row + 1000) * 7919 + (c + 1000) * 104729);
+      const d = Math.hypot((x + bw / 2 - cx) / W, ((y + bh / 2 - cy) / H) * 1.25);
+      dMax = Math.max(dMax, d);
+      const base = rand() < 0.22 ? p.brick.klinkkeri : p.brick.tiili;
+      let color = mix(base, p.brick.savi, rand() * (p.light ? 0.28 : 0.16));
+      if (!p.light) color = mix(color, p.bg, 0.12 + rand() * 0.16);
+      bricks.push({ x, y, d, focus: row === 0 && c === 0, color, jitter: rand() - 0.5, dir: row % 2 ? 1 : -1, delay: 0, alpha: 1 });
+    }
+  }
+  const vignette = Math.hypot(0.5, 0.625);
+  for (const b of bricks) {
+    // Alternate courses are laid leftward and rightward, like a bricklayer working along the line.
+    const side = Math.sign(b.x + bw / 2 - cx) === b.dir ? 0.035 : 0;
+    b.delay = b.focus ? TL.focus : TL.wall + (b.d / dMax) * TL.wallSpread + side + b.jitter * 0.05;
+    b.alpha = b.focus ? 1 : 1 - 0.82 * smooth(0.18, 1.0, b.d / vignette);
+  }
+  const focus = bricks.find((b) => b.focus);
+  // A window with no size yet (hidden, before it is shown) has no room for the focus brick: nothing to lay.
+  if (!focus) return null;
+  return { s, ox, oy, bw, bh, bricks, focus, x0, x1, y0, y1,
+    fx: focus.x + bw / 2, fy: focus.y + bh / 2, zEnd: Math.max(W / bw, H / bh) * 1.12 };
+}
 
 export interface SplashOptions {
   /** The element the `>_` lands in: the first terminal's screen, once it exists. */
@@ -196,48 +256,7 @@ export function playSplash(options: SplashOptions): Splash {
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
 
-    let s = clamp(W * 0.3, 120, 400) / 86.72;
-    if (48.32 * s > H * 0.22) s = (H * 0.22) / 48.32;
-    const bw = s * 21, bh = (bw * 12) / 25, g = (bw * 2) / 25;
-    const px = g + bw * 0.3, py = g + bh * 0.45;
-    const wordH = (WORD.y1 - WORD.y0) * s;
-    const top = H / 2 - (wordH + py + bh) / 2;
-    const ox = W / 2 - ((WORD.x0 + WORD.x1) / 2) * s, oy = top - WORD.y0 * s;
-    const x0 = ox + WORD.x0 * s, x1 = ox + WORD.x1 * s, y0 = top, y1 = top + wordH;
-    const clear = [x0 - px, y0 - py, x1 + px, y1 + py];
-    const baseY = y1 + py, cx = W / 2, cy = (y0 + y1) / 2;
-    const pX = bw + g, pY = bh + g;
-
-    const bricks: Brick[] = [];
-    const rMin = -Math.ceil((baseY + bh) / pY) - 1, rMax = Math.ceil((H - baseY) / pY) + 1;
-    const n = Math.ceil(W / 2 / pX) + 2;
-    let dMax = 0;
-    for (let row = rMin; row <= rMax; row++) {
-      const off = ((row % 2) + 2) % 2 ? pX / 2 : 0;
-      const y = baseY + row * pY;
-      for (let c = -n; c <= n; c++) {
-        const x = cx - bw / 2 + c * pX + off;
-        if (x + bw < -2 || x > W + 2 || y + bh < -2 || y > H + 2) continue;
-        if (x < clear[2] && x + bw > clear[0] && y < clear[3] - 0.5 && y + bh > clear[1]) continue;
-        const rand = rng((row + 1000) * 7919 + (c + 1000) * 104729);
-        const d = Math.hypot((x + bw / 2 - cx) / W, ((y + bh / 2 - cy) / H) * 1.25);
-        dMax = Math.max(dMax, d);
-        const base = rand() < 0.22 ? p.brick.klinkkeri : p.brick.tiili;
-        let color = mix(base, p.brick.savi, rand() * (p.light ? 0.28 : 0.16));
-        if (!p.light) color = mix(color, p.bg, 0.12 + rand() * 0.16);
-        bricks.push({ x, y, d, focus: row === 0 && c === 0, color, jitter: rand() - 0.5, dir: row % 2 ? 1 : -1, delay: 0, alpha: 1 });
-      }
-    }
-    const vignette = Math.hypot(0.5, 0.625);
-    for (const b of bricks) {
-      // Alternate courses are laid leftward and rightward, like a bricklayer working along the line.
-      const side = Math.sign(b.x + bw / 2 - cx) === b.dir ? 0.035 : 0;
-      b.delay = b.focus ? TL.focus : TL.wall + (b.d / dMax) * TL.wallSpread + side + b.jitter * 0.05;
-      b.alpha = b.focus ? 1 : 1 - 0.82 * smooth(0.18, 1.0, b.d / vignette);
-    }
-    const focus = bricks.find((b) => b.focus) as Brick;
-    L = { s, ox, oy, bw, bh, bricks, focus, x0, x1, y0, y1,
-      fx: focus.x + bw / 2, fy: focus.y + bh / 2, zEnd: Math.max(W / bw, H / bh) * 1.12 };
+    L = wallLayout(W, H, p);
   };
 
   // ---- mortar dust: the only simulated part ----

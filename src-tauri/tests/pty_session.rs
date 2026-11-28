@@ -132,8 +132,19 @@ fn classic_shell(
     pattern: &str,
     then: Option<(&str, &[&str])>,
 ) -> (bool, String) {
+    prompt_shell(shell, "classic", rc, pattern, then)
+}
+
+/// Like [`classic_shell`], with the prompt choice `prompt`.
+fn prompt_shell(
+    shell: &str,
+    prompt: &str,
+    rc: Option<(&str, &str)>,
+    pattern: &str,
+    then: Option<(&str, &[&str])>,
+) -> (bool, String) {
     let tag = format!(
-        "{}-{}",
+        "{}-{}-{prompt}",
         tiili_lib::command::program_name(shell),
         rc.is_some()
     );
@@ -141,7 +152,7 @@ fn classic_shell(
     if let Some((name, text)) = rc {
         std::fs::write(home.join(name), text).expect("rc file");
     }
-    let mut cmd = command_for(shell, "classic", &temp_dir(&format!("scripts-{tag}")))
+    let mut cmd = command_for(shell, prompt, &temp_dir(&format!("scripts-{tag}")))
         .expect("zsh and bash have an integration");
     set_colour_env(&mut cmd);
     cmd.env("HOME", &home);
@@ -169,19 +180,25 @@ fn classic_shell(
     (found, String::from_utf8_lossy(&seen).into_owned())
 }
 
-/// Default zsh gets the chosen prompt / User's own prompt wins: with Classic, a zsh or bash whose config sets no
-/// prompt shows Classic's coloured `user@host:path`, and one whose config sets PROMPT or PS1 keeps it.
+/// The chosen prompt replaces the user's own, and Default keeps it: with Classic, a zsh or bash shows Classic's coloured
+/// `user@host:path` whether or not its config sets PROMPT or PS1; with Off (shown as Default), one whose config sets
+/// a prompt shows that prompt and never Classic.
 #[cfg(unix)]
 #[test]
 #[ignore = "host: needs a pseudo-terminal, which the sandbox refuses; the cargo-test-host release check runs it"]
-fn classic_prompt_applies_only_where_the_users_config_left_the_default() {
+fn chosen_prompt_replaces_the_users_own_and_default_keeps_it() {
     // Classic's host part: the default colour after the user name, `@`, then green (ANSI slot 2).
     const CLASSIC: &str = "\x1b[39m@\x1b[32m";
-    let cases: &[(&str, &str, &str)] = &[
-        ("/bin/zsh", ".zshrc", "PROMPT='mine-zsh> '\n"),
-        ("/bin/bash", ".bash_profile", "PS1='mine-bash> '\n"),
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("/bin/zsh", ".zshrc", "PROMPT='mine-zsh> '\n", "mine-zsh> "),
+        (
+            "/bin/bash",
+            ".bash_profile",
+            "PS1='mine-bash> '\n",
+            "mine-bash> ",
+        ),
     ];
-    for &(shell, rc_name, rc) in cases {
+    for &(shell, rc_name, rc, mine) in cases {
         if !std::path::Path::new(shell).exists() {
             eprintln!("{shell} is missing; skipped");
             continue;
@@ -189,19 +206,17 @@ fn classic_prompt_applies_only_where_the_users_config_left_the_default() {
         let (found, seen) = classic_shell(shell, None, CLASSIC, None);
         assert!(found, "{shell} without a prompt of its own: {seen:?}");
 
-        let mine = if shell.ends_with("zsh") {
-            "mine-zsh> "
-        } else {
-            "mine-bash> "
-        };
-        let (found, seen) = classic_shell(shell, Some((rc_name, rc)), mine, None);
+        let (found, seen) = classic_shell(shell, Some((rc_name, rc)), CLASSIC, None);
+        assert!(found, "{shell} kept its own prompt over Classic: {seen:?}");
+
+        let (found, seen) = prompt_shell(shell, "off", Some((rc_name, rc)), mine, None);
         assert!(
             found,
-            "{shell} with its own prompt never showed it: {seen:?}"
+            "{shell} with Default never showed its own prompt: {seen:?}"
         );
         assert!(
             !seen.contains(CLASSIC),
-            "{shell} showed Classic over the user's prompt: {seen:?}"
+            "{shell} showed Classic with Default chosen: {seen:?}"
         );
     }
 }

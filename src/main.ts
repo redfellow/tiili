@@ -9,7 +9,7 @@ import { same } from "./settingsSession";
 import { applyTheme, themeKindSource, type TiiliTheme } from "./themes";
 import { documentTokens, followSystemTheme, highlightColour, terminalTheme } from "./theme";
 import type { ITheme } from "@xterm/xterm";
-import { localDay, playSplash, splashDue } from "./splash";
+import { playSplash, type Splash, type SplashOptions, splashDue, splashStamp } from "./splash";
 import { createTopBar } from "./topBar";
 import { showUpdateDialog } from "./updateDialog";
 import { autoCheck, findUpdate, takeWhatsNew } from "./updates";
@@ -101,16 +101,32 @@ function clearRestoredOf(backend: Backend): (() => Promise<void>) | undefined {
 
 const SPLASH_KEY = "tiili.splash.lastShown";
 
-/** Whether the splash is due today; if so, records today as its day. Storage that fails plays the splash. */
+/** Whether the splash is due (today, or in this version); if so, records both. Storage that fails plays the splash. */
 function claimSplashDay(): boolean {
   const now = new Date();
   try {
-    if (!splashDue(localStorage.getItem(SPLASH_KEY), now)) return false;
-    localStorage.setItem(SPLASH_KEY, localDay(now));
+    if (!splashDue(localStorage.getItem(SPLASH_KEY), now, APP_VERSION)) return false;
+    localStorage.setItem(SPLASH_KEY, splashStamp(now, APP_VERSION));
   } catch {
     // Storage is unavailable: play the splash rather than lose it.
   }
   return true;
+}
+
+/** Plays the splash; one that fails to start is cleared away, since a splash must never keep the terminals from starting. */
+function startSplash(options: SplashOptions): Splash | undefined {
+  try {
+    return playSplash(options);
+  } catch (error) {
+    console.error(error);
+    clearSplash();
+    return undefined;
+  }
+}
+
+/** Removes any splash overlay, so what lies under it (the terminals, or a start-up error) shows. */
+function clearSplash(): void {
+  document.querySelectorAll(".splash").forEach((overlay) => overlay.remove());
 }
 
 async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> {
@@ -132,7 +148,7 @@ async function start(root: HTMLElement, bar: HTMLElement | null): Promise<void> 
   // The splash covers the start-up; the first terminal opens underneath it, where its >_ lands.
   let adoptSettings: (next: Settings) => void = () => undefined;
   const splash = settings.behaviour.startupSplash && claimSplashDay()
-    ? playSplash({
+    ? startSplash({
         target: () => root.querySelector(".pane[data-focused] .xterm-screen"),
         fontSize: settings.font.size,
         reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -309,6 +325,7 @@ if (settingsOwner) {
 } else if (root) {
   start(root, document.getElementById("top-bar")).catch((error: unknown) => {
     root.textContent = `tiili could not start the terminal: ${String(error)}`;
+    clearSplash();
     reveal();
   });
 }
