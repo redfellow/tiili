@@ -19,6 +19,8 @@ import {
   type TabAction,
   type ZoomAction,
   zenAction,
+  wheelZoom,
+  WHEEL_ZOOM_PIXELS,
   zoomAction,
 } from "./keymap";
 
@@ -234,6 +236,47 @@ describe("zoomAction", () => {
       expect(settingsShortcut(event, platform)).toBeNull();
       expect(clipboardAction(event, platform)).toBeNull();
     }
+  });
+});
+
+describe("wheelZoom", () => {
+  const wheel = (deltaY: number, mods: Partial<KeyChord> = {}, deltaMode = 0) => ({
+    ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, deltaY, deltaMode, ...mods,
+  });
+  const ctrl = { ctrlKey: true };
+
+  it("Ctrl+wheel up zooms in and down zooms out on Linux and Windows", () => {
+    expect(wheelZoom(wheel(-100, ctrl), "linux", 0)).toEqual({ zoom: "in", carried: 0 });
+    expect(wheelZoom(wheel(100, ctrl), "windows", 0)).toEqual({ zoom: "out", carried: 0 });
+  });
+
+  it("A line-mode notch is one step, however small", () => {
+    expect(wheelZoom(wheel(-3, ctrl, 1), "linux", 0)).toEqual({ zoom: "in", carried: 0 });
+  });
+
+  it("macOS zooms with ⌘, and Ctrl+wheel there is not a zoom", () => {
+    expect(wheelZoom(wheel(-100, { metaKey: true }), "macos", 0)).toEqual({ zoom: "in", carried: 0 });
+    expect(wheelZoom(wheel(-100, ctrl), "macos", 0)).toBeNull();
+  });
+
+  it("A plain, Alt or Shift wheel belongs to the terminal", () => {
+    expect(wheelZoom(wheel(-100), "linux", 0)).toBeNull();
+    expect(wheelZoom(wheel(-100, { ctrlKey: true, altKey: true }), "linux", 0)).toBeNull();
+    expect(wheelZoom(wheel(-100, { ctrlKey: true, shiftKey: true }), "linux", 0)).toBeNull();
+    expect(wheelZoom(wheel(-100, { ctrlKey: true, metaKey: true }), "linux", 0)).toBeNull();
+  });
+
+  it("Touchpad amounts add up to a step, and turning back starts again", () => {
+    let carried = 0;
+    const steps: (string | null)[] = [];
+    for (const delta of [-20, -20, -20, -20]) {
+      const result = wheelZoom(wheel(delta, ctrl), "linux", carried)!;
+      steps.push(result.zoom);
+      carried = result.carried;
+    }
+    expect(steps).toEqual([null, null, "in", null]);
+    expect(carried).toBe(-80 + WHEEL_ZOOM_PIXELS);
+    expect(wheelZoom(wheel(20, ctrl), "linux", carried)).toEqual({ zoom: null, carried: 20 });
   });
 });
 

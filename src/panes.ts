@@ -24,6 +24,7 @@ import {
   settingsShortcut,
   tabAction,
   zenAction,
+  wheelZoom,
   zoomAction,
   type FindAction,
   type LayoutAction,
@@ -165,6 +166,8 @@ export class Panes {
   private readonly commands = new Map<number, string>();
   /** The window name last told to the app, so an unchanged one is not sent again. */
   private reportedName = "";
+  /** Touchpad pixels of a Ctrl+wheel zoom not yet enough for a step (see `wheelZoom`). */
+  private wheelCarried = 0;
   /** The window title last set, so an unchanged one is not set again. */
   private shownTitle = "tiili >_";
   /** The session order last reported to the app, for `tiili list`. */
@@ -1216,6 +1219,7 @@ export class Panes {
         () => this.onOutput(pane),
       );
       opened.term.attachCustomKeyEventHandler((event) => this.onKey(opened, event));
+      opened.term.attachCustomWheelEventHandler((event) => this.onWheel(pane, event));
       opened.find.interceptKeys((event) => this.shortcut(event));
       pane.terminal = opened;
       // Its tab may have been hidden, or Zen may show another pane, while the shell started: it keeps this size
@@ -1736,6 +1740,22 @@ export class Panes {
     }
     const pastes = ctrlVPastes(this.settings().behaviour.ctrlVPaste, this.platform);
     return !handleClipboardKey(this.backend, terminal.term, event, this.platform, pastes);
+  }
+
+  /**
+   * Zooms the terminal pane under the pointer on Ctrl with the wheel (⌘ on macOS), as the zoom keys do the focused one.
+   * Returns false for those wheel events, which then neither scroll the pane nor reach its shell.
+   */
+  private onWheel(pane: Pane, event: WheelEvent): boolean {
+    const wheel = wheelZoom(event, this.platform, this.wheelCarried);
+    if (!wheel) {
+      this.wheelCarried = 0;
+      return true;
+    }
+    event.preventDefault();
+    this.wheelCarried = wheel.carried;
+    if (wheel.zoom) this.zoom(pane, wheel.zoom);
+    return false;
   }
 
   /**
