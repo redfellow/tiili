@@ -12,6 +12,24 @@ The startup splash SHALL show the app version, as `v` followed by the version fr
 - **WHEN** the startup splash plays
 - **THEN** the bottom-right corner shows the app version, such as `v0.1.1`
 
+### Requirement: Splash after an update
+With the startup splash turned on, it SHALL play at the first start of each local day and again at the first start in a version it has not played in, whatever the day.
+
+#### Scenario: New version plays the splash
+- **WHEN** the splash already played today and tiili starts for the first time after an update
+- **THEN** the splash plays
+
+#### Scenario: Once a day otherwise
+- **WHEN** the splash already played today in this version and tiili starts again
+- **THEN** the splash does not play
+
+### Requirement: Splash never blocks startup
+The splash SHALL never keep the terminals from starting: it SHALL lay its wall once the window has a size, and a splash that fails SHALL be cleared so the panes, or a start-up error, show.
+
+#### Scenario: Hidden window at startup
+- **WHEN** the splash starts while the window is still hidden and measures 0×0
+- **THEN** the splash plays once the window is shown and the panes open under it
+
 ### Requirement: Version in settings
 The settings dialogue SHALL show `tiili` followed by the app version at the left of its footer, on every tab.
 
