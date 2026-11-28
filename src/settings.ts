@@ -112,8 +112,8 @@ export const APP_ICONS = ["system", "light", "dark"] as const;
 export type AppIcon = (typeof APP_ICONS)[number];
 
 /**
- * The prompt tiili gives zsh, bash and PowerShell where the user's own config leaves the shell's default one; `off`
- * leaves every shell exactly as it starts without tiili.
+ * The prompt tiili shows in zsh, bash, fish and PowerShell in place of the one the user's own config sets up; `off`
+ * (shown as Default) keeps theirs.
  */
 export const PROMPT_IDS = ["off", "classic", "minimal", "tiili"] as const;
 export type PromptId = (typeof PROMPT_IDS)[number];

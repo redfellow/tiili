@@ -9,7 +9,7 @@ export interface PromptSegment {
 export interface PromptStyle {
   id: PromptId;
   label: string;
-  /** What the prompt looks like, line by line, in the same ANSI slots the shell scripts use; empty for Off. */
+  /** What the prompt looks like, line by line, in the same ANSI slots the shell scripts use; empty for Default. */
   preview: PromptSegment[][];
 }
 
@@ -19,9 +19,12 @@ const user: PromptSegment[] = [
   { text: "host", ansi: 2 },
 ];
 
-/** Every prompt choice in card order: Off (the shell's own prompt), then the one-line styles, then the two-line one. */
+/**
+ * Every prompt choice in card order: Default (id `off`: the prompt the user's own shell config sets up), then the
+ * one-line styles, then the two-line one, each shown in place of the user's own.
+ */
 export const PROMPT_STYLES: readonly PromptStyle[] = [
-  { id: "off", label: "Off", preview: [] },
+  { id: "off", label: "Default", preview: [] },
   {
     id: "classic",
     label: "Classic",

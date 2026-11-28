@@ -1467,6 +1467,16 @@ body.settings-window {
   position: static;
 }
 
+/* The EXPERIMENTAL tag after a section's heading, and the line under the heading that explains it. */
+.settings-tag-inline {
+  position: static;
+}
+
+.settings-experimental {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+}
+
 /* Card grids (themes, prompts, tiling): the selected card is outlined in the focus colour. */
 .settings-cards {
   display: grid;
