@@ -2,7 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
-import { Terminal, type FontWeight } from "@xterm/xterm";
+import { Terminal } from "@xterm/xterm";
 import { type AttentionSignal, parseOsc9, parseOsc99, parseOsc777, sanitizeMessage } from "./attention";
 import type { Backend, PaneLaunch, SessionId } from "./backend";
 import { createFindBar, type FindBar } from "./findBar";
@@ -143,8 +143,9 @@ export async function applyFont(term: Terminal, settings: Settings, zoom = 0): P
   // A newer call started while this font loaded; its settings win.
   if (fontGenerations.get(term) !== generation) return;
   term.options.fontFamily = fontFamilyList(font.family);
-  term.options.fontWeight = String(font.weight) as FontWeight;
-  term.options.fontWeightBold = String(font.weightBold) as FontWeight;
+  // As numbers: xterm takes any number from 1 to 1000, but of strings only "100".."900", and others fall back to normal.
+  term.options.fontWeight = font.weight;
+  term.options.fontWeightBold = font.weightBold;
   applySize(term, settings, zoom);
   term.options.cursorStyle = settings.cursor.style;
   term.options.cursorBlink = settings.cursor.blink && hasFocus(term);
